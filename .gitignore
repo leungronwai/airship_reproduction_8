@@ -1,0 +1,26 @@
+# 忽略.idea 文件夹
+.idea
+
+# 忽略.DS_Store 文件
+.DS_Store
+
+# 忽略.env 文件
+.env
+
+# 忽略.env.example 文件
+.env.example
+
+# 忽略.env.staging 文件
+.env.staging
+
+# 忽略.env.production 文件
+.env.production
+
+# 忽略.env.development 文件
+.env.development
+
+# 忽略.env.test 文件
+.env.test
+
+# 忽略.env.local 文件
+.env.local

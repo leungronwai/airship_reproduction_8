@@ -1,0 +1,269 @@
+# simulation/run_simulation.py
+import logging
+import numpy as np
+import matplotlib.pyplot as plt
+import time as timer # Use timer to avoid conflict with time variable t
+
+from config import parameters as params
+from airship.utils import R_block
+from airship.model import Airship
+from airship.trajectory import Trajectory
+from airship.observer import FixedTimeDO
+from airship.controller import FixedTimeBLFController
+
+
+# 全局 logger（在这里做一次 basicConfig）
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+
+
+def run_simulation():
+    # --- 初始化 ---
+    airship = Airship(params.X0)
+    trajectory = Trajectory()
+    observer = FixedTimeDO()
+    controller = FixedTimeBLFController()
+
+    # --- 数据记录 ---
+    sim_time = np.arange(0, params.T_SPAN, params.DT)
+    n_steps = len(sim_time)
+    state_history = np.zeros((12, n_steps))
+    error_history = np.zeros((6, n_steps))  # e1 = y - yc
+    error2_history = np.zeros((6, n_steps))  # e2 = y_dot - yc_dot
+    control_history = np.zeros((6, n_steps))
+    disturbance_history = np.zeros((6, n_steps))
+    estimate_history = np.zeros((6, n_steps))
+    kb_history = np.zeros((6, n_steps))
+    yc_history = np.zeros((6, n_steps))
+    y_history = np.zeros((6, n_steps))
+
+    # --- 仿真循环 ---
+    X = airship.get_state()
+    tau = np.zeros(6)  # Initial control
+
+    start_time = timer.time()
+
+    for i, t in enumerate(sim_time):
+        # 1. 获取当前状态 (Get current state)
+        X = airship.get_state()
+        zeta = X[0:3]
+        gamma = X[3:6]
+        x_vec = X[6:12]  # v, omega
+
+        # 2. 获取期望状态 (Get desired state)
+        yc, yc_dot, yc_ddot, xc, xc_dot = trajectory.get_desired_state(t)
+        zeta_d, gamma_d = yc[0:3], yc[3:6]
+        zeta_d_dot, gamma_d_dot = yc_dot[0:3], yc_dot[3:6]
+
+        # 3. 计算误差 (Calculate errors)
+        R = R_block(gamma)
+        y = np.concatenate((zeta, gamma))  # Current position/attitude vector
+        y_dot = R @ x_vec  # Current velocity vector in yc space
+
+        e1 = y - yc
+        e2 = y_dot - yc_dot
+
+        # 4. 更新扰动观测器 (Update disturbance observer)
+        # Observer needs f calculated by controller based on CURRENT e1, e2
+        # Calculate f for the observer first (it uses last state's effect)
+        f_for_observer = controller.get_last_f()  # Get f from previous step calculation
+        delta_hat = observer.update(params.DT, e1, e2, tau, gamma, lambda e1_arg, e2_arg: f_for_observer)
+
+        # 5. 计算控制输入 (Calculate control input)
+        # Controller calculates its own f based on current state/errors
+        tau = controller.calculate_control(t, e1, e2, delta_hat, gamma, gamma_d, xc, xc_dot)
+
+        # 6. 获取实际扰动 (Get actual disturbance)
+        actual_delta = params.disturbance_delta(t)
+
+        # 7. 积分气艇模型 (Integrate airship model - using RK4)
+        # Define the ODE function for the solver/RK4
+        def airship_ode(t_rk, X_rk):
+            # Need control 'tau' and disturbance 'actual_delta' at time t_rk
+            # Assume they are constant over the small step dt for simplicity
+            # A better RK4 would re-evaluate control/disturbance within the step
+            return airship.rhs(t_rk, X_rk, tau, lambda t_ignore: actual_delta)
+
+        # RK4 Step
+        k1 = airship_ode(t, X)
+        k2 = airship_ode(t + 0.5 * params.DT, X + 0.5 * params.DT * k1)
+        k3 = airship_ode(t + 0.5 * params.DT, X + 0.5 * params.DT * k2)
+        k4 = airship_ode(t + params.DT, X + params.DT * k3)
+        X_next = X + (params.DT / 6.0) * (k1 + 2 * k2 + 2 * k3 + k4)
+
+        # 8. 更新状态 (Update state)
+        airship.X = X_next
+        airship.X[3:6] = (airship.X[3:6] + np.pi) % (2 * np.pi) - np.pi  # Normalize angles
+
+        # 9. 记录数据 (Log data)
+        state_history[:, i] = X
+        error_history[:, i] = e1
+        error2_history[:, i] = e2
+        control_history[:, i] = tau
+        disturbance_history[:, i] = actual_delta
+        estimate_history[:, i] = delta_hat
+        kb_history[:, i] = params.kb_func(t)
+        yc_history[:, i] = yc
+        y_history[:, i] = y
+
+        # 打印进度 (Print progress)
+        if i % (n_steps // 10) == 0:
+            # print(f"Simulation progress: {i / n_steps * 100:.0f}%")
+            logger.info(f"Simulation progress: {i / n_steps * 100:.0f}%")
+
+    end_time = timer.time()
+    # print(f"Simulation finished in {end_time - start_time:.2f} seconds.")
+    logger.info(f"Simulation finished in {end_time - start_time:.2f} seconds.")
+
+    # --- 结果绘图 ---
+    plt.style.use('seaborn-v0_8-whitegrid')
+
+    # 图1: 三维轨迹跟踪 (3D Trajectory Tracking)
+    fig1 = plt.figure("3D Trajectory")
+    ax3d = fig1.add_subplot(111, projection='3d')
+    ax3d.plot(state_history[0, :], state_history[1, :], state_history[2, :], label='Airship Trajectory (Actual)')
+    ax3d.plot(yc_history[0, :], yc_history[1, :], yc_history[2, :], '--', label='Desired Trajectory')
+    ax3d.set_xlabel('X [m]')
+    ax3d.set_ylabel('Y [m]')
+    ax3d.set_zlabel('Z [m]')
+    ax3d.set_title('3D Trajectory Tracking')
+    ax3d.legend()
+    # Equal aspect ratio might be needed depending on scale
+    min_lim = np.min(yc_history[0:3, :])
+    max_lim = np.max(yc_history[0:3, :])
+    # ax3d.set_xlim([min_lim, max_lim])
+    # ax3d.set_ylim([min_lim, max_lim])
+    # ax3d.set_zlim([np.min(state_history[2,:]), np.max(state_history[2,:])])
+
+    # 图2: 位置跟踪误差 (Position Tracking Error e1 vs Constraints)
+    fig2, axs2 = plt.subplots(3, 1, sharex=True, figsize=(10, 8))
+    fig2.suptitle('Position Tracking Error (e1) vs Constraints')
+    pos_labels = ['e_x', 'e_y', 'e_z']
+    for i in range(3):
+        axs2[i].plot(sim_time, error_history[i, :], label=f'{pos_labels[i]} (Actual Error)')
+        axs2[i].plot(sim_time, kb_history[i, :], 'r--', label='Constraint kb')
+        axs2[i].plot(sim_time, -kb_history[i, :], 'r--')
+        axs2[i].set_ylabel(f'{pos_labels[i]} [m]')
+        axs2[i].legend()
+        axs2[i].grid(True)
+    axs2[2].set_xlabel('Time [s]')
+
+    # 图3: 姿态跟踪误差 (Attitude Tracking Error e1 vs Constraints)
+    fig3, axs3 = plt.subplots(3, 1, sharex=True, figsize=(10, 8))
+    fig3.suptitle('Attitude Tracking Error (e1) vs Constraints')
+    att_labels = ['e_phi', 'e_theta', 'e_psi']
+    for i in range(3):
+        axs3[i].plot(sim_time, error_history[i + 3, :], label=f'{att_labels[i]} (Actual Error)')
+        axs3[i].plot(sim_time, kb_history[i + 3, :], 'r--', label='Constraint kb')
+        axs3[i].plot(sim_time, -kb_history[i + 3, :], 'r--')
+        axs3[i].set_ylabel(f'{att_labels[i]} [rad]')
+        axs3[i].legend()
+        axs3[i].grid(True)
+    axs3[2].set_xlabel('Time [s]')
+
+    # 图4: 控制输入 (Control Inputs)
+    fig4, axs4 = plt.subplots(6, 1, sharex=True, figsize=(10, 12))
+    fig4.suptitle('Control Input Tau')
+    control_labels = ['Fx', 'Fy', 'Fz', 'Tx', 'Ty', 'Tz']
+    for i in range(6):
+        axs4[i].plot(sim_time, control_history[i, :], label=f'{control_labels[i]}')
+        axs4[i].set_ylabel(f'{control_labels[i]} [N or Nm]')
+        axs4[i].legend()
+        axs4[i].grid(True)
+    axs4[5].set_xlabel('Time [s]')
+
+    # 图5: 扰动估计 (Disturbance Estimation)
+    fig5, axs5 = plt.subplots(6, 1, sharex=True, figsize=(10, 12))
+    fig5.suptitle('Disturbance Estimation')
+    dist_labels = ['d1', 'd2', 'd3', 'd4', 'd5', 'd6']
+    for i in range(6):
+        axs5[i].plot(sim_time, disturbance_history[i, :], 'k-', label=f'Actual {dist_labels[i]}')
+        axs5[i].plot(sim_time, estimate_history[i, :], 'r--', label=f'Estimated {dist_labels[i]}')
+        axs5[i].set_ylabel(f'{dist_labels[i]}')
+        axs5[i].legend()
+        axs5[i].grid(True)
+    axs5[5].set_xlabel('Time [s]')
+
+    # 图6: 速度跟踪误差 e2 (Velocity Tracking Error e2)
+    fig6, axs6 = plt.subplots(6, 1, sharex=True, figsize=(10, 12))
+    fig6.suptitle('Velocity Tracking Error (e2)')
+    vel_err_labels = ['e_zeta_dot_x', 'e_zeta_dot_y', 'e_zeta_dot_z', 'e_gamma_dot_phi', 'e_gamma_dot_theta', 'e_gamma_dot_psi']
+    for i in range(6):
+        axs6[i].plot(sim_time, error2_history[i, :], label=f'{vel_err_labels[i]}')
+        axs6[i].set_ylabel(f'{vel_err_labels[i]}')
+        axs6[i].legend()
+        axs6[i].grid(True)
+    axs6[5].set_xlabel('Time [s]')
+
+    plt.show()
+
+
+
+
+
+
+
+
+# 注意：不要在模块顶层调用 run_simulation()，否则一导入就会执行。只在 if __name__=='__main__' 下调用它。
+if __name__ == '__main__':
+    # 如果直接运行这个脚本，也能启动仿真
+    run_simulation()
+
+
+
+'''
+如何理解这句话： 注意：不要在模块顶层调用 run_simulation()，否则一导入就会执行。只在 if __name__=='__main__' 下调用它。
+在 Python 中，每个 .py 文件被当作一个“模块”载入时，解释器会从头到尾执行一遍这个文件里的顶层代码。如果你在模块的顶层直接写了
+
+# run_simulation.py
+
+def run_simulation():
+    # …做很多事…
+    pass
+
+# 下面这一行在模块载入时就会执行
+run_simulation()
+
+那么只要你在别的地方写了
+
+import simulation.run_simulation
+
+就会立刻跑一次 run_simulation()——因为导入模块时，解释器会执行模块里的所有顶层语句。
+
+⸻
+
+用 if __name__ == '__main__' 来区分“被当脚本执行”还是“被别的模块导入”
+
+在模块里加上这一段：
+
+if __name__ == '__main__':
+    run_simulation()
+
+就能做到：
+	•	当你在命令行（或 IDE 的“Run”按钮）直接执行
+
+python simulation/run_simulation.py
+
+这时模块的 __name__ 等于 "__main__"，条件为真，于是会调用 run_simulation()，启动仿真。
+
+	•	当别人通过 import simulation.run_simulation 载入这个模块时
+	•	模块的 __name__ 会是 "simulation.run_simulation"，条件不满足，run_simulation() 就不会自动执行。
+	•	这样，导入这个模块只会导入函数、类、全局变量，不会触发仿真流程。
+
+⸻
+
+小结
+	•	不要在模块顶层直接调用 run_simulation()，否则“导入”就会“执行”。
+	•	要把启动代码放在：
+
+if __name__ == '__main__':
+    run_simulation()
+
+这样既能保留“脚本直接跑” 的便利性，又能保证它“被当作库导入”时不会乱跑。
+
+
+'''

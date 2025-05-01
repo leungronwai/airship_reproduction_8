@@ -1,0 +1,5 @@
+# settings.yaml
+DT: 0.1
+T_SPAN: 100
+k1: [0.1, 0.1, 0.1, 0.2, 0.2, 0.2]
+new_param: 42      # 这个在 parameters.py 里不存在，会被跳过
