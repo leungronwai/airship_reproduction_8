@@ -32,7 +32,7 @@ class Trajectory:
 
         # --- 期望姿态 desired attitude  gamma_d (Eq. 66) ---
         phi_d = 0.0 # 期望滚转角设为0 (Desired roll is zero)
-        theta_d = np.arctan2(zd_dot, np.sqrt(xd_dot**2 + yd_dot**2)) # 注意: 原论文公式似乎有误, 通常是 -zd_dot
+        theta_d = np.arctan2(zd_dot, np.sqrt(xd_dot**2 + yd_dot**2)) # 注意: 原论文公式似乎有误, 通常是 -zd_dot / note: The original paper seems to have an error, usually it's -zd_dot
         theta_d = np.arctan2(-zd_dot, np.sqrt(xd_dot**2 + yd_dot**2)) # 使用常见定义 (Using common definition)
         psi_d = np.arctan2(yd_dot, xd_dot) # 期望偏航角 (Desired yaw)
         gamma_d = np.array([phi_d, theta_d, psi_d])

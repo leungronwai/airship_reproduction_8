@@ -96,7 +96,7 @@ def calculate_added_mass_inertia(a1, a2, b, rho_air):
     """
 
     if b <= 0:
-        raise ValueError("半短轴 b 必须大于 0 (Semi-minor axis b must be positive)")
+        raise ValueError("半短轴 b 必须大于 0 /Semi-minor axis b must be positive")
 
     # 计算平均半长轴 (Calculate mean semi-major axis 'a')
     a = (a1 + a2) / 2.0
@@ -119,7 +119,7 @@ def calculate_added_mass_inertia(a1, a2, b, rho_air):
         # 对于扁椭球需要不同的公式或检查源文献 / Check source for different formulas
         # Different formulas or source check needed for oblate case.
         # 为避免错误，可以抛出异常或继续计算（结果可能错误） /  Continue calculation (result may be incorrect)
-        # raise ValueError("当前公式仅适用于 a >= b 的情况")
+        # raise ValueError("当前公式仅适用于 a >= b 的情况" / Current formula only for a >= b case")
 
     # 计算体积 (Calculate Volume V - Eq. 43)
     # V = (2.0 / 3.0) * np.pi * (a1 + a2) * b**2
@@ -129,7 +129,7 @@ def calculate_added_mass_inertia(a1, a2, b, rho_air):
     m_air = rho_air * V
 
     # 处理特殊情况：球体 (Handle special case: Sphere)
-    tolerance = 1e-9 # 定义一个小的容差
+    tolerance = 1e-9 # 定义一个小的容差 / Define a small tolerance
     if abs(a - b) < tolerance:
         # 对于球体 (For a sphere, a = b, e = 0)
         # k1_ = k2_ = k3_ = 0.5 (标准流体动力学结果 standard hydrodynamic result)
@@ -174,7 +174,8 @@ def calculate_added_mass_inertia(a1, a2, b, rho_air):
 
             # beta_prime (Eq. 48)
             if abs(e_sq) < tolerance:
-                 raise ValueError("偏心率 e 的平方接近于零，无法计算 beta_prime。")
+                 raise ValueError("偏心率 e 的平方接近于零，无法计算 beta_prime。"
+                 " The square of eccentricity e is close to zero, beta_prime cannot be calculated.")
             beta_prime = (1.0 / e_sq) - (g * f / 2.0)
 
             # 计算惯性因子 k1, k2, k3 / Calculate inertia factors k1, k2, k3
@@ -197,11 +198,13 @@ def calculate_added_mass_inertia(a1, a2, b, rho_air):
             term2_den_k3 = 2.0 * (b_sq - a_sq) + (b_sq + a_sq) * (beta_prime - alpha_prime)
 
             if abs(term2_den_k3) < tolerance:
-                # 检查球体情况是否已处理 (e=0 -> a=b -> b^2-a^2 = 0)
-                # 如果 a != b 但分母为零，表示可能有其他问题或特殊共振情况 / If a != b but denominator is zero, there may be another issue or resonance case.
+                # 检查球体情况是否已处理 (e=0 -> a=b -> b^2-a^2 = 0) 
+                # / Check if sphere case has been handled (e=0 -> a=b -> b^2-a^2 = 0)
+                # 如果 a != b 但分母为零，表示可能有其他问题或特殊共振情况 
+                # / If a != b but denominator is zero, there may be another issue or resonance case.
                 if abs(a-b) > tolerance:
                      raise ValueError("计算 k3 时分母接近零 (非球体情况) Small denominator in k3 calculation。")
-                else: # 如果是球体，分子也为零，极限应为 0.5 / if sphere case 
+                else: # 如果是球体，分子也为零，极限应为 0.5 / If it's a sphere, numerator is also zero, limit should be 0.5
                      k3_ = 0.5
             else:
                 k3_ = - (1.0 / 5.0) * term1_num_k3 / term2_den_k3

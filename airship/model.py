@@ -115,9 +115,9 @@ class Airship:
 
         # --- 新增：计算相对速度 (New: Calculate Relative Velocity) ---
         # 获取风速 (Get wind velocity)
-        # 如果使用常数风速:
+        # 如果使用常数风速: / if using constant wind speed:
         V_wind_ERF = self.V_wind_erf_const
-        # 如果使用函数风速:
+        # 如果使用函数风速: / if using function wind speed:
         # V_wind_ERF = self.V_wind_func(t, zeta)
 
         # 将风速转换到体轴系 (Transform wind to Body Frame)
@@ -153,9 +153,9 @@ class Airship:
         # airship_model.py (rhs 方法中)
         # ...
         # --- 加载气动系数 (Load aerodynamic coefficients from dictionary) ---
-        # 假设 AERO_COEFFS 字典可以通过 params 或 self 访问
-        # aero_data = params.AERO_COEFFS # 或 self.aero_coeffs
-        aero_data = params.AERO_COEFFS  # 如果作为全局变量或参数传入
+        # 假设 AERO_COEFFS 字典可以通过 params 或 self 访问 / Assuming AERO_COEFFS dict can be accessed via params or self
+        # aero_data = params.AERO_COEFFS # or self.aero_coeffs 
+        aero_data = params.AERO_COEFFS  # 如果作为全局变量或参数传入 / If AERO_COEFFS is passed as a global variable or parameter
 
         Cx1 = aero_data['Cx1']
         Cx2 = aero_data['Cx2']
