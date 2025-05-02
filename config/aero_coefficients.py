@@ -18,7 +18,7 @@ airship_b  = params.airship_b  # [m] 半短轴 (Semi-minor axis)
 Lh = airship_a1 + airship_a2 # [m] 机身总长 (Total hull length) - 假设
 L_ref = Lh                 # [m] 参考长度 (Reference length) - 假设
 # 体积中心 x 坐标 (Volume Center x-coordinate) - Placeholder,
-# 精确值依赖于双椭球的具体组合方式, 这里用平均 a 近似或假设原点在特定位置
+# 精确值依赖于双椭球的具体组合方式, 这里用平均 a 近似或假设原点在特定位置 / 
 xcv = airship_a1 +(3/8)*(airship_a2 - airship_a1)                  # [m] - Placeholder, assume origin or calc if needed Eq.22
 
 # 计算体积 (Calculate Volume)
@@ -96,9 +96,10 @@ I3 = I3_table
 J1 = J1_table
 J2 = J2_table
 
-# --- 附加质量计算 (需要 k1, k2) ---
-# k1, k2 需要先通过 calculate_added_mass_inertia 计算得到
+# --- 附加质量计算 (需要 k1, k2) / Added Mass Calculation (requires k1, k2) ---
+# k1, k2 需要先通过 calculate_added_mass_inertia 计算得到 /  k1, k2 must first be calculated using calculate_added_mass_inertia
 # 这里使用占位符，实际应在调用 get_aero_coefficients 前计算好
+# Here, placeholders are used; actual values should be calculated before calling get_aero_coefficients
 k1_placeholder = 0.1 # Placeholder - MUST BE CALCULATED/PROVIDED
 k2_placeholder = 0.9 # Placeholder - MUST BE CALCULATED/PROVIDED
 
@@ -127,10 +128,10 @@ def get_aero_coefficients(k1=k1_placeholder, k2=k2_placeholder):
     # Eq. 66-81
     coeffs['Cx1'] = -(CDh0 * Sh + CDf0 * Sf + CDg0 * Sg)
     coeffs['Cx2'] = (k2 - k1) * eta_k * I1 * Sh
-    # 假设 Eq 73 (Cz1=Cz4) 和 Eq 70 (Cz2=Cz4) 是笔误，或者 Cz4 依赖于不同导数
-    # 按照最直接的解释 Cy4, Cz4 公式计算
+    # 假设 Eq 73 (Cz1=Cz4) 和 Eq 70 (Cz2=Cz4) 是笔误，或者 Cz4 依赖于不同导数 / Assume Cz4 is a typo or Cz4 depends on different derivatives
+    # 按照最直接的解释 Cy4, Cz4 公式计算 / Calculate Cy4, Cz4 based on the most direct interpretation
 
-    # coeffs['Cz4'] = 0.5 * dCL_ddelta_f * Sf * eta_f # 假设舵面效率相同
+    # coeffs['Cz4'] = 0.5 * dCL_ddelta_f * Sf * eta_f # 假设舵面效率相同 / Assume control surface efficiency is the same
     coeffs['Cz1'] = coeffs['Cx2']
     coeffs['Cy1'] = coeffs['Cx2']
 
@@ -152,14 +153,14 @@ def get_aero_coefficients(k1=k1_placeholder, k2=k2_placeholder):
     coeffs['Cn1'] = -coeffs['Cm1']
     coeffs['Cn2'] = -coeffs['Cm2']
     coeffs['Cn3'] = -coeffs['Cm3']
-    coeffs['Cn4'] = -coeffs['Cm4'] # <-- 使用了 Cm4
+    coeffs['Cn4'] = -coeffs['Cm4'] # <-- 使用了 Cm4 / Using Cm4
 
     return coeffs
 
 # ==============================================================================
 #  (可选) 计算附加质量和惯性的函数 (Optional: Function to Calculate Added Mass/Inertia)
 # ==============================================================================
-# 这个函数也可以放在这里，或者放在单独的文件中
+# 这个函数也可以放在这里，或者放在单独的文件中  / This function can be placed here or in a separate file
 def calculate_added_mass_inertia_local(a1=airship_a1, a2=airship_a2, b=airship_b, rho=rho_air_at_altitude):
     """
     在此文件内部计算附加质量和附加惯性矩阵 (仅用于演示)。
@@ -182,17 +183,17 @@ def calculate_added_mass_inertia_local(a1=airship_a1, a2=airship_a2, b=airship_b
     else:
         a_sq = a**2
         term_inside_sqrt = 1.0 - (b**2 / a_sq)
-        if term_inside_sqrt < -tolerance: # 允许小的负数容差
+        if term_inside_sqrt < -tolerance: # 允许小的负数容差 / Allow a small negative number tolerance
              print(f"警告: 偏心率计算sqrt内部为负 ({term_inside_sqrt:.2e})，假设为球体。")
              k1 = 0.5; k2 = 0.5; k3 = 0.5
         else:
-             term_inside_sqrt = max(0, term_inside_sqrt) # 避免负数
+             term_inside_sqrt = max(0, term_inside_sqrt) # 避免负数 / Avoid negative numbers
              e = np.sqrt(term_inside_sqrt)
              if abs(1.0 - e) < tolerance: raise ValueError("e is near 1.")
              e_sq = e**2
 
-             if abs(e) < tolerance : # 避免 f 和 g 中的除零
-                 # 接近球体的情况，用极限或直接设为球体值
+             if abs(e) < tolerance : # 避免 f 和 g 中的除零 / Avoid division by zero in f and g
+                 # 接近球体的情况，用极限或直接设为球体值 / Near-spherical case, use limit or set to spherical value
                  k1 = 0.5; k2 = 0.5; k3 = 0.5
              else:
                  f_log = np.log((1.0 + e) / (1.0 - e))
@@ -222,7 +223,7 @@ def calculate_added_mass_inertia_local(a1=airship_a1, a2=airship_a2, b=airship_b
                  else:
                      k3 = (1.0 / 5.0) * term1_num_k3 / term2_den_k3
 
-    # --- 返回 k1, k2 (以及可能需要的 M', I0') ---
+    # --- 返回 k1, k2 (以及可能需要的 M', I0') / Return k1, k2 (and possibly M', I0') ---
     M_prime = m_air * np.diag([k1, k2, k2])
     I0_prime = m_air * np.diag([0.0, k3, k3])
 
@@ -233,19 +234,20 @@ def calculate_added_mass_inertia_local(a1=airship_a1, a2=airship_a2, b=airship_b
 #  主执行部分 (示例) (Main execution part - Example)
 # ==============================================================================
 if __name__ == "__main__":
-    # 这个部分只在直接运行 aero_coefficients.py 时执行，用于测试
+    # 这个部分只在直接运行 aero_coefficients.py 时执行，用于测试 
+    # / This part only runs when aero_coefficients.py is directly executed, for testing
     print("--- 测试计算气动系数 ---")
     try:
-        # 1. 计算 k1, k2 (或从外部获取)
+        # 计算 k1, k2 (或从外部获取) / Calculate k1, k2 (or get from external)
         k1_calc, k2_calc, _, _ = calculate_added_mass_inertia_local()
         print(f"计算得到的 k1 = {k1_calc:.4f}, k2 = {k2_calc:.4f}")
 
-        # 2. 使用计算得到的 k1, k2 计算气动系数
+        # 使用计算得到的 k1, k2 计算气动系数 / Calculate aerodynamic coefficients using calculated k1, k2
         aero_coeffs_calculated = get_aero_coefficients(k1=k1_calc, k2=k2_calc)
 
-        print("\n计算得到的气动系数:")
+        print("\n计算得到的气动系数 / Aerodynamic Coefficients:")
         for coeff, value in aero_coeffs_calculated.items():
             print(f"  {coeff}: {value:.4f}")
 
     except ValueError as e:
-        print(f"\n计算过程中发生错误: {e}")
+        print(f"\n计算过程中发生错误 / Error during calculation: {e}")
