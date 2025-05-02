@@ -12,7 +12,7 @@ from airship.observer import FixedTimeDO
 from airship.controller import FixedTimeBLFController
 
 
-# 全局 logger（在这里做一次 basicConfig）
+# 全局 logger（在这里做一次 basicConfig） / Global logger (basicConfig done here)
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
@@ -22,13 +22,13 @@ logger = logging.getLogger(__name__)
 
 
 def run_simulation():
-    # --- 初始化 ---
+    # --- 初始化 / Initialize ---
     airship = Airship(params.X0)
     trajectory = Trajectory()
     observer = FixedTimeDO()
     controller = FixedTimeBLFController()
 
-    # --- 数据记录 ---
+    # --- 数据记录 / Data logging ---
     sim_time = np.arange(0, params.T_SPAN, params.DT)
     n_steps = len(sim_time)
     state_history = np.zeros((12, n_steps))
@@ -41,14 +41,14 @@ def run_simulation():
     yc_history = np.zeros((6, n_steps))
     y_history = np.zeros((6, n_steps))
 
-    # --- 仿真循环 ---
+    # --- 仿真循环 / Simulation loop ---
     X = airship.get_state()
     tau = np.zeros(6)  # Initial control
 
     start_time = timer.time()
 
     for i, t in enumerate(sim_time):
-        # 1. 获取当前状态 (Get current state)
+        # 1. 获取当前状态 (Get current state) 
         X = airship.get_state()
         zeta = X[0:3]
         gamma = X[3:6]
@@ -119,7 +119,7 @@ def run_simulation():
     # print(f"Simulation finished in {end_time - start_time:.2f} seconds.")
     logger.info(f"Simulation finished in {end_time - start_time:.2f} seconds.")
 
-    # --- 结果绘图 ---
+    # --- 结果绘图 / Plotting results ---
     plt.style.use('seaborn-v0_8-whitegrid')
 
     # 图1: 三维轨迹跟踪 (3D Trajectory Tracking)
