@@ -18,14 +18,14 @@ def setup_logger():
 def main():
     # 1. 初始化日志 /  Initialize logger
     logger = setup_logger() # test
-    logger.info("程序启动")
+    logger.info("程序启动 / Program started")
 
     # 2. 调用仿真主入口（内部已使用 config.parameters 拿到所有常量）
     # Call the main simulation entry point (internally uses config.parameters to access all constants)
     run_simulation()
 
     # 3. 结束日志 / End logging
-    logger.info("仿真结束")
+    logger.info("仿真结束 / Simulation ended")
 
 if __name__ == '__main__':
     print("[INFO]: starting information ")

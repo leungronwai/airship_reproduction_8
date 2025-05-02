@@ -70,7 +70,7 @@ except ValueError as e:
 
 
 
-def calculate_added_mass_inertia(a1, a2, b, rho_air):
+def calculate_added_mass_inertia(a1, a2, b, rho_air_):
     """
     根据双椭球体模型的几何参数计算附加质量和附加惯性矩阵。
     Calculates the added mass and added inertia matrices based on the
@@ -83,7 +83,7 @@ def calculate_added_mass_inertia(a1, a2, b, rho_air):
         a1 (float): 第一个半长轴 (Semi-major axis 1).
         a2 (float): 第二个半长轴 (Semi-major axis 2).
         b (float): 半短轴 (Semi-minor axis).
-        rho_air (float): 当地空气密度 (Local air density).
+        rho_air_ (float): 当地空气密度 (Local air density).
 
     Returns:
         tuple:包含两个 NumPy 数组的元组 (M_prime, I0_prime)
@@ -101,7 +101,7 @@ def calculate_added_mass_inertia(a1, a2, b, rho_air):
     # 计算平均半长轴 (Calculate mean semi-major axis 'a')
     a = (a1 + a2) / 2.0
     if a <= 0:
-        raise ValueError("平均半长轴 a 必须大于 0 (Mean semi-major axis a must be positive)")
+        raise ValueError("平均半长轴 a 必须大于 0 / Mean semi-major axis a must be positive")
 
     # 检查是否为长椭球 (Check for prolate spheroid assumption a >= b)
     # 注意：如果 b > a (扁椭球)，偏心率 e 和相关公式定义不同
@@ -116,7 +116,7 @@ def calculate_added_mass_inertia(a1, a2, b, rho_air):
         )
         # print(f"警告：当前公式适用于长椭球 (a >= b)，但输入为 a={a:.3f}, b={b:.3f} (扁椭球)。"
             #   f"结果可能不准确。")
-        # 对于扁椭球需要不同的公式或检查源文献 / Check source for different formulas
+        # 对于扁椭球需要不同的公式或检查源文献
         # Different formulas or source check needed for oblate case.
         # 为避免错误，可以抛出异常或继续计算（结果可能错误） /  Continue calculation (result may be incorrect)
         # raise ValueError("当前公式仅适用于 a >= b 的情况" / Current formula only for a >= b case")
@@ -126,7 +126,7 @@ def calculate_added_mass_inertia(a1, a2, b, rho_air):
     V = (4.0 / 3.0) * np.pi * a * b**2 # 使用平均值 a 的等效公式 Use equivalent formula with mean value a
 
     # 计算排开空气的质量 (Calculate mass of displaced air)
-    m_air = rho_air * V
+    m_air = rho_air_ * V
 
     # 处理特殊情况：球体 (Handle special case: Sphere)
     tolerance = 1e-9 # 定义一个小的容差 / Define a small tolerance
@@ -143,51 +143,52 @@ def calculate_added_mass_inertia(a1, a2, b, rho_air):
         term_inside_sqrt = 1.0 - (b**2 / a_sq)
         if (1.0 - (b**2 / (a**2))) < 0:
              # 这理论上不应该在 a >= b 时发生，除非有数值误差
-             print(f"警告: 偏心率计算出现问题 Eccentricity calculation warning "
-                   "(term = {term_inside_sqrt:.2e})。将 e 设为 0 / set e as 0。")
-             e = 0.0
+             print(f"警告: 偏心率计算出现问题 / Eccentricity calculation warning "
+                   f"(term = {term_inside_sqrt:.2e})。将 e 设为 0 / set e as 0。")
+             _e = 0.0
              k1_ = k2_ = k3_ = 0.5 # 退化为球体情况 / Fallback to sphere case
         else:
-            e = np.sqrt(1.0 - (b**2 / (a**2)))
+            _e = np.sqrt(1.0 - (b**2 / (a**2)))
 
             # 避免 e 极其接近 1 (避免 f 中的除零) / Avoid e close to 1 (to avoid division by zero in f)
-            if abs(1.0 - e) < tolerance:
+            if abs(1.0 - _e) < tolerance:
                  raise ValueError("偏心率 e 接近 1 (b 接近 0)，几何形状无效。/ Eccentricity e approaches 1 (invalid geometry)")
 
             # 计算中间参数 / Calculate intermediate parameters f, g, alpha_prime, beta_prime
             # Calculate intermediate parameters f, g, alpha_prime, beta_prime
 
             # f (Eq. 45)
-            f = np.log((1.0 + e) / (1.0 - e))
+            f = np.log((1.0 + _e) / (1.0 - _e))
 
             # g (Eq. 46)
             # 避免 e=0 (已在球体情况中处理) / Avoid division by zero for e=0 (handled in sphere case)
-            e_sq = e**2
-            e_cubed = e**3
+            e_sq = _e**2
+            e_cubed = _e**3
             if abs(e_cubed) < tolerance:
                  # 理论上 e 非零，但数值上可能很小 / Theoretically e is non-zero, but numerically small
-                 raise ValueError("偏心率 e 的立方接近于零，无法计算 g。")
-            g = (1.0 - e_sq) / e_cubed
+                 raise ValueError("偏心率 e 的立方接近于零，无法计算 g。 / Eccentricity e cubed is close to zero, cannot calculate g.")
+            _g = (1.0 - e_sq) / e_cubed
 
             # alpha_prime (Eq. 47)
-            alpha_prime = 2.0 * g * (f / 2.0 - e)
+            alpha_prime = 2.0 * _g * (f / 2.0 - _e)
 
             # beta_prime (Eq. 48)
             if abs(e_sq) < tolerance:
                  raise ValueError("偏心率 e 的平方接近于零，无法计算 beta_prime。"
-                 " The square of eccentricity e is close to zero, beta_prime cannot be calculated.")
-            beta_prime = (1.0 / e_sq) - (g * f / 2.0)
+                                  "The square of eccentricity e is close to zero, beta_prime cannot be calculated."
+                                  )
+            beta_prime = (1.0 / e_sq) - (_g * f / 2.0)
 
             # 计算惯性因子 k1, k2, k3 / Calculate inertia factors k1, k2, k3
             # k1 (Eq. 49)
-            denom_k1 = 2.0 - alpha_prime
-            if abs(denom_k1) < tolerance:
+            denominator_k1 = 2.0 - alpha_prime       # denominator 分母   numer 分子，， fraction 分数
+            if abs(denominator_k1) < tolerance:
                 raise ValueError("计算 k1 时分母接近零。/ Small denominator in k1 calculation")
             k1_ = - alpha_prime / (2.0 - alpha_prime)
 
             # k2 (Eq. 50)
-            denom_k2 = 2.0 - beta_prime
-            if abs(denom_k2) < tolerance:
+            denominator_k2 = 2.0 - beta_prime
+            if abs(denominator_k2) < tolerance:
                 raise ValueError("计算 k2 时分母接近零。/ Small denominator in k2 calculation")
             k2_ = - beta_prime / (2.0 - beta_prime)
 
@@ -210,11 +211,11 @@ def calculate_added_mass_inertia(a1, a2, b, rho_air):
                 k3_ = - (1.0 / 5.0) * term1_num_k3 / term2_den_k3
 
 
-    # 构建附加质量矩阵 (Construct Added Mass Matrix M' - Eq. 42)
+    # 构建附加质量矩阵 (Construct Added Mass Matrix M_prime - Eq. 42)
     _M_prime = m_air * np.diag([k1_, k2_, k2_])
 
     # 构建附加惯性矩阵 (Construct Added Inertia Matrix I0' - Eq. 42)
-    _I0_prime = m_air * np.diag([0.0, k3_, k3_]) # 注意第一个元素是 0 note first element is 0
+    _I0_prime = m_air * np.diag([0.0, k3_, k3_]) # 注意第一个元素是 0 /note first element is 0
 
     return _M_prime, _I0_prime
 
