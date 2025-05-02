@@ -28,6 +28,7 @@ def main():
     logger.info("仿真结束")
 
 if __name__ == '__main__':
+    print("[INFO]: starting information ")
     main()
 
 
