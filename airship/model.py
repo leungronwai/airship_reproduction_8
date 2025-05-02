@@ -247,7 +247,7 @@ class Airship:
 
 
         print(dXdt.shape)
-        print("10000000000")
+
 
 
         return dXdt
