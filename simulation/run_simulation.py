@@ -288,14 +288,21 @@ def run_nmpc_simulation():
     plt.show()
 
 
-# --- 显式导出 / Explicit export --- 
-__all__ = ["run_simulation", "run_nmpc_simulation"]
 
-# --- 运行入口，仅用于单独运行调试 ---
+
+def run(mode="blf"):
+    if mode == "blf":
+        run_simulation()
+    elif mode == "nmpc":
+        run_nmpc_simulation()
+    else:
+        raise ValueError(f"Unknown mode: {mode}")
+
+
+__all__ = ["run", "run_simulation", "run_nmpc_simulation"]
+
 if __name__ == '__main__':
-    run_simulation()
-    # 或者临时测试 NMPC：run_nmpc_simulation()
-
+    run(mode="nmpc") # or "blf"
 
 
 
