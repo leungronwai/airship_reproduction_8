@@ -1,7 +1,9 @@
 # main.py
-
+import os
 import logging
+from datetime import datetime
 from simulation.run_simulation import run_simulation
+
 
 def setup_logger():
     """
@@ -9,11 +11,21 @@ def setup_logger():
     Global logging configuration: Configure once here, and other modules in the project
     can retrieve the same logger.
     """
+    log_dir = "logs"
+    os.makedirs(log_dir, exist_ok=True)  # 创建 logs 目录 / Create logs directory if it doesn't exist
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_file = os.path.join(log_dir, f"simulation_{timestamp}.log")
+
     logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(levelname)s - %(message)s'
+        level=logging.DEBUG,  # 可以调整级别 / Adjust the level as needed
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler(log_file, mode='w'),
+            logging.StreamHandler()  # 同时输出到终端 / Also output to terminal
+        ]
     )
     return logging.getLogger(__name__)
+
 
 def main():
     # 1. 初始化日志 /  Initialize logger
@@ -22,10 +34,15 @@ def main():
 
     # 2. 调用仿真主入口（内部已使用 config.parameters 拿到所有常量）
     # Call the main simulation entry point (internally uses config.parameters to access all constants)
-    run_simulation()
+    try:
+        run_simulation()
+    except Exception as e:
+        logger.error(f"仿真过程中发生错误: {e} / Error during simulation: {e}")
+    else:
+        logger.info("仿真成功完成 / Simulation completed successfully") # 3. 结束日志 / End logging
+    
 
-    # 3. 结束日志 / End logging
-    logger.info("仿真结束 / Simulation ended")
+
 
 if __name__ == '__main__':
     print("[INFO]: starting information ")

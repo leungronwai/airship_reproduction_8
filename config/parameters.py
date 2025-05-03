@@ -2,8 +2,8 @@
 import numpy as np
 
 # --- 仿真参数 (Simulation Parameters) ---
-DT = 0.05  # 仿真步长 (Simulation step size) [s]
-T_SPAN = 200 # 仿真总时间 (Total simulation time) [s] # Reduced for faster testing, original paper used longer
+DT = 0.1  # 仿真步长 (Simulation step size) [s]
+T_SPAN = 50 # 仿真总时间 (Total simulation time) [s] # Reduced for faster testing, original paper used longer
 
 # --- 物理参数 (Physical Parameters - Placeholder Values!) ---
 # 这些值需要根据具体气艇模型替换 (These values MUST be replaced based on the specific airship model)
@@ -48,7 +48,7 @@ Cnr = -1.0   # Yaw damping coefficient vs r
 
 # 在 simulation.py 或 parameters.py 的初始化部分
 # In simulation.py or parameters.py initialization section
-import aero_coefficients as aero
+from config import aero_coefficients as aero
 
 try:
     # 计算 k1, k2 (假设函数在 aero.py 或其他地方)

@@ -48,18 +48,23 @@ def run_simulation():
     start_time = timer.time()
 
     for i, t in enumerate(sim_time):
-        # 1. 获取当前状态 (Get current state) 
+        # 获取当前状态 (Get current state) 
         X = airship.get_state()
         zeta = X[0:3]
         gamma = X[3:6]
         x_vec = X[6:12]  # v, omega
 
-        # 2. 获取期望状态 (Get desired state)
+        logger.debug(f"Step {i}/{n_steps}, Time: {t:.2f}s, State: {X}")
+        logger.debug(f"[{i}] t={t:.2f}s | zeta={zeta} | gamma={gamma}")
+
+        # 获取期望状态 (Get desired state)
         yc, yc_dot, yc_ddot, xc, xc_dot = trajectory.get_desired_state(t)
         zeta_d, gamma_d = yc[0:3], yc[3:6]
         zeta_d_dot, gamma_d_dot = yc_dot[0:3], yc_dot[3:6]
 
-        # 3. 计算误差 (Calculate errors)
+        logger.debug(f"[{i}] Desired zeta_d={zeta_d}, gamma_d={gamma_d}")
+
+        # 计算误差 (Calculate errors)
         R = R_block(gamma)
         y = np.concatenate((zeta, gamma))  # Current position/attitude vector
         y_dot = R @ x_vec  # Current velocity vector in yc space
@@ -67,20 +72,23 @@ def run_simulation():
         e1 = y - yc
         e2 = y_dot - yc_dot
 
-        # 4. 更新扰动观测器 (Update disturbance observer)
+        # 更新扰动观测器 (Update disturbance observer)
         # Observer needs f calculated by controller based on CURRENT e1, e2
         # Calculate f for the observer first (it uses last state's effect)
         f_for_observer = controller.get_last_f()  # Get f from previous step calculation
         delta_hat = observer.update(params.DT, e1, e2, tau, gamma, lambda e1_arg, e2_arg: f_for_observer)
 
-        # 5. 计算控制输入 (Calculate control input)
+        # 计算控制输入 (Calculate control input)
         # Controller calculates its own f based on current state/errors
         tau = controller.calculate_control(t, e1, e2, delta_hat, gamma, gamma_d, xc, xc_dot)
 
-        # 6. 获取实际扰动 (Get actual disturbance)
+        if i % (n_steps // 10) == 0:  # Print every 10% of the simulation 每 10 步打印一次 e1、tau 的范数
+            logger.debug(f"[{i}] t={t:.2f}s | e1 norm={np.linalg.norm(e1):.4f} | tau norm={np.linalg.norm(tau):.4f}")
+
+        # 获取实际扰动 (Get actual disturbance)
         actual_delta = params.disturbance_delta(t)
 
-        # 7. 积分气艇模型 (Integrate airship model - using RK4)
+        # 积分气艇模型 (Integrate airship model - using RK4)
         # Define the ODE function for the solver/RK4
         def airship_ode(t_rk, X_rk):
             # Need control 'tau' and disturbance 'actual_delta' at time t_rk
@@ -95,11 +103,11 @@ def run_simulation():
         k4 = airship_ode(t + params.DT, X + params.DT * k3)
         X_next = X + (params.DT / 6.0) * (k1 + 2 * k2 + 2 * k3 + k4)
 
-        # 8. 更新状态 (Update state)
+        # 更新状态 (Update state)
         airship.X = X_next
         airship.X[3:6] = (airship.X[3:6] + np.pi) % (2 * np.pi) - np.pi  # Normalize angles
 
-        # 9. 记录数据 (Log data)
+        # 记录数据 (Log data)
         state_history[:, i] = X
         error_history[:, i] = e1
         error2_history[:, i] = e2
