@@ -1,6 +1,7 @@
 # main.py
 import os
 import logging
+import traceback
 from datetime import datetime
 from simulation.run_simulation import run_simulation
 
@@ -38,6 +39,7 @@ def main():
         run_simulation()
     except Exception as e:
         logger.error(f"仿真过程中发生错误: {e} / Error during simulation: {e}")
+        traceback.print_exc()  # 打印完整的错误堆栈 / Print the full error stack
     else:
         logger.info("仿真成功完成 / Simulation completed successfully") # 3. 结束日志 / End logging
     
