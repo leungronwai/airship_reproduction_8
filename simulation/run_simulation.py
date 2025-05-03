@@ -12,6 +12,9 @@ from airship.observer import FixedTimeDO
 from airship.controller import FixedTimeBLFController
 
 
+from airship.controller import NMPCThrustController  # 定义的NMPC类
+
+
 # 全局 logger（在这里做一次 basicConfig） / Global logger (basicConfig done here)
 logging.basicConfig(
     level=logging.INFO,
@@ -27,6 +30,8 @@ def run_simulation():
     trajectory = Trajectory()
     observer = FixedTimeDO()
     controller = FixedTimeBLFController()
+
+
 
     # --- 数据记录 / Data logging ---
     sim_time = np.arange(0, params.T_SPAN, params.DT)
@@ -210,6 +215,86 @@ def run_simulation():
     plt.show()
 
 
+def run_nmpc_simulation():
+    from airship.controller import NMPCThrustController
+    from airship.trajectory import Trajectory
+    from airship.model import Airship
+
+    airship = Airship(params.X0)
+    trajectory = Trajectory()
+    controller = NMPCThrustController(
+        model=airship,
+        dt=params.DT,
+        N=params.N_HORIZON,
+        Q=params.Q,
+        R=params.R,
+        Qf=params.Qf,
+        T_bounds=(params.T_MIN, params.T_MAX),
+        mu_bounds=(params.MU_MIN, params.MU_MAX),
+        nu_bounds=(params.NU_MIN, params.NU_MAX)
+    )
+
+    sim_time = np.arange(0, params.T_SPAN, params.DT)
+    n_steps = len(sim_time)
+
+    state_history = np.zeros((12, n_steps))
+    control_history = np.zeros((3, n_steps))  # [T, mu, nu]
+    yc_history = np.zeros((6, n_steps))  # zeta + gamma
+
+    X = airship.get_state()
+
+    for i, t in enumerate(sim_time):
+        # 获取参考轨迹
+        X_ref = []
+        U_ref = []
+        for j in range(params.N_HORIZON + 1):
+            t_future = t + j * params.DT
+            yc_j, yc_dot_j, _, _, _ = trajectory.get_desired_state(t_future)
+            X_ref.append(np.concatenate([yc_j, yc_dot_j]))
+        for j in range(params.N_HORIZON):
+            U_ref.append(np.array([8.0, 0.0, 0.0]))  # 可替换为 smarter guess
+
+        # NMPC 控制器返回 u = [T, μ, ν]
+        u_cmd = controller.step(X, X_ref, U_ref)
+        tau = controller.thrust_to_force(u_cmd)
+
+        # 积分系统（RK4）
+        def f(t_rk, x_rk):
+            return airship.rhs(t_rk, x_rk, tau, lambda _: np.zeros(6))
+
+        k1 = f(t, X)
+        k2 = f(t + 0.5 * params.DT, X + 0.5 * params.DT * k1)
+        k3 = f(t + 0.5 * params.DT, X + 0.5 * params.DT * k2)
+        k4 = f(t + params.DT, X + params.DT * k3)
+        X_next = X + (params.DT / 6.0) * (k1 + 2 * k2 + 2 * k3 + k4)
+
+        # 状态更新
+        airship.X = X_next
+        X = X_next
+
+        # 记录
+        state_history[:, i] = X
+        control_history[:, i] = u_cmd
+        yc_history[:, i] = X_ref[0][0:6]
+
+    # 可视化（简单轨迹）
+    import matplotlib.pyplot as plt
+    fig = plt.figure("NMPC 3D Trajectory")
+    ax = fig.add_subplot(111, projection='3d')
+    ax.plot(state_history[0, :], state_history[1, :], state_history[2, :], label='Airship')
+    ax.plot(yc_history[0, :], yc_history[1, :], yc_history[2, :], '--', label='Reference')
+    ax.set_xlabel('X'); ax.set_ylabel('Y'); ax.set_zlabel('Z')
+    ax.legend()
+    plt.show()
+
+
+# --- 显式导出 / Explicit export --- 
+__all__ = ["run_simulation", "run_nmpc_simulation"]
+
+# --- 运行入口，仅用于单独运行调试 ---
+if __name__ == '__main__':
+    run_simulation()
+    # 或者临时测试 NMPC：run_nmpc_simulation()
 
 
 
@@ -217,9 +302,16 @@ def run_simulation():
 
 
 # 注意：不要在模块顶层调用 run_simulation()，否则一导入就会执行。只在 if __name__=='__main__' 下调用它。
-if __name__ == '__main__':
-    # 如果直接运行这个脚本，也能启动仿真
-    run_simulation()
+# if __name__ == '__main__':
+#     from argparse import ArgumentParser
+#     parser = ArgumentParser()
+#     parser.add_argument('--mode', choices=['blf', 'nmpc'], default='nmpc')
+#     args = parser.parse_args()
+
+#     if args.mode == 'blf':  # run " python run_simulation.py " in terminal
+#         run_simulation()
+#     else:
+#         run_nmpc_simulation()  # "python run_simulation.py --mode blf " in terminal
 
 
 

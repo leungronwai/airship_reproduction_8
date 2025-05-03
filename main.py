@@ -3,7 +3,9 @@ import os
 import logging
 import traceback
 from datetime import datetime
-from simulation.run_simulation import run_simulation
+from simulation.run_simulation import run
+from simulation.run_simulation import run_simulation, run_nmpc_simulation  # 引入两个仿真函数
+
 
 
 def setup_logger():
@@ -28,21 +30,24 @@ def setup_logger():
     return logging.getLogger(__name__)
 
 
+    
+
+
 def main():
-    # 1. 初始化日志 /  Initialize logger
-    logger = setup_logger() # test
+    logger = setup_logger()
     logger.info("程序启动 / Program started")
 
-    # 2. 调用仿真主入口（内部已使用 config.parameters 拿到所有常量）
-    # Call the main simulation entry point (internally uses config.parameters to access all constants)
+    # ==== 控制仿真模式（手动切换）====
+    simulation_mode = "nmpc"  # or "blf"  #选择仿真模式 / Choose simulation mode
+
     try:
-        run_simulation()
+        run(mode=simulation_mode)
     except Exception as e:
         logger.error(f"仿真过程中发生错误: {e} / Error during simulation: {e}")
-        traceback.print_exc()  # 打印完整的错误堆栈 / Print the full error stack
+        traceback.print_exc() # 打印完整的错误堆栈 / Print the full error stack
     else:
         logger.info("仿真成功完成 / Simulation completed successfully") # 3. 结束日志 / End logging
-    
+
 
 
 
@@ -54,15 +59,3 @@ if __name__ == '__main__':
 
 
 
-'''
-我想 逐步丰富 main.py, 例如:
-	•	支持 CLI 参数(用 argparse)
-	•	支持不同的仿真模式（调试/发布）
-	•	将日志输出到文件等
-
-Ideas to gradually enhance main.py, for example:
-    • Support CLI arguments (using argparse)
-    • Support different simulation modes (debug/release)
-    • Output logs to a file, etc.
-
-'''
