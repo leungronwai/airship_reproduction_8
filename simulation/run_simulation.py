@@ -290,20 +290,7 @@ def run_nmpc_simulation():
 
 
 
-def run(mode="blf"):
-    if mode == "blf":
-        run_simulation()
-    elif mode == "nmpc":
-        run_nmpc_simulation()
-    else:
-        raise ValueError(f"Unknown mode: {mode}")
 
-
-# 运行仿真函数 / Run simulation function
-__all__ = ["run", "run_simulation", "run_nmpc_simulation"]
-
-if __name__ == '__main__':
-    run(mode="nmpc") # or "blf"
 
 
 
