@@ -299,6 +299,7 @@ def run(mode="blf"):
         raise ValueError(f"Unknown mode: {mode}")
 
 
+# 运行仿真函数 / Run simulation function
 __all__ = ["run", "run_simulation", "run_nmpc_simulation"]
 
 if __name__ == '__main__':
