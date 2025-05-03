@@ -41,7 +41,13 @@ def main():
     simulation_mode = "nmpc"  # or "blf"  #选择仿真模式 / Choose simulation mode
 
     try:
-        run(mode=simulation_mode)
+        if simulation_mode == "blf":
+            run_simulation()
+
+        elif simulation_mode == "nmpc":
+            run_nmpc_simulation()
+        else:
+            raise ValueError(f"未知的仿真模式 / unknown simulation mode: {simulation_mode}")
     except Exception as e:
         logger.error(f"仿真过程中发生错误: {e} / Error during simulation: {e}")
         traceback.print_exc() # 打印完整的错误堆栈 / Print the full error stack
