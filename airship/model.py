@@ -2,6 +2,7 @@
 import numpy as np
 from .utils import skew, R_zeta, R_y, S_omega, R_block
 from config import parameters as params
+import casadi as ca
 
 
 class Airship:
@@ -269,6 +270,93 @@ class Airship:
 
     def get_velocity(self):
         return self.X[6:12] # v, omega
+
+
+
+class AirshipCasADiSymbolic:
+    def __init__(self, params):
+        self.params = params
+        self.m = params.m
+        self.g = params.g
+        self.I0 = params.I0
+        self.M = params.M_cfg
+        self.M_inv = params.M_inv
+        self.M_upper_left = self.M[0:3, 0:3]
+        self.rc = params.rc.flatten()
+        self.rb = params.rb.flatten()
+        self.Vol_airship = params.Vol_airship
+        self.rho_air = params.rho_air
+        self.V_wind = params.V_WIND_ERF
+        self.AERO_COEFFS = params.AERO_COEFFS
+
+    def rhs_symbolic(self, X, U):
+        """
+        Build symbolic RHS using CasADi.
+        :param X: 12x1 casadi SX state vector
+        :param U: 3x1 casadi SX control vector [T, μ, v]
+        :return: dX/dt as casadi SX 12x1
+        """
+        ca = __import__("casadi").casadi  # dynamic import if not at top
+
+        # === 解构状态 ===
+        zeta = X[0:3]
+        gamma = X[3:6]
+        v     = X[6:9]
+        omega = X[9:12]
+
+        # === 推力向量 T_vec from T, μ, ν ===
+        T_mag = U[0]
+        mu    = U[1]
+        nu    = U[2]
+        T_vec = ca.vertcat(
+            T_mag * ca.cos(mu) * ca.cos(nu),
+            T_mag * ca.sin(mu),
+            T_mag * ca.cos(mu) * ca.sin(nu)
+        )
+
+        # === 推力矩（力臂 × 力） ===
+        rP = self.rb  # 力作用点到坐标原点
+        tau_vec = ca.cross(rP, T_vec)  # 力矩 = 力臂 × 力
+
+        # === N项 ===
+        omega_cross_v = ca.cross(omega, v)
+        omega_cross_rc = ca.cross(omega, self.rc)
+        omega_cross_omega_cross_rc = ca.cross(omega, omega_cross_rc)
+        omega_cross_I0_omega = ca.cross(omega, self.I0 @ omega)
+        rc_cross_omega_cross_v = ca.cross(self.rc, omega_cross_v)
+
+        N1 = self.M_upper_left @ omega_cross_v + self.m * omega_cross_omega_cross_rc
+        N2 = omega_cross_I0_omega + self.m * rc_cross_omega_cross_v
+        N = ca.vertcat(N1, N2)
+
+        # === F项 ===（这里只加重力、浮力，气动力可选加）
+        Rz = R_zeta(gamma)
+        fg_earth = ca.vertcat(0, 0, self.m * self.g)  # 重力在地球坐标系下
+        fg_BRF = Rz.T @ fg_earth   # 重力在机体坐标系下
+        mg_BRF = ca.cross(self.rc, fg_BRF)   # 重力力矩 = 力臂 × 力
+
+        F_buoy_earth = ca.vertcat(0, 0, -self.rho_air * self.Vol_airship * self.g) # 浮力在地球坐标系下
+        fb_BRF = Rz.T @ F_buoy_earth  # 浮力在机体坐标系下
+        mb_BRF = ca.cross(-self.rb, fb_BRF)  # 浮力力矩 = 力臂 × 力
+
+        # 气动力 (可选) - 这部分需要根据具体的气动模型和参数进行计算
+        # V_wind_BRF = ...  # 风速在机体坐标系下
+        # V_rel_BRF = v - V_wind_BRF  # 相对速度
+        # q_dyn = 0.5 * self.rho_air * ca.norm_2(V_rel_BRF) ** 2  # 动态压力
+
+
+        F_vec = fg_BRF - fb_BRF + T_vec  # 这里可以加气动力
+        M_vec = mg_BRF + mb_BRF + tau_vec   # 力矩 = 重力力矩 + 浮力力矩 + 推力矩
+        F_full = ca.vertcat(F_vec, M_vec)
+
+        # === 动力学公式 ===
+        x_dot = self.M_inv @ (F_full - N)
+
+        # === 运动学 ===
+        R_block_mat = R_block(gamma)
+        y_dot = R_block_mat @ ca.vertcat(v, omega)
+
+        return ca.vertcat(y_dot, x_dot)
 
 
 
