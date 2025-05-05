@@ -21,7 +21,8 @@ airship_b = 19.0  # [m] - Placeholder
 
 rc = np.array([[0], [0], [0.50]]) # CV到CG的距离向量 (Distance vector CV to CG) - Placeholder
 rb = np.array([[0], [0], [0]])  # CV到CB的距离向量 (Distance vector CV to CB) - Placeholder
-rp = np.array([[0.8 * airship_a1], [1.0], [2.0]])  # 推力作用点在前右下方 (Thrust point in front right down) - Placeholder
+rp_r = np.array([[0.8 * airship_a1], [airship_b], [2.0]])  # 推力作用点在前右下方 (Thrust point in front right down) - Placeholder
+rp_l = np.array([[0.8 * airship_a1], [-airship_b], [2.0]]) # 推力作用点在前左下方 (Thrust point in front left down) - Placeholder
 g = 9.74 # 重力加速度 (Gravitational acceleration) [m/s^2]
 Vol_airship = 10700 # 气艇体积 (Airship Volume) [m^3] - Placeholder
 rho_air = 0.088   # 空气密度 (Air density at ~20km altitude) [kg/m^3] - Placeholder
@@ -54,7 +55,7 @@ Cnr = -1.0   # Yaw damping coefficient vs r
 
 # 在 simulation.py 或 parameters.py 的初始化部分
 # In simulation.py or parameters.py initialization section
-from config import aero_coefficients as aero
+import aero_coefficients as aero
 
 try:
     # 计算 k1, k2 (假设函数在 aero.py 或其他地方)
