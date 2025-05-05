@@ -1,6 +1,8 @@
 # model.py
+import sys
+sys.path.append(".")  # 添加上级目录到路径中 / add parent directory to path
 import numpy as np
-from .utils import skew, R_zeta, R_y, S_omega, R_block
+from utils import skew, R_zeta, R_y, S_omega, R_block
 from config import parameters as params
 import casadi as ca
 
@@ -15,7 +17,9 @@ class Airship:
         self.I0 = params.I0 # Inertia matrix I0
         self.M_upper_left = params.M_cfg[0:3, 0:3] # m*I + M' from Eq. 9
         self.rc_vec = params.rc # Vector CV->CG (shape (3,1))
-        self.rb_vec = params.rb
+        self.rb_vec = params.rb # Vector CV->CB (shape (3,1))
+        self.rp_r_vec = params.rp_r # 右侧推力作用点向量 (Vector CV->CP Right)
+        self.rp_l_vec = params.rp_l # 左侧推力作用点向量 (Vector CV->CP Left)
         self.rc_skew = skew(self.rc_vec.flatten()) # Skew-symmetric matrix for rc
 
         # --- 添加计算浮力和气动所需的参数 (Add parameters for buoyancy/aero) ---
@@ -227,10 +231,43 @@ class Airship:
 
 
 
+        #--- 计算总推力 (Calculate Total Thrust and  Torque) ---
+        # --- 计算推力和推力力矩 (Calculate Thrust Forces and Moments) ---
+        # 从tau中提取推力参数 / Extract thrust parameters from tau
+        T_mag = tau[0]  # 推力大小 / Thrust magnitude
+        mu = tau[1]     # 水平面内的推力偏转角 / Thrust deflection angle in the horizontal plane
+        nu = tau[2]     # 垂直面内的推力偏转角 / Thrust deflection angle in the vertical plane
+
+        # 计算右侧推力向量 / Calculate right thrust vector
+        T_vec_r = np.array([
+            [T_mag * np.cos(mu) * np.cos(nu)],
+            [T_mag * np.sin(mu)],
+            [T_mag * np.cos(mu) * np.sin(nu)]
+        ])
+
+        # 计算左侧推力向量 / Calculate left thrust vector
+        T_vec_l = np.array([
+            [T_mag * np.cos(mu) * np.cos(nu)],
+            [T_mag * np.sin(mu)],
+            [T_mag * np.cos(mu) * np.sin(nu)]
+        ])
+
+        # 计算总推力 /  Calculate total thrust
+        T_total = T_vec_r + T_vec_l
+
+        # 计算推力力矩 / Calculate thrust torque
+        rp_r_1d = self.rp_r_vec.flatten()
+        rp_l_1d = self.rp_l_vec.flatten()
+        tau_r = np.cross(rp_r_1d, T_vec_r.flatten()).reshape(3, 1)
+        tau_l = np.cross(rp_l_1d, T_vec_l.flatten()).reshape(3, 1)
+        tau_vec = tau_r + tau_l       
+
+
+
         # 组合力和力矩 (Combine Forces and Torques)
-        F_forces = fg_BRF - fb_BRF + fa_BRF
+        F_forces = fg_BRF - fb_BRF + fa_BRF + T_total
         print(F_forces.shape)
-        F_torques = mg_BRF + mb_BRF + ma_BRF
+        F_torques = mg_BRF + mb_BRF + ma_BRF + tau_vec
         print(F_torques.shape)
 
         F_term = np.vstack((F_forces, F_torques)).flatten() # Combine forces and torques into 6x1 vector
@@ -386,14 +423,22 @@ class AirshipCasADiSymbolic:
             delta_ELVR = U[6]
         
         # --- Thrust vector ---
-        T_vec = ca.vertcat(
+        T_vec_r = ca.vertcat(
             T_mag * ca.cos(mu) * ca.cos(nu),
             T_mag * ca.sin(mu),
             T_mag * ca.cos(mu) * ca.sin(nu)
         )
+
+        T_vec_l = ca.vertcat(
+            T_mag * ca.cos(mu) * ca.cos(nu),
+            T_mag * ca.sin(mu),
+            T_mag * ca.cos(mu) * ca.sin(nu)
+        )
+
+        T_total = T_vec_r + T_vec_l
         
-        # Thrust moment
-        tau_vec = ca.cross(self.rp, T_vec)
+        # total Thrust moment
+        tau_vec = ca.cross(self.rp_r, T_vec_r) + ca.cross(self.rp_l, T_vec_l)
         
         # --- Aerodynamic forces and moments ---
         # Get aerodynamic coefficients
@@ -459,7 +504,7 @@ class AirshipCasADiSymbolic:
         ma_BRF = ca.vertcat(moment_L, moment_M, moment_N)
         
         # --- Combine all forces and moments ---
-        F_forces = fg_BRF - fb_BRF + fa_BRF + T_vec
+        F_forces = fg_BRF - fb_BRF + fa_BRF + T_total
         F_torques = mg_BRF + mb_BRF + ma_BRF + tau_vec
         F_term = ca.vertcat(F_forces, F_torques)
         

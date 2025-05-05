@@ -1,5 +1,12 @@
 # main.py
+import sys
 import os
+
+# 添加项目根目录到 sys.path / Add project root directory to sys.path
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if PROJECT_ROOT not in sys.path:
+    sys.path.append(PROJECT_ROOT)
+
 import logging
 import traceback
 from datetime import datetime
