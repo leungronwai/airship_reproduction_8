@@ -11,8 +11,17 @@ m = 9400  # 质量 (Mass) [kg] - Placeholder
 Jx, Jy, Jz = 2e6, 5.5e6, 5.5e6 # 转动惯量 (Moments of Inertia) [kg*m^2] - Placeholder
 I0 = np.diag([Jx, Jy, Jz]) # 惯性矩阵 (Inertia Matrix)
 
+
+# --- 几何参数 (airship Geometric Parameters) ---
+airship_a1 = 73.50 # [m] - Placeholder
+airship_a2 = 62.5 # [m] - Placeholder (如果只有一个 a，则 a1=a2=a)
+airship_b = 19.0  # [m] - Placeholder
+
+
+
 rc = np.array([[0], [0], [0.50]]) # CV到CG的距离向量 (Distance vector CV to CG) - Placeholder
 rb = np.array([[0], [0], [0]])  # CV到CB的距离向量 (Distance vector CV to CB) - Placeholder
+rp = np.array([[0.8 * airship_a1], [1.0], [2.0]])  # 推力作用点在前右下方 (Thrust point in front right down) - Placeholder
 g = 9.74 # 重力加速度 (Gravitational acceleration) [m/s^2]
 Vol_airship = 10700 # 气艇体积 (Airship Volume) [m^3] - Placeholder
 rho_air = 0.088   # 空气密度 (Air density at ~20km altitude) [kg/m^3] - Placeholder
@@ -21,10 +30,7 @@ L_ref = 38.0     # 参考长度 (Reference Length for Aero Moments) [m] - Placeh
 
 
 
-# --- 几何参数 (Geometric Parameters) ---
-airship_a1 = 73.50 # [m] - Placeholder
-airship_a2 = 62.5 # [m] - Placeholder (如果只有一个 a，则 a1=a2=a)
-airship_b = 19.0  # [m] - Placeholder
+
 
 # --- 环境参数 (Environmental Parameters) ---
 rho_air_at_altitude = rho_air # [kg/m^3] 空气密度 air dense @ ~20km - Placeholder

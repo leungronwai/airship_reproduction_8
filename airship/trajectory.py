@@ -7,11 +7,6 @@ class Trajectory:
     def __init__(self):
         pass # No specific initialization needed for this trajectory
 
-
-
-
-
-
     def get_desired_state(self, t):
         """计算给定时间t的期望状态及其导数
         Calculate the expected state and its derivative at the given time t
@@ -84,7 +79,7 @@ class Trajectory:
 
     @staticmethod
     def define_spiral_trajectory(t):
-        """Define the spiral trajectory function """
+        """Define the desired spiral trajectory function """
 
         def trajectory(t):
             # 参数 parameters

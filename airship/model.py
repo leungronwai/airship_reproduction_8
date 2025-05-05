@@ -273,6 +273,8 @@ class Airship:
 
 
 
+
+
 class AirshipCasADiSymbolic:
     def __init__(self, params):
         self.params = params
@@ -284,80 +286,253 @@ class AirshipCasADiSymbolic:
         self.M_upper_left = self.M[0:3, 0:3]
         self.rc = params.rc.flatten()
         self.rb = params.rb.flatten()
+        self.rp = params.rp.flatten()
         self.Vol_airship = params.Vol_airship
         self.rho_air = params.rho_air
+        self.S_ref = params.S_ref
+        self.L_ref = params.L_ref
         self.V_wind = params.V_WIND_ERF
         self.AERO_COEFFS = params.AERO_COEFFS
-
-    def rhs_symbolic(self, X, U):
+        
+    def rhs_symbolic(self, X, U, t=None, external_disturbance=None):
         """
         Build symbolic RHS using CasADi.
-        :param X: 12x1 casadi SX state vector
-        :param U: 3x1 casadi SX control vector [T, μ, v]
-        :return: dX/dt as casadi SX 12x1
+        
+        Args:
+            X: 12x1 casadi SX state vector [zeta, gamma, v, omega]
+            U: Control vector - either:
+               - 3x1 [T, μ, v] for direct thrust control
+               - 6x1 [T, μ, v, delta_RUDT, delta_RUDB, delta_ELVL, delta_ELVR] for full control
+            t: Time (optional)
+            external_disturbance: Optional external disturbance (6x1)
+            
+        Returns:
+            dX/dt as casadi SX 12x1
         """
-        ca = __import__("casadi").casadi  # dynamic import if not at top
-
+        ca = __import__("casadi")  # dynamic import
+        
         # === 解构状态 ===
-        zeta = X[0:3]
-        gamma = X[3:6]
-        v     = X[6:9]
-        omega = X[9:12]
-
-        # === 推力向量 T_vec from T, μ, ν ===
-        T_mag = U[0]
-        mu    = U[1]
-        nu    = U[2]
-        T_vec = ca.vertcat(
-            T_mag * ca.cos(mu) * ca.cos(nu),
-            T_mag * ca.sin(mu),
-            T_mag * ca.cos(mu) * ca.sin(nu)
-        )
-
-        # === 推力矩（力臂 × 力） ===
-        rP = self.rb  # 力作用点到坐标原点
-        tau_vec = ca.cross(rP, T_vec)  # 力矩 = 力臂 × 力
-
-        # === N项 ===
+        zeta = X[0:3]   # Position in ERF
+        gamma = X[3:6]  # Attitude (Euler angles)
+        v = X[6:9]      # Linear velocity in BRF
+        omega = X[9:12] # Angular velocity in BRF
+        
+        # === 运动学 (Kinematics) ===
+        R = R_block(gamma)  # Combined rotation matrix
+        y_dot = R @ ca.vertcat(v, omega)  # [zeta_dot, gamma_dot]
+        
+        # === 动力学 (Dynamics) ===
+        
+        # --- Calculate N term (Coriolis and centrifugal effects) ---
         omega_cross_v = ca.cross(omega, v)
         omega_cross_rc = ca.cross(omega, self.rc)
         omega_cross_omega_cross_rc = ca.cross(omega, omega_cross_rc)
         omega_cross_I0_omega = ca.cross(omega, self.I0 @ omega)
         rc_cross_omega_cross_v = ca.cross(self.rc, omega_cross_v)
-
+        
         N1 = self.M_upper_left @ omega_cross_v + self.m * omega_cross_omega_cross_rc
         N2 = omega_cross_I0_omega + self.m * rc_cross_omega_cross_v
-        N = ca.vertcat(N1, N2)
-
-        # === F项 ===（这里只加重力、浮力，气动力可选加）
+        N_term = ca.vertcat(N1, N2)
+        
+        # --- Calculate F term (forces and moments) ---
+        # Gravity force and moment
         Rz = R_zeta(gamma)
-        fg_earth = ca.vertcat(0, 0, self.m * self.g)  # 重力在地球坐标系下
-        fg_BRF = Rz.T @ fg_earth   # 重力在机体坐标系下
-        mg_BRF = ca.cross(self.rc, fg_BRF)   # 重力力矩 = 力臂 × 力
-
-        F_buoy_earth = ca.vertcat(0, 0, -self.rho_air * self.Vol_airship * self.g) # 浮力在地球坐标系下
-        fb_BRF = Rz.T @ F_buoy_earth  # 浮力在机体坐标系下
-        mb_BRF = ca.cross(-self.rb, fb_BRF)  # 浮力力矩 = 力臂 × 力
-
-        # 气动力 (可选) - 这部分需要根据具体的气动模型和参数进行计算
-        # V_wind_BRF = ...  # 风速在机体坐标系下
-        # V_rel_BRF = v - V_wind_BRF  # 相对速度
-        # q_dyn = 0.5 * self.rho_air * ca.norm_2(V_rel_BRF) ** 2  # 动态压力
-
-
-        F_vec = fg_BRF - fb_BRF + T_vec  # 这里可以加气动力
-        M_vec = mg_BRF + mb_BRF + tau_vec   # 力矩 = 重力力矩 + 浮力力矩 + 推力矩
-        F_full = ca.vertcat(F_vec, M_vec)
-
-        # === 动力学公式 ===
-        x_dot = self.M_inv @ (F_full - N)
-
-        # === 运动学 ===
-        R_block_mat = R_block(gamma)
-        y_dot = R_block_mat @ ca.vertcat(v, omega)
-
-        return ca.vertcat(y_dot, x_dot)
-
+        fg_earth = ca.vertcat(0, 0, self.m * self.g)  # Gravity in Earth Frame
+        fg_BRF = Rz.T @ fg_earth  # Rotate gravity vector to Body Frame
+        mg_BRF = ca.cross(self.rc, fg_BRF) # Torque due to gravity acting at CG (rc is CV->CG)
+        
+        # Buoyancy force and moment
+        F_buoy_earth = ca.vertcat(0, 0, -self.rho_air * self.Vol_airship * self.g)
+        fb_BRF = Rz.T @ F_buoy_earth
+        mb_BRF = ca.cross(-self.rb, fb_BRF)  # Torque due to buoyancy acting at CB (assumed at CV, so arm is -rb)
+        
+        # --- Wind and relative velocity ---
+        # Wind velocity in ERF
+        V_wind_ERF = self.V_wind
+        
+        # Transform wind to BRF
+        V_wind_BRF = Rz.T @ V_wind_ERF
+        
+        # Calculate relative velocity
+        v_rel_brf = v - V_wind_BRF
+        u_rel, v_rel_body, w_rel = v_rel_brf[0], v_rel_brf[1], v_rel_brf[2]
+        
+        # Dynamic pressure
+        V_rel_mag = ca.norm_2(v_rel_brf)
+        q_dyn = 0.5 * self.rho_air * V_rel_mag**2
+        
+        # Angle of attack and sideslip angle
+        alpha = ca.atan2(w_rel, u_rel)
+        beta = ca.asin(v_rel_body / (V_rel_mag + 1e-6))  # Add small epsilon to avoid division by zero
+        
+        # --- Control inputs ---
+        if U.shape[0] == 3:  # Basic thrust control [T, μ, ν]
+            T_mag = U[0]
+            mu = U[1]
+            nu = U[2]
+            
+            # Default control surface deflections
+            delta_RUDT = 0.0
+            delta_RUDB = 0.0
+            delta_ELVL = 0.0
+            delta_ELVR = 0.0
+        else:  # Full control [T, μ, ν, delta_RUDT, delta_RUDB, delta_ELVL, delta_ELVR]
+            T_mag = U[0]
+            mu = U[1]
+            nu = U[2]
+            delta_RUDT = U[3]
+            delta_RUDB = U[4]
+            delta_ELVL = U[5]
+            delta_ELVR = U[6]
+        
+        # --- Thrust vector ---
+        T_vec = ca.vertcat(
+            T_mag * ca.cos(mu) * ca.cos(nu),
+            T_mag * ca.sin(mu),
+            T_mag * ca.cos(mu) * ca.sin(nu)
+        )
+        
+        # Thrust moment
+        tau_vec = ca.cross(self.rp, T_vec)
+        
+        # --- Aerodynamic forces and moments ---
+        # Get aerodynamic coefficients
+        Cx1 = self.AERO_COEFFS['Cx1']
+        Cx2 = self.AERO_COEFFS['Cx2']
+        Cy1 = self.AERO_COEFFS['Cy1']
+        Cy2 = self.AERO_COEFFS['Cy2']
+        Cy3 = self.AERO_COEFFS['Cy3']
+        Cy4 = self.AERO_COEFFS['Cy4']
+        Cz1 = self.AERO_COEFFS['Cz1']
+        Cz2 = self.AERO_COEFFS['Cz2']
+        Cz3 = self.AERO_COEFFS['Cz3']
+        Cz4 = self.AERO_COEFFS['Cz4']
+        Cl1 = self.AERO_COEFFS['Cl1']
+        Cl2 = self.AERO_COEFFS['Cl2']
+        Cm1 = self.AERO_COEFFS['Cm1']
+        Cm2 = self.AERO_COEFFS['Cm2']
+        Cm3 = self.AERO_COEFFS['Cm3']
+        Cm4 = self.AERO_COEFFS['Cm4']
+        Cn1 = self.AERO_COEFFS['Cn1']
+        Cn2 = self.AERO_COEFFS['Cn2']
+        Cn3 = self.AERO_COEFFS['Cn3']
+        Cn4 = self.AERO_COEFFS['Cn4']
+        
+        # Pre-calculate trigonometric terms
+        sin_a = ca.sin(alpha)
+        cos_a = ca.cos(alpha)
+        sin_b = ca.sin(beta)
+        cos_b = ca.cos(beta)
+        sin_abs_a = ca.sin(ca.fabs(alpha))
+        sin_abs_b = ca.sin(ca.fabs(beta))
+        sin_2a = ca.sin(2 * alpha)
+        sin_2b = ca.sin(2 * beta)
+        cos_a_half = ca.cos(alpha / 2.0)
+        sin_a_half = ca.sin(alpha / 2.0)
+        cos_b_half = ca.cos(beta / 2.0)
+        
+        # X Force - Eq. 23
+        Fax = q_dyn * (Cx1 * cos_a**2 * cos_b**2 + Cx2 * sin_2a * sin_a_half)
+        
+        # Y Force - Eq. 24
+        Fay = q_dyn * (Cy1 * cos_b_half * sin_2b + Cy2 * sin_2b +
+                       Cy3 * sin_b * sin_abs_b + Cy4 * (delta_RUDT + delta_RUDB))
+        
+        # Z Force - Eq. 25
+        Faz = q_dyn * (Cz1 * cos_a_half * sin_2a + Cz2 * sin_2a +
+                       Cz3 * sin_a * sin_abs_a + Cz4 * (delta_ELVL + delta_ELVR))
+        
+        fa_BRF = ca.vertcat(Fax, Fay, Faz)
+        
+        # Roll Moment - Eq. 26
+        moment_L = q_dyn * (Cl1 * (delta_ELVL - delta_ELVR + delta_RUDB - delta_RUDT) +
+                           Cl2 * sin_b * sin_abs_b)
+        
+        # Pitch Moment - Eq. 27
+        moment_M = q_dyn * (Cm1 * cos_a_half * sin_2a + Cm2 * sin_2a +
+                           Cm3 * sin_a * sin_abs_a + Cm4 * (delta_ELVL + delta_ELVR))
+        
+        # Yaw Moment - Eq. 28
+        moment_N = q_dyn * (Cn1 * cos_b_half * sin_2b + Cn2 * sin_2b +
+                           Cn3 * sin_b * sin_abs_b + Cn4 * (delta_ELVL + delta_ELVR))
+        
+        ma_BRF = ca.vertcat(moment_L, moment_M, moment_N)
+        
+        # --- Combine all forces and moments ---
+        F_forces = fg_BRF - fb_BRF + fa_BRF + T_vec
+        F_torques = mg_BRF + mb_BRF + ma_BRF + tau_vec
+        F_term = ca.vertcat(F_forces, F_torques)
+        
+        # --- Add external disturbance if provided ---
+        if external_disturbance is not None:
+            F_term = F_term + external_disturbance
+            
+        # --- Dynamics equation: Mx_dot + N = F ---
+        x_dot = self.M_inv @ (F_term - N_term)
+        
+        # --- Combine state derivatives ---
+        dXdt = ca.vertcat(y_dot, x_dot)
+        
+        return dXdt
+    
+    def get_nmpc_model(self):
+        """
+        Create a CasADi function for use in NMPC.
+        
+        Returns:
+            f: CasADi Function that maps (x, u) to xdot
+        """
+        ca = __import__("casadi")
+        
+        # Define symbolic variables
+        x = ca.SX.sym('x', 12)  # State
+        u = ca.SX.sym('u', 7)   # Control (T, μ, ν, delta_RUDT, delta_RUDB, delta_ELVL, delta_ELVR)
+        
+        # Get dynamics
+        xdot = self.rhs_symbolic(x, u)
+        
+        # Create function
+        f = ca.Function('f', [x, u], [xdot], ['x', 'u'], ['xdot'])
+        
+        return f
+    
+    def discrete_time_model(self, dt, integration_method='rk4'):
+        """
+        Get a discrete-time model using various integration methods.
+        
+        Args:
+            dt: Time step
+            integration_method: 'euler', 'rk4', etc.
+            
+        Returns:
+            F: CasADi Function that maps (x, u) to x_next
+        """
+        ca = __import__("casadi")
+        
+        # Define symbolic variables
+        x = ca.SX.sym('x', 12)
+        u = ca.SX.sym('u', 7)
+        
+        # Get continuous dynamics
+        xdot = self.rhs_symbolic(x, u)
+        
+        # Create discrete model based on integration method
+        if integration_method == 'euler':
+            x_next = x + dt * xdot
+        elif integration_method == 'rk4':
+            # RK4 integration
+            k1 = xdot
+            k2 = self.rhs_symbolic(x + dt/2 * k1, u)
+            k3 = self.rhs_symbolic(x + dt/2 * k2, u)
+            k4 = self.rhs_symbolic(x + dt * k3, u)
+            x_next = x + dt/6 * (k1 + 2*k2 + 2*k3 + k4)
+        else:
+            raise ValueError(f"Unknown integration method: {integration_method}")
+        
+        # Create a function
+        F = ca.Function('F', [x, u], [x_next], ['x', 'u'], ['x_next'])
+        
+        return F
 
 
 
