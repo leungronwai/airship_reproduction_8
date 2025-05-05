@@ -3,9 +3,10 @@ import numpy as np
 from airship.utils import sig, R_block, R_zeta, R_y, S_omega
 from config import parameters as params
 import casadi as ca
+import numpy as np
 from model import AirshipCasADiSymbolic
 
-class FixedTimeBLFController:
+class AnyController:
     def __init__(self):
         # 加载参数 (Load parameters)
         self.k1 = params.k1
@@ -17,89 +18,58 @@ class FixedTimeBLFController:
         self.epsilon = params.epsilon
         self.phi = params.phi
         self.rho = params.rho
-        self.M = params.M_cfg
-        self.M_inv = params.M_inv
+ 
 
-        self.f_term_last = np.zeros(6) # Store f for observer
 
-    def calculate_f(self, e1, e2, gamma, gamma_c, xc, xc_dot):
-        """计算 f(e1, e2) 项 - Eq. 20 (Simplified)"""
-        R = R_block(gamma)
-        Rc = R_block(gamma_c)
-        try:
-            Rc_inv = np.linalg.inv(Rc)
-        except np.linalg.LinAlgError:
-             print("Warning: Rc is singular!")
-             Rc_inv = np.identity(6)
+        self.rp_r = params.rp_r
+        self.rp_l = params.rp_l
 
-        # Ṙ = R * S(omega) where S is block diag [S(w), S(w)]? No, kinematic relation.
-        # Ṙζ = Rζ * S(ω); Ṙy involves derivatives of angles. Very complex.
-        # Simplifying: Neglect R_dot terms, as they are often smaller or compensated by adaptation/DO.
-        R_dot = np.zeros((6,6)) # Placeholder/Simplification
-        Rc_dot = np.zeros((6,6)) # Placeholder/Simplification
 
-        # F - N - M*xc_dot term is highly model dependent.
-        # Assuming F-N is handled by the observer as part of delta.
-        # We calculate the terms available from Eq. 20.
-        term1 = R @ Rc_inv @ e2
-        term2 = - R @ Rc_inv @ (R - Rc) @ xc
-        term3 = (R_dot - Rc_dot) @ xc # Simplified to 0
-        term4 = (R - Rc) @ xc_dot
-        term5 = R @ self.M_inv @ (-self.M @ xc_dot) # RM⁻¹(-Mẋc) term? Yes, this is -R*xc_dot
 
-        # Combine terms. Note: This 'f' is used in BOTH observer and controller.
-        f = term1 + term2 + term3 + term4 - R @ xc_dot # Simplified version
-        self.f_term_last = f # Store for observer use
-        return f   # Return f for observer
-
-    def calculate_control(self, t, e1, e2, delta_hat, gamma, gamma_c, xc, xc_dot):
+    def calculate_control(self, t, x, x_ref, x_ref_dot, u_thrust):
         """计算控制输入 tau - Eq. 52"""
-        kb = self.kb_func(t)
-        kb_dot = self.kb_dot_func(t)
+        # --- Control inputs ---
+        T_mag = u_thrust[0]  # 推力大小 / Thrust magnitude
+        mu = u_thrust[1]     # 水平面内的推力偏转角  / Thrust deflection angle in the horizontal plane
+        nu = u_thrust[2]     # 垂直面内的推力偏转角 / Thrust deflection angle in the vertical plane
+        
+        # 计算右侧和左侧推力矢量(假设对称) / Calculate right and left thrust vectors (assuming symmetry)
+        # 计算推力向量 / Calculate thrust vector
+                # --- Thrust vector ---
+        thrust_vector_r = ca.vertcat(
+            T_mag * np.cos(mu) * np.cos(nu),
+            T_mag * np.sin(mu),
+            T_mag * np.cos(mu) * np.sin(nu)
+        )
 
-        # --- 检查约束 (Check constraints) ---
-        if np.any(np.abs(e1) >= kb):
-            print(f"ERROR: Constraint violated at time {t:.2f}!")
-            # Implement saturation or emergency stop here
-            e1 = np.clip(e1, -kb + 1e-6, kb - 1e-6) # Clip to avoid NaN
+        thrust_vector_l = ca.vertcat(
+            T_mag * np.cos(mu) * np.cos(nu),
+            T_mag * np.sin(mu),
+            T_mag * np.cos(mu) * np.sin(nu)
+        )
 
-        # --- 计算BLF相关项 (Calculate BLF related terms) ---
-        # Omega = diag( sec^2(...) ) = diag( kb^2 / (kb^2 - e1^2) )
-        Omega_diag = kb**2 / (kb**2 - e1**2)
-        # Lambda* = diag( |kb_dot/kb| + epsilon ) - See Remark 4
-        lambda_star_diag = np.abs(kb_dot / kb) + self.epsilon # Use abs as in Tee 2011
+        T_total = thrust_vector_r + thrust_vector_l
+        
+        # 获取推力作用点 / Get the thrust application points
+        rp_r = self.params.rp_r.flatten()
+        rp_l = self.params.rp_l.flatten()
+        
+        # 计算力矩 / --- Thrust torque ---
+        tau_r = np.cross(rp_r, thrust_vector_r.flatten()).reshape(3, 1)
+        tau_l = np.cross(rp_l, thrust_vector_l.flatten()).reshape(3, 1)
 
-        # --- 虚拟控制律 (Virtual Control - Eq. 38) ---
-        # e2* = - diag(lambda*) * (k1*sig(e1, 1-phi) + k2*sig(e1, 1-phi+rho))
-        term_k1 = self.k1 * sig(e1, 1 - self.phi)
-        term_k2 = self.k2 * sig(e1, 1 - self.phi + self.rho)
-        e2_star = - lambda_star_diag * (term_k1 + term_k2)
-
-        # --- 计算误差 xi (Calculate error xi) ---
-        xi = e2 - e2_star
-
-        # --- 计算 f(e1, e2) ---
-        # This 'f' is for the controller dynamics (Eq. 19)
-        f_term = self.calculate_f(e1, e2, gamma, gamma_c, xc, xc_dot)
-
-        # --- 计算控制律 τ (Calculate control law tau - Eq. 52 rearranged) ---
-        # τ = -M * R^T * ( sig(xi, 2*phi-1)*(k3 + k4*sig(xi, phi)) + f_term ) - delta_hat
-        # Need R = R_block(gamma)
-        R = R_block(gamma)
-        RM_inv = R @ self.M_inv
-
-        control_dyn_term = sig(xi, 2 * self.phi - 1) * (self.k3 + self.k4 * sig(xi, self.phi))
-
-        tau = -self.M @ R.T @ (control_dyn_term + f_term) - delta_hat
+        # total Thrust momentsa
+        tau_vec = tau_r + tau_l
+        
+        # 组合力和力矩
+        tau = np.concatenate([T_total, tau_vec]) # 6D force and torque vector
 
         # Apply saturation if needed based on actuator limits
         # tau = np.clip(tau, min_tau, max_tau)
 
-        return tau  # Return control input tau
+        return tau  # Return control input tau 6D vector
 
-    def get_last_f(self):
-        """观测器需要控制器计算的f项"""
-        return self.f_term_last
+
 
 
 
@@ -111,8 +81,8 @@ class NMPCThrustController:
     """
     def __init__(self, model, dt, N, Q, R, Qf, T_bounds, mu_bounds, nu_bounds):
         """
-        :param model:    Airship instance with a casadi-compatible dynamics (rhs)
-        :param dt:       sampling time
+        :param model:    Airship实例, 用于仿真/ Airship instance with a casadi-compatible dynamics (rhs)
+        :param dt:       采样时间 sampling time
         :param N:        prediction horizon steps
         :param Q, R, Qf: weight vectors or lists for state, input, terminal cost
         :param T_bounds: (T_min, T_max)
@@ -120,6 +90,7 @@ class NMPCThrustController:
         :param nu_bounds:(nu_min, nu_max)
         """
         self.model = model
+        self.params = params
         self.dt = dt
         self.N = N
         # build cost matrices
@@ -130,6 +101,10 @@ class NMPCThrustController:
         self.T_min,  self.T_max  = T_bounds
         self.mu_min, self.mu_max = mu_bounds
         self.nu_min, self.nu_max = nu_bounds
+
+        #保存推进器位置参数，用于推力计算
+        self.rp_r = self.params.rp_r
+        self.rp_l = self.params.rp_l
 
         # symbolic variables
         X = ca.SX.sym('X', 12)
@@ -151,8 +126,8 @@ class NMPCThrustController:
         self._build_nlp(X, U)
 
     def _build_continuous_dynamics(self, X, U):
-        # 用 AirshipCasADiSymbolic 构造符号表达式
-        symbolic_model = AirshipCasADiSymbolic(self.model)  # self.model 是 Airship 实例
+        # 用 AirshipCasADiSymbolic 构造符号表达式  使用params构建符号化模型
+        symbolic_model = AirshipCasADiSymbolic(self.params)  # self.model 是 Airship 实例
         # 生成符号函数 f_cont(X, U) -> dX/dt
         f_cont = ca.Function("f_cont", [X, U], [symbolic_model.rhs_symbolic(X, U)])
         return f_cont
@@ -275,5 +250,63 @@ class NMPCThrustController:
         u0 = w_opt[12:15]  # 紧跟在 X0 后的就是 U0 = [T, mu, nu]
         return u0
 
+    def thrust_to_force_torque(self, u_thrust):
+        """
+        将推力控制 [T, μ, v] 转换为力和力矩 [Fx, Fy, Fz, Mx, My, Mz]
+        
+        Args:
+            u_thrust: 推力控制输入 [T, μ, v]
+            
+        Returns:
+            tau: 6维力和力矩向量
+        """
 
-    
+        import numpy as np
+
+
+        # --- Control inputs ---
+        T_mag = u_thrust[0]  # 推力大小 / Thrust magnitude
+        mu = u_thrust[1]     # 水平面内的推力偏转角  / Thrust deflection angle in the horizontal plane
+        nu = u_thrust[2]     # 垂直面内的推力偏转角 / Thrust deflection angle in the vertical plane
+        
+        # 计算右侧和左侧推力矢量(假设对称) / Calculate right and left thrust vectors (assuming symmetry)
+        # 计算推力向量 / Calculate thrust vector
+                # --- Thrust vector ---
+        thrust_vector_r = ca.vertcat(
+            T_mag * ca.cos(mu) * ca.cos(nu),
+            T_mag * ca.sin(mu),
+            T_mag * ca.cos(mu) * ca.sin(nu)
+        )
+
+        thrust_vector_l = ca.vertcat(
+            T_mag * ca.cos(mu) * ca.cos(nu),
+            T_mag * ca.sin(mu),
+            T_mag * ca.cos(mu) * ca.sin(nu)
+        )
+
+        T_total = thrust_vector_r + thrust_vector_l
+        
+        
+   
+        
+        # 获取推力作用点 / Get the thrust application points
+        rp_r = self.params.rp_r.flatten()
+        rp_l = self.params.rp_l.flatten()
+        
+        # 计算力矩 / --- Thrust torque ---
+        tau_r = ca.cross(rp_r, thrust_vector_r.flatten()).reshape(3, 1)
+        tau_l = ca.cross(rp_l, thrust_vector_l.flatten()).reshape(3, 1)
+
+        # total Thrust momentsa
+        tau_vec = tau_r + tau_l
+        
+        # 组合力和力矩
+        tau = np.concatenate([T_total, tau_vec]) # 6D force and torque vector
+        
+        return tau  # return force and torque vector of thrust
+
+
+
+
+
+

@@ -7,6 +7,14 @@ from config import parameters as params
 import casadi as ca
 
 
+# 导入控制器类，但使用不同的变量名以避免命名冲突
+from controller import AnyController as AnyControllerClass
+from controller import NMPCThrustController as NMPCControllerClass
+
+# 不要在模块级别实例化控制器，应该在Airship类内部实例化
+
+
+
 class Airship:
     def __init__(self, initial_state):
         self.X = initial_state # [zeta, gamma, v, omega] (12x1)
@@ -149,9 +157,9 @@ class Airship:
         # !!! 关键占位符: 这些值需要由控制分配模块根据 tau[3:6] 确定 !!!
         # !!! Critical Placeholder: These values need to be determined by a Control Allocation module based on tau[3:6] !!!
         delta_RUDT = np.deg2rad(0.0)  # [rad] - Placeholder
-        delta_RUDB = 0.0  # [rad] - Placeholder
-        delta_ELVL = 0.0  # [rad] - Placeholder
-        delta_ELVR = 0.0  # [rad] - Placeholder
+        delta_RUDB = np.deg2rad(0.0)  # [rad] - Placeholder
+        delta_ELVL = np.deg2rad(0.0)  # [rad] - Placeholder
+        delta_ELVR = np.deg2rad(0.0)  # [rad] - Placeholder
 
         # --- 加载气动系数 (Load aerodynamic coefficients from parameters) ---
         # --- 占位符气动系数 (Placeholder Aero Coefficients) ---
@@ -231,36 +239,10 @@ class Airship:
 
 
 
-        #--- 计算总推力 (Calculate Total Thrust and  Torque) ---
-        # --- 计算推力和推力力矩 (Calculate Thrust Forces and Moments) ---
-        # 从tau中提取推力参数 / Extract thrust parameters from tau
-        T_mag = tau[0]  # 推力大小 / Thrust magnitude
-        mu = tau[1]     # 水平面内的推力偏转角 / Thrust deflection angle in the horizontal plane
-        nu = tau[2]     # 垂直面内的推力偏转角 / Thrust deflection angle in the vertical plane
 
-        # 计算右侧推力向量 / Calculate right thrust vector
-        T_vec_r = np.array([
-            [T_mag * np.cos(mu) * np.cos(nu)],
-            [T_mag * np.sin(mu)],
-            [T_mag * np.cos(mu) * np.sin(nu)]
-        ])
-
-        # 计算左侧推力向量 / Calculate left thrust vector
-        T_vec_l = np.array([
-            [T_mag * np.cos(mu) * np.cos(nu)],
-            [T_mag * np.sin(mu)],
-            [T_mag * np.cos(mu) * np.sin(nu)]
-        ])
-
-        # 计算总推力 /  Calculate total thrust
-        T_total = T_vec_r + T_vec_l
-
-        # 计算推力力矩 / Calculate thrust torque
-        rp_r_1d = self.rp_r_vec.flatten()
-        rp_l_1d = self.rp_l_vec.flatten()
-        tau_r = np.cross(rp_r_1d, T_vec_r.flatten()).reshape(3, 1)
-        tau_l = np.cross(rp_l_1d, T_vec_l.flatten()).reshape(3, 1)
-        tau_vec = tau_r + tau_l       
+        # --- 计算推力和推力矩 (Calculate Thrust and torque) ---
+        T_total = tau[0:3].reshape(3, 1)  # 推力矢量 - Thrust vector
+        tau_vec = tau[3:6].reshape(3, 1)  # 推力矩矢量 - Torque vector
 
 
 
@@ -323,7 +305,8 @@ class AirshipCasADiSymbolic:
         self.M_upper_left = self.M[0:3, 0:3]
         self.rc = params.rc.flatten()
         self.rb = params.rb.flatten()
-        self.rp = params.rp.flatten()
+        self.rp_r = params.rp_r.flatten()
+        self.rp_l = params.rp_l.flatten()
         self.Vol_airship = params.Vol_airship
         self.rho_air = params.rho_air
         self.S_ref = params.S_ref
@@ -402,43 +385,7 @@ class AirshipCasADiSymbolic:
         alpha = ca.atan2(w_rel, u_rel)
         beta = ca.asin(v_rel_body / (V_rel_mag + 1e-6))  # Add small epsilon to avoid division by zero
         
-        # --- Control inputs ---
-        if U.shape[0] == 3:  # Basic thrust control [T, μ, ν]
-            T_mag = U[0]
-            mu = U[1]
-            nu = U[2]
-            
-            # Default control surface deflections
-            delta_RUDT = 0.0
-            delta_RUDB = 0.0
-            delta_ELVL = 0.0
-            delta_ELVR = 0.0
-        else:  # Full control [T, μ, ν, delta_RUDT, delta_RUDB, delta_ELVL, delta_ELVR]
-            T_mag = U[0]
-            mu = U[1]
-            nu = U[2]
-            delta_RUDT = U[3]
-            delta_RUDB = U[4]
-            delta_ELVL = U[5]
-            delta_ELVR = U[6]
-        
-        # --- Thrust vector ---
-        T_vec_r = ca.vertcat(
-            T_mag * ca.cos(mu) * ca.cos(nu),
-            T_mag * ca.sin(mu),
-            T_mag * ca.cos(mu) * ca.sin(nu)
-        )
 
-        T_vec_l = ca.vertcat(
-            T_mag * ca.cos(mu) * ca.cos(nu),
-            T_mag * ca.sin(mu),
-            T_mag * ca.cos(mu) * ca.sin(nu)
-        )
-
-        T_total = T_vec_r + T_vec_l
-        
-        # total Thrust moment
-        tau_vec = ca.cross(self.rp_r, T_vec_r) + ca.cross(self.rp_l, T_vec_l)
         
         # --- Aerodynamic forces and moments ---
         # Get aerodynamic coefficients
@@ -475,6 +422,16 @@ class AirshipCasADiSymbolic:
         cos_a_half = ca.cos(alpha / 2.0)
         sin_a_half = ca.sin(alpha / 2.0)
         cos_b_half = ca.cos(beta / 2.0)
+
+
+        # --- 获取控制舵面偏转角 (Get Control Surface Deflections) ---
+        # !!! 关键占位符: 这些值需要由控制分配模块根据 tau[3:6] 确定 !!!
+        # !!! Critical Placeholder: These values need to be determined by a Control Allocation module based on tau[3:6] !!!
+        delta_RUDT = np.deg2rad(0.0)  # [rad] - Placeholder
+        delta_RUDB = np.deg2rad(0.0)  # [rad] - Placeholder
+        delta_ELVL = np.deg2rad(0.0)  # [rad] - Placeholder
+        delta_ELVR = np.deg2rad(0.0)  # [rad] - Placeholder
+
         
         # X Force - Eq. 23
         Fax = q_dyn * (Cx1 * cos_a**2 * cos_b**2 + Cx2 * sin_2a * sin_a_half)
@@ -502,6 +459,12 @@ class AirshipCasADiSymbolic:
                            Cn3 * sin_b * sin_abs_b + Cn4 * (delta_ELVL + delta_ELVR))
         
         ma_BRF = ca.vertcat(moment_L, moment_M, moment_N)
+
+
+        # --- Control inputs ---
+        T_total = U[0:3]  # Thrust vector
+        tau_vec = U[3:6]
+        
         
         # --- Combine all forces and moments ---
         F_forces = fg_BRF - fb_BRF + fa_BRF + T_total
@@ -531,7 +494,7 @@ class AirshipCasADiSymbolic:
         
         # Define symbolic variables
         x = ca.SX.sym('x', 12)  # State
-        u = ca.SX.sym('u', 7)   # Control (T, μ, ν, delta_RUDT, delta_RUDB, delta_ELVL, delta_ELVR)
+        u = ca.SX.sym('u', 3)   # Control (T, μ, ν)  , delta_RUDT, delta_RUDB, delta_ELVL, delta_ELVR)
         
         # Get dynamics
         xdot = self.rhs_symbolic(x, u)
@@ -583,41 +546,3 @@ class AirshipCasADiSymbolic:
 
 
 
-'''  
-# --- 可选的测试代码块在底部 ---
-# 对于 airship 包下的这些模块文件，核心的类和函数定义必须放在顶层，以便能够被其他模块导入和使用。
-# 可以选择性地在这个文件底部添加 if __name__ == "__main__": 块来包含仅仅用于独立测试该模块的代码。
-# 绝对不要把主要的类和函数定义放到这个 if __name__ == "__main__": 块里面。
-# 这允许您通过 python airship/model.py 这样的命令来单独测试 model.py 里的 Airship 类（如果需要的话），
-# 但当它被 simulation 模块导入时，测试代码不会运行。
-
-if __name__ == "__main__":
-    # 这个块只在直接运行 python airship/model.py 时执行
-    print("--- 测试 Airship 类 ---")
-    # 创建一个初始状态 (可能需要从 config.parameters 导入)
-    initial_X = np.zeros(12)
-    initial_X[6] = 10 # 设置初始速度 u=10
-
-    # 实例化 Airship
-    test_ship = Airship(initial_X)
-    print("Airship 对象已创建。")
-
-    # 测试 rhs 方法 (提供假的 tau, disturbance, wind)
-    current_t = 0.0
-    fake_tau = np.zeros(6)
-    def fake_dist(t): return np.zeros(6)
-    fake_wind = np.array([1.0, 0, 0])
-
-    try:
-        dXdt = test_ship.rhs(current_t, test_ship.get_state(), fake_tau, fake_dist, fake_wind)
-        print(f"rhs 方法在 t={current_t} 时计算得到的 dXdt:\n{dXdt}")
-        assert dXdt.shape == (12,) # 检查输出形状
-        print("rhs 方法基本运行测试通过。")
-    except Exception as e:
-        print(f"测试 rhs 时出错: {e}")
-
-    # 可以添加更多针对特定方法的测试
-
-
-
-'''

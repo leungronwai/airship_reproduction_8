@@ -224,6 +224,7 @@ def run_nmpc_simulation():
     trajectory = Trajectory()
     controller = NMPCThrustController(
         model=airship,
+        params=params,
         dt=params.DT,
         N=params.N_HORIZON,
         Q=params.Q,
