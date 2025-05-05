@@ -37,7 +37,7 @@ def main():
     logger = setup_logger()
     logger.info("程序启动 / Program started")
 
-    # ==== 控制仿真模式（手动切换）====
+    # ==== 控制仿真模式（手动切换）/ Control simulation mode (switch manually) ====
     simulation_mode = "nmpc"  # or "blf"  #选择仿真模式 / Choose simulation mode
 
     try:
