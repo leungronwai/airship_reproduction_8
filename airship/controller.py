@@ -169,7 +169,7 @@ class AnyController:
         return tau
 
     def reset(self):
-        """重置控制器状态"""
+        """重置控制器状态 / Reset controller state"""
         self.pos_error_integral = np.zeros(3)
         self.att_error_integral = np.zeros(3)
         self.last_pos_error = np.zeros(3)

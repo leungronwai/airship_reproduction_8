@@ -32,7 +32,7 @@ def plot_trajectory(trajectory_type="all", simulation_time=200, num_points=1000)
         plot_specific_trajectory(trajectory, t_values, "lemniscate", 223)
     
     if trajectory_type == "all":
-        plot_linear_trajectory(trajectory, t_values, 134)
+        plot_linear_trajectory(trajectory, t_values, 224)
         # 线性轨迹需要特殊处理，因为它接受额外参数
     elif trajectory_type == "linear":
         plot_linear_trajectory(trajectory, t_values, 111)
@@ -152,7 +152,7 @@ if __name__ == "__main__":
 python test_desired_trajectory.py --type all
 
 # 只绘制8字形轨迹
-python test_desired_trajectory.py --type figure8
+python test_desired_trajectory.py --type figure8 --time 2500 --points 2000
 
 # 只绘制莱洛曲线轨迹
 python test_desired_trajectory.py --type lemniscate
