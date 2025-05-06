@@ -25,6 +25,14 @@ logger = logging.getLogger(__name__)
 
 
 def run_simulation(trajectory_type="default"):
+    """
+    1.初始化：创建气艇模型、轨迹生成器、控制器等对象
+   
+
+
+    
+    """
+
     # --- 初始化 / Initialize ---
     airship = Airship(params.X0)
     trajectory = Trajectory()
@@ -46,6 +54,14 @@ def run_simulation(trajectory_type="default"):
 
     # --- 仿真循环 / Simulation loop ---
     for i, t in enumerate(sim_time):
+        ''' 
+        2.仿真循环：在**每个时间步**:
+            a. 获取参考轨迹
+            b. 调用NMPC控制器计算控制输入
+            c. 更新气艇状态
+        '''
+
+
         # 获取当前状态 (Get current state) 
         X = airship.get_state()
         
