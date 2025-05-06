@@ -185,6 +185,7 @@ class AnyController:
 class NMPCThrustController:
     """
     NMPC controller for airship using direct thrust allocation (T, μ, v).
+    NMPC 控制器，使用直接推力分配 (T, μ, v)。
     """
     def __init__(self, model, dt, N, Q, R, Qf, T_bounds, mu_bounds, nu_bounds):
         """
