@@ -7,11 +7,6 @@ from config import parameters as params
 import casadi as ca
 
 
-# 导入控制器类，但使用不同的变量名以避免命名冲突
-from controller import AnyController as AnyControllerClass
-from controller import NMPCThrustController as NMPCControllerClass
-
-# 不要在模块级别实例化控制器，应该在Airship类内部实例化
 
 
 
