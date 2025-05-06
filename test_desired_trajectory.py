@@ -21,19 +21,22 @@ def plot_trajectory(trajectory_type="all", simulation_time=200, num_points=1000)
     # 设置图形布局
     plt.figure(figsize=(18, 10))
     
-    # 绘制2D和3D图表
+    # 使用2行2列的布局
     if trajectory_type == "all" or trajectory_type == "spiral":
-        plot_specific_trajectory(trajectory, t_values, "spiral", 131)
+        plot_specific_trajectory(trajectory, t_values, "spiral", 221)
     
     if trajectory_type == "all" or trajectory_type == "figure8":
-        plot_specific_trajectory(trajectory, t_values, "figure8", 132)
+        plot_specific_trajectory(trajectory, t_values, "figure8", 222)
     
     if trajectory_type == "all" or trajectory_type == "lemniscate":
-        plot_specific_trajectory(trajectory, t_values, "lemniscate", 133)
+        plot_specific_trajectory(trajectory, t_values, "lemniscate", 223)
     
-    if trajectory_type == "all" or trajectory_type == "linear":
-        # 线性轨迹需要特殊处理，因为它接受额外参数
+    if trajectory_type == "all":
         plot_linear_trajectory(trajectory, t_values, 134)
+        # 线性轨迹需要特殊处理，因为它接受额外参数
+    elif trajectory_type == "linear":
+        plot_linear_trajectory(trajectory, t_values, 111)
+    
     
     plt.tight_layout()
     plt.show()
