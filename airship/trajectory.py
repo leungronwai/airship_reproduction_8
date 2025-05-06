@@ -120,6 +120,7 @@ class Trajectory:
     def get_figure8_trajectory(self, t):
         """
         生成一个水平8字形轨迹, 带有平滑的高度变化
+        返回 8 字形轨迹的期望状态及其导数
         
         参数:
             t: 当前时间
