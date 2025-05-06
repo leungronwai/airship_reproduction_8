@@ -53,8 +53,7 @@ def run_simulation(trajectory_type="default"):
         if trajectory_type == "default":
             yc, yc_dot, yc_ddot, xc, xc_dot = trajectory.get_desired_state(t)
         elif trajectory_type == "spiral":
-            spiral_func = trajectory.define_spiral_trajectory(t)
-            pos, vel, acc = spiral_func(t)
+            yc, yc_dot, yc_ddot, xc, xc_dot = trajectory.get_spiral_trajectory(t)
             # 转换螺旋轨迹为所需格式...
             # 这里需要额外转换代码 - 需要实现
         elif trajectory_type == "figure8":

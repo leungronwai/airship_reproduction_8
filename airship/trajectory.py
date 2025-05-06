@@ -12,20 +12,33 @@ class Trajectory:
     # └─────────────────────────────────────────────────────┘
 
     def get_spiral_trajectory(self, t):
-        """
-        生成一个螺旋轨迹，带有高度变化
-        
-        参数:
-            t: 当前时间
-            
-        返回:
-            yc, yc_dot, yc_ddot, xc, xc_dot: 与get_desired_state相同的输出格式
-        """
+        """生成一个螺旋轨迹，带有高度变化"""
         dt_small = 1e-4
         
-        # 使用spiral_func获取基础数据
-        spiral_func = self.define_spiral_trajectory(t)
-        pos, vel, acc = spiral_func(t)
+        # --- 轨迹参数 ---
+        omega = 0.05  # 角速度
+        r = 100       # 半径
+        h_max = 150   # 最大高度
+        
+        # --- 直接计算位置、速度和加速度 ---
+        theta = omega * t
+        # 位置
+        xd = r * np.cos(theta)
+        yd = r * np.sin(theta)
+        zd = h_max * (1 - np.exp(-theta / 10))
+        pos = np.array([xd, yd, zd])
+        
+        # 速度
+        xd_dot = -r * omega * np.sin(theta)
+        yd_dot = r * omega * np.cos(theta)
+        zd_dot = h_max * (1 / 10) * np.exp(-theta / 10) * omega
+        vel = np.array([xd_dot, yd_dot, zd_dot])
+        
+        # 加速度
+        xd_ddot = -r * omega**2 * np.cos(theta)
+        yd_ddot = -r * omega**2 * np.sin(theta)
+        zd_ddot = -h_max * (1 / 10) * omega**2 * np.exp(-theta / 10)
+        acc = np.array([xd_ddot, yd_ddot, zd_ddot])
         
         # 构造位置和速度向量
         zeta_d = pos
