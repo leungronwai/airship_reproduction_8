@@ -12,7 +12,7 @@ from airship.observer import FixedTimeDO
 from airship.controller import FixedTimeBLFController
 
 
-from airship.controller import NMPCThrustController  # 定义的NMPC类
+from airship.controller import AnyControllerClass  # 定义的NMPC类
 
 
 # 全局 logger（在这里做一次 basicConfig） / Global logger (basicConfig done here)
@@ -24,14 +24,12 @@ logger = logging.getLogger(__name__)
 
 
 
-def run_simulation():
+def run_simulation(trajectory_type="default"):
     # --- 初始化 / Initialize ---
     airship = Airship(params.X0)
     trajectory = Trajectory()
     observer = FixedTimeDO()
-    controller = FixedTimeBLFController()
-
-
+    controller = AnyControllerClass()
 
     # --- 数据记录 / Data logging ---
     sim_time = np.arange(0, params.T_SPAN, params.DT)
@@ -47,25 +45,38 @@ def run_simulation():
     y_history = np.zeros((6, n_steps))
 
     # --- 仿真循环 / Simulation loop ---
-    X = airship.get_state()
-    tau = np.zeros(6)  # Initial control
-
-    start_time = timer.time()
-
     for i, t in enumerate(sim_time):
         # 获取当前状态 (Get current state) 
         X = airship.get_state()
-        zeta = X[0:3]
-        gamma = X[3:6]
-        x_vec = X[6:12]  # v, omega
-
-        logger.debug(f"Step {i}/{n_steps}, Time: {t:.2f}s, State: {X}")
-        logger.debug(f"[{i}] t={t:.2f}s | zeta={zeta} | gamma={gamma}")
-
-        # 获取期望状态 (Get desired state)
-        yc, yc_dot, yc_ddot, xc, xc_dot = trajectory.get_desired_state(t)
-        zeta_d, gamma_d = yc[0:3], yc[3:6]
-        zeta_d_dot, gamma_d_dot = yc_dot[0:3], yc_dot[3:6]
+        
+        # 基于轨迹类型获取期望状态 (Get desired state based on trajectory type)
+        if trajectory_type == "default":
+            yc, yc_dot, yc_ddot, xc, xc_dot = trajectory.get_desired_state(t)
+        elif trajectory_type == "spiral":
+            spiral_func = trajectory.define_spiral_trajectory(t)
+            pos, vel, acc = spiral_func(t)
+            # 转换螺旋轨迹为所需格式...
+            # 这里需要额外转换代码 - 需要实现
+        elif trajectory_type == "figure8":
+            yc, yc_dot, yc_ddot, xc, xc_dot = trajectory.get_figure8_trajectory(t)
+        elif trajectory_type == "lemniscate":
+            yc, yc_dot, yc_ddot, xc, xc_dot = trajectory.get_lemniscate_trajectory(t)
+        elif trajectory_type == "linear":
+            # 直线轨迹，可以自定义起点和终点
+            start_point = np.array([0.0, 0.0, -19000.0]) 
+            end_point = np.array([5000.0, 5000.0, -19000.0])  
+            yc, yc_dot, yc_ddot, xc, xc_dot = trajectory.get_linear_trajectory(
+                t, 
+                start_point=start_point,
+                end_point=end_point,
+                speed=15.0,  # 飞行速度 15 m/s
+                hover_at_end=True  # 到达终点后悬停
+            )
+        else:
+            raise ValueError(f"未知的轨迹类型: {trajectory_type}")
+        
+        zeta_d, gamma_d = yc[0:3], yc[3:6] # Desired position/attitude vector
+        zeta_d_dot, gamma_d_dot = yc_dot[0:3], yc_dot[3:6] # Desired velocity vector
 
         logger.debug(f"[{i}] Desired zeta_d={zeta_d}, gamma_d={gamma_d}")
 
@@ -257,7 +268,7 @@ def run_nmpc_simulation():
 
         # NMPC 控制器返回 u = [T, μ, ν]
         u_cmd = controller.step(X, X_ref, U_ref)
-        tau = controller.thrust_to_force(u_cmd)
+        tau = controller.thrust_to_force_torque(u_cmd)
 
         # 积分系统（RK4）
         def f(t_rk, x_rk):

@@ -8,66 +8,173 @@ from model import AirshipCasADiSymbolic
 
 class AnyController:
     def __init__(self):
-        # 加载参数 (Load parameters)
-        self.k1 = params.k1
-        self.k2 = params.k2
-        self.k3 = params.k3
-        self.k4 = params.k4
-        self.kb_func = params.kb_func
-        self.kb_dot_func = params.kb_dot_func
-        self.epsilon = params.epsilon
-        self.phi = params.phi
-        self.rho = params.rho
- 
-
-
+        # 原有参数
+        self.params = params  # 确保能访问params参数
         self.rp_r = params.rp_r
         self.rp_l = params.rp_l
-
-
-
-    def calculate_control(self, t, x, x_ref, x_ref_dot, u_thrust):
-        """计算控制输入 tau - Eq. 52"""
-        # --- Control inputs ---
-        T_mag = u_thrust[0]  # 推力大小 / Thrust magnitude
-        mu = u_thrust[1]     # 水平面内的推力偏转角  / Thrust deflection angle in the horizontal plane
-        nu = u_thrust[2]     # 垂直面内的推力偏转角 / Thrust deflection angle in the vertical plane
         
-        # 计算右侧和左侧推力矢量(假设对称) / Calculate right and left thrust vectors (assuming symmetry)
-        # 计算推力向量 / Calculate thrust vector
-                # --- Thrust vector ---
-        thrust_vector_r = ca.vertcat(
+        # 添加PID控制器参数
+        # 位置PID参数
+        self.Kp_pos = np.array([5.0, 5.0, 5.0])  # 位置比例增益
+        self.Ki_pos = np.array([0.1, 0.1, 0.1])  # 位置积分增益
+        self.Kd_pos = np.array([2.0, 2.0, 2.0])  # 位置微分增益
+        
+        # 姿态PID参数
+        self.Kp_att = np.array([3.0, 3.0, 3.0])  # 姿态比例增益
+        self.Ki_att = np.array([0.05, 0.05, 0.05])  # 姿态积分增益
+        self.Kd_att = np.array([1.0, 1.0, 1.0])  # 姿态微分增益
+        
+        # 积分误差和上一次误差（用于计算微分项）
+        self.pos_error_integral = np.zeros(3)
+        self.att_error_integral = np.zeros(3)
+        self.last_pos_error = np.zeros(3)
+        self.last_att_error = np.zeros(3)
+        self.last_time = 0.0  # 上一次更新的时间
+        
+        # 积分限幅，防止积分饱和
+        self.integral_limit_pos = np.array([50.0, 50.0, 50.0])
+        self.integral_limit_att = np.array([1.0, 1.0, 1.0])
+
+    def calculate_control(self, t, x, x_ref, x_ref_dot, u_thrust=None):
+        """
+        基于PID控制计算控制输入
+        
+        参数:
+            t: 当前时间
+            x: 当前状态 [位置, 姿态]
+            x_ref: 参考状态 [位置, 姿态]
+            x_ref_dot: 参考状态导数 [位置导数, 姿态导数]
+            u_thrust: 初始推力参数 [T, μ, v]，如果为None则由控制器计算
+            
+        返回:
+            tau: 6维控制向量 [Fx, Fy, Fz, Tx, Ty, Tz]
+        """
+        # 提取当前状态和参考状态
+        pos = x[0:3]  # 当前位置
+        att = x[3:6]  # 当前姿态
+        pos_ref = x_ref[0:3]  # 参考位置
+        att_ref = x_ref[3:6]  # 参考姿态
+        
+        # 计算位置和姿态误差
+        pos_error = pos_ref - pos
+        att_error = att_ref - att
+        # 注意姿态误差可能需要特殊处理，如角度归一化
+        att_error = np.array([(angle + np.pi) % (2 * np.pi) - np.pi for angle in att_error])
+        
+        # 计算时间增量
+        dt = t - self.last_time
+        if dt <= 0 or self.last_time == 0:
+            dt = 0.01  # 默认时间步长
+        
+        # 更新积分项（带限幅）
+        self.pos_error_integral += pos_error * dt
+        self.att_error_integral += att_error * dt
+        
+        # 积分限幅
+        self.pos_error_integral = np.clip(self.pos_error_integral, 
+                                        -self.integral_limit_pos, 
+                                        self.integral_limit_pos)
+        self.att_error_integral = np.clip(self.att_error_integral,
+                                        -self.integral_limit_att,
+                                        self.integral_limit_att)
+        
+        # 计算微分项 (可以使用参考轨迹导数作为前馈项)
+        pos_error_derivative = (pos_error - self.last_pos_error) / dt
+        att_error_derivative = (att_error - self.last_att_error) / dt
+        
+        # 前馈项 - 使用参考轨迹的导数
+        pos_ref_dot = x_ref_dot[0:3]
+        att_ref_dot = x_ref_dot[3:6]
+        
+        # 计算PID控制输出 (带前馈)
+        F_pos = (self.Kp_pos * pos_error + 
+                self.Ki_pos * self.pos_error_integral + 
+                self.Kd_pos * (pos_error_derivative + 0.5 * pos_ref_dot))
+        
+        T_att = (self.Kp_att * att_error + 
+                self.Ki_att * self.att_error_integral + 
+                self.Kd_att * (att_error_derivative + 0.5 * att_ref_dot))
+        
+        # 更新上一次误差和时间
+        self.last_pos_error = pos_error.copy()
+        self.last_att_error = att_error.copy()
+        self.last_time = t
+        
+        # 将PID控制输出转换为推力参数和控制力矩
+        if u_thrust is not None:
+            # 使用提供的初始推力参数
+            tau = self._thrust_params_to_tau(u_thrust)
+            # 添加PID控制修正
+            tau[0:3] += F_pos
+            tau[3:6] += T_att
+        else:
+            # 根据控制需求计算合适的推力参数
+            T_mag = np.linalg.norm(F_pos)  # 推力大小
+            if T_mag > 0.001:
+                # 计算推力方向
+                mu = np.arctan2(F_pos[1], F_pos[0])  # 水平面内角度
+                nu = np.arctan2(F_pos[2], np.sqrt(F_pos[0]**2 + F_pos[1]**2))  # 垂直面内角度
+            else:
+                mu, nu = 0.0, 0.0
+                
+            thrust_params = [T_mag, mu, nu]
+            tau = self._thrust_params_to_tau(thrust_params)
+            
+            # 添加姿态控制力矩
+            tau[3:6] += T_att
+    
+        return tau
+
+    def _thrust_params_to_tau(self, thrust_params):
+        """
+        将推力参数转换为力和力矩向量
+        
+        参数:
+            thrust_params: [T, μ, v]
+            
+        返回:
+            tau: [Fx, Fy, Fz, Tx, Ty, Tz]
+        """
+        T_mag, mu, nu = thrust_params
+        
+        # 计算右侧推力向量
+        thrust_vector_r = np.array([
             T_mag * np.cos(mu) * np.cos(nu),
             T_mag * np.sin(mu),
             T_mag * np.cos(mu) * np.sin(nu)
-        )
-
-        thrust_vector_l = ca.vertcat(
+        ])
+        
+        # 计算左侧推力向量
+        thrust_vector_l = np.array([
             T_mag * np.cos(mu) * np.cos(nu),
             T_mag * np.sin(mu),
             T_mag * np.cos(mu) * np.sin(nu)
-        )
-
+        ])
+        
+        # 总推力
         T_total = thrust_vector_r + thrust_vector_l
         
-        # 获取推力作用点 / Get the thrust application points
-        rp_r = self.params.rp_r.flatten()
-        rp_l = self.params.rp_l.flatten()
+        # 获取推力作用点
+        rp_r = self.rp_r.flatten()
+        rp_l = self.rp_l.flatten()
         
-        # 计算力矩 / --- Thrust torque ---
-        tau_r = np.cross(rp_r, thrust_vector_r.flatten()).reshape(3, 1)
-        tau_l = np.cross(rp_l, thrust_vector_l.flatten()).reshape(3, 1)
-
-        # total Thrust momentsa
+        # 计算力矩
+        tau_r = np.cross(rp_r, thrust_vector_r)
+        tau_l = np.cross(rp_l, thrust_vector_l)
         tau_vec = tau_r + tau_l
         
         # 组合力和力矩
-        tau = np.concatenate([T_total, tau_vec]) # 6D force and torque vector
+        tau = np.concatenate([T_total, tau_vec])
+        
+        return tau
 
-        # Apply saturation if needed based on actuator limits
-        # tau = np.clip(tau, min_tau, max_tau)
-
-        return tau  # Return control input tau 6D vector
+    def reset(self):
+        """重置控制器状态"""
+        self.pos_error_integral = np.zeros(3)
+        self.att_error_integral = np.zeros(3)
+        self.last_pos_error = np.zeros(3)
+        self.last_att_error = np.zeros(3)
+        self.last_time = 0.0 # 上一次更新的时间
 
 
 
@@ -117,7 +224,7 @@ class NMPCThrustController:
         h = dt
         k1 = f_cont(X, U)
         k2 = f_cont(X + 0.5*h*k1, U)
-        k3 = f_cont(X + 0.5*h*k2, U)
+        k3 = f_cont(X + 0.5*h+k2, U)
         k4 = f_cont(X +   h*k3, U)
         X_next = X + (h/6)*(k1 + 2*k2 + 2*k3 + k4)
         self.f_d = ca.Function('f_d', [X, U], [X_next])
