@@ -1,4 +1,7 @@
+'''
 # main.py
+
+'''
 import sys
 import os
 
@@ -10,7 +13,7 @@ if PROJECT_ROOT not in sys.path:
 import logging
 import traceback
 from datetime import datetime
-from simulation.run_simulation import run
+
 from simulation.run_simulation import run_simulation, run_nmpc_simulation  # 引入两个仿真函数
 
 

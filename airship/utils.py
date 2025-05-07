@@ -1,6 +1,7 @@
-'''
+"""
 utils.py
-'''
+"""
+
 import numpy as np
 import numba as nb
 from numba import njit, float64, int64
@@ -18,6 +19,7 @@ def sig(x, alpha):
     """计算 x 的分数阶幂次：sign(x) * |x|^alpha"""
     # Element-wise operation
     return np.sign(x) * np.power(np.abs(x), alpha)
+
 
 @njit(float64[:](float64[:]), cache=True)
 def R_zeta(gamma):
