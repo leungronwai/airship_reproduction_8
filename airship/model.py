@@ -3,6 +3,7 @@
 Airship dynamic model module (model.py)
 """
 # pylint: disable=invalid-name
+# cspell:ignore coeffs ddelta eta_f Sh Sg Sf Cdcf dalpha arcsin coeff ndarray linalg vertcat xdot
 # === 标准库 ===
 import sys
 import os
@@ -282,6 +283,9 @@ class Airship:
 
 
 class AirshipCasADiSymbolic:
+    """
+    气艇符号模型类
+    """
     def __init__(self, params):
         self.params = params
         self.m = params.m
