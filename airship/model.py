@@ -269,12 +269,15 @@ class Airship:
         self.X[4] = np.clip(self.X[4], -np.pi / 2 + 0.01, np.pi / 2 - 0.01)  # Keep Theta away from singularity
 
     def get_state(self):
+        """获取当前状态 (Get current state)"""
         return self.X
 
     def get_pose(self):
+        """获取当前姿态 (Get current pose)"""
         return self.X[0:6]  # zeta, gamma
 
     def get_velocity(self):
+        """获取当前速度 (Get current velocity)"""
         return self.X[6:12]  # v, omega
 
 
