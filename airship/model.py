@@ -1,19 +1,24 @@
 # model.py
 """
-model.py
+Airship dynamic model module (model.py)
 """
+# pylint: disable=invalid-name
+# === 标准库 ===
 import sys
 import os
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
+# === 第三方库 ===
 import numpy as np
-import numba as nb
 from numba import njit, float64
 import casadi as ca
 
-from .utils import skew, R_zeta, R_y, S_omega, R_block
+# === 本地模块 ===
 from config import parameters as params
+from .utils import skew, R_zeta, R_block
+
+
+# === 设置路径（如有需要） ===
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 
 class Airship:

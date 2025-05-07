@@ -1,13 +1,22 @@
-# controller.py
+"""
+controller.py - Contains implementation of AnyController and
+NMPCThrustController classes for airship control.
+"""
+# pylint: disable=invalid-name
 import numpy as np
-from airship.utils import sig, R_block, R_zeta, R_y, S_omega
-from config import parameters as params
 import casadi as ca
-from model import AirshipCasADiSymbolic
-from numba import njit, float64
+from numba import njit
+
+from config import parameters as params
+from airship.model import AirshipCasADiSymbolic
+
+
 
 
 class AnyController:
+    """
+    Base class for airship controllers.
+    """
     def __init__(self):
         # 原有参数 / original parameters
         self.params = params  # 确保能访问 params 参数 / Ensure access to params
@@ -16,14 +25,14 @@ class AnyController:
 
         # 添加 PID 控制器参数 / Add PID controller parameters
         # 位置 PID 参数 / Position PID parameters
-        self.Kp_pos = np.array([5.0, 5.0, 5.0])  # 位置比例增益 / Position proportional gain
-        self.Ki_pos = np.array([0.1, 0.1, 0.1])  # 位置积分增益 / Position integral gain
-        self.Kd_pos = np.array([2.0, 2.0, 2.0])  # 位置微分增益 / Position derivative gain
+        self.kp_pos = np.array([5.0, 5.0, 5.0])  # 位置比例增益 / Position proportional gain
+        self.ki_pos = np.array([0.1, 0.1, 0.1])  # 位置积分增益 / Position integral gain
+        self.kd_pos = np.array([2.0, 2.0, 2.0])  # 位置微分增益 / Position derivative gain
 
         # 姿态 PID 参数  / Attitude PID parameters
-        self.Kp_att = np.array([3.0, 3.0, 3.0])  # 姿态比例增益 / Attitude proportional gain
-        self.Ki_att = np.array([0.05, 0.05, 0.05])  # 姿态积分增益 / Attitude integral gain
-        self.Kd_att = np.array([1.0, 1.0, 1.0])  # 姿态微分增益 / Attitude derivative gain
+        self.kp_att = np.array([3.0, 3.0, 3.0])  # 姿态比例增益 / Attitude proportional gain
+        self.ki_att = np.array([0.05, 0.05, 0.05])  # 姿态积分增益 / Attitude integral gain
+        self.kd_att = np.array([1.0, 1.0, 1.0])  # 姿态微分增益 / Attitude derivative gain
 
         # 积分误差和上一次误差（用于计算微分项） / Integral errors and last errors (for derivative calculation)
         self.pos_error_integral = np.zeros(3)
@@ -44,8 +53,8 @@ class AnyController:
             t: 当前时间 / Current time
             x: 当前状态 [位置，姿态] / Current state [position, attitude]
             x_ref: 参考状态 [位置，姿态] / Reference state [position, attitude]
-            x_ref_dot: 参考状态导数 [位置导数，姿态导数] / Reference state derivative [position derivative, attitude derivative]
-            u_thrust: 初始推力参数 [T, μ, v], 如果为 None 则由控制器计算 / Initial thrust parameters [T, mu, v], if None, calculated by controller
+            x_ref_dot: 参考状态导数 [位置导数，姿态导数]
+            u_thrust: 初始推力参数 [T, μ, v], 如果为 None 则由控制器计算
 
         返回：
             tau: 6 维控制向量 [Fx, Fy, Fz, Tx, Ty, Tz] / 6D control vector [Fx, Fy, Fz, Tx, Ty, Tz]
@@ -59,7 +68,8 @@ class AnyController:
         # 计算位置和姿态误差 / Calculate position and attitude errors
         pos_error = pos_ref - pos
         att_error = att_ref - att
-        # 注意姿态误差可能需要特殊处理，如角度归一化 / Note that attitude error may need special handling, such as angle normalization
+        # 注意姿态误差可能需要特殊处理，如角度归一化
+        # Note that attitude error may need special handling, such as angle normalization
         att_error = np.array([(angle + np.pi) % (2 * np.pi) - np.pi for angle in att_error])
 
         # 计算时间增量 / Calculate time increment
@@ -72,10 +82,15 @@ class AnyController:
         self.att_error_integral += att_error * dt
 
         # 积分限幅 / Integral limits
-        self.pos_error_integral = np.clip(self.pos_error_integral, -self.integral_limit_pos, self.integral_limit_pos)
-        self.att_error_integral = np.clip(self.att_error_integral, -self.integral_limit_att, self.integral_limit_att)
+        self.pos_error_integral = np.clip(
+            self.pos_error_integral, -self.integral_limit_pos, self.integral_limit_pos
+            )
+        self.att_error_integral = np.clip(
+            self.att_error_integral, -self.integral_limit_att, self.integral_limit_att
+            )
 
-        # 计算微分项 (可以使用参考轨迹导数作为前馈项) / Calculate derivative terms (can use reference trajectory derivatives as feedforward)
+        # 计算微分项 (可以使用参考轨迹导数作为前馈项)
+        # Calculate derivative terms (can use reference trajectory derivatives as feedforward)
         pos_error_derivative = (pos_error - self.last_pos_error) / dt
         att_error_derivative = (att_error - self.last_att_error) / dt
 
@@ -83,17 +98,27 @@ class AnyController:
         pos_ref_dot = x_ref_dot[0:3]
         att_ref_dot = x_ref_dot[3:6]
 
-        # 计算 PID 控制输出 (带前馈) / Calculate PID control output (with feedforward)
-        F_pos = self.Kp_pos * pos_error + self.Ki_pos * self.pos_error_integral + self.Kd_pos * (pos_error_derivative + 0.5 * pos_ref_dot)
+        # 计算 PID 控制输出 (带前馈)
+        # Calculate PID control output (with feedforward)
+        F_pos = (
+            self.kp_pos * pos_error
+            + self.ki_pos * self.pos_error_integral
+            + self.kd_pos * (pos_error_derivative + 0.5 * pos_ref_dot)
+            )
 
-        T_att = self.Kp_att * att_error + self.Ki_att * self.att_error_integral + self.Kd_att * (att_error_derivative + 0.5 * att_ref_dot)
+        T_att = (
+            self.kp_att * att_error
+            + self.ki_att * self.att_error_integral
+            + self.kd_att * (att_error_derivative + 0.5 * att_ref_dot)
+            )
 
         # 更新上一次误差和时间 / Update last errors and time
         self.last_pos_error = pos_error.copy()
         self.last_att_error = att_error.copy()
         self.last_time = t
 
-        # 将 PID 控制输出转换为推力参数和控制力矩 / Convert PID control output to thrust parameters and control torque
+        # 将 PID 控制输出转换为推力参数和控制力矩
+        # Convert PID control output to thrust parameters and control torque
         if u_thrust is not None:
             # 使用提供的初始推力参数 / Use provided initial thrust parameters
             tau = self._thrust_params_to_tau(u_thrust)
@@ -101,12 +126,13 @@ class AnyController:
             tau[0:3] += F_pos
             tau[3:6] += T_att
         else:
-            # 根据控制需求计算合适的推力参数    / Calculate suitable thrust parameters based on control needs
+            # 根据控制需求计算合适的推力参数
+            # Calculate suitable thrust parameters based on control needs
             T_mag = np.linalg.norm(F_pos)  # 推力大小 / Thrust magnitude
             if T_mag > 0.001:
                 # 计算推力方向 / Calculate thrust direction
                 mu = np.arctan2(F_pos[1], F_pos[0])  # 水平面内角度 / Angle in horizontal plane
-                nu = np.arctan2(F_pos[2], np.sqrt(F_pos[0] ** 2 + F_pos[1] ** 2))  # 垂直面内角度 / Angle in vertical plane
+                nu = np.arctan2(F_pos[2], np.sqrt(F_pos[0] ** 2 + F_pos[1] ** 2))  # 垂直面内角度
             else:
                 mu, nu = 0.0, 0.0
 

@@ -1,0 +1,53 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Airship Simulation Project Structure
+
+## Core Components
+
+### Entry Points
+- [main.py](mdc:main.py) - Main entry point
+  - Handles simulation execution
+  - Manages logging setup
+  - Controls simulation modes (BLF/NMPC)
+  - Configures trajectory types
+
+### Simulation Modules
+- [simulation/](mdc:simulation/) - Core simulation logic
+  - Contains simulation execution code
+  - Handles trajectory generation
+  - Implements control algorithms
+
+### Testing
+- [test/](mdc:test/) - Test suite
+- [test_desired_trajectory.py](mdc:test_desired_trajectory.py) - Trajectory testing
+
+### Configuration
+- [config/](mdc:config/) - Configuration files
+- [settings.yaml](mdc:settings.yaml) - Global settings
+
+### Development
+- [notebook.ipynb](mdc:notebook.ipynb) - Development and analysis notebook
+
+## Project Organization
+- `airship/` - Airship-specific implementations
+- `absolute/` - Absolute path utilities
+- `logs/` - Runtime logs
+- `.cursor/` - Cursor IDE configuration
+- `.github/` - GitHub workflows and templates
+
+## Key Features
+- Dual controller support (BLF and NMPC)
+- Multiple trajectory types
+- Comprehensive logging system
+- Test suite
+- Development notebook for analysis
+- Configuration management
+
+## Development Guidelines
+1. Use the logging system for debugging
+2. Follow the established project structure
+3. Add tests for new features
+4. Document changes in the notebook

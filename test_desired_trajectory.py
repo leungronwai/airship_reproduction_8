@@ -8,9 +8,9 @@ def plot_trajectory(trajectory_type="all", simulation_time=200, num_points=1000)
     """
     绘制指定类型的轨迹
 
-    参数:
+    参数：
         trajectory_type: 轨迹类型，可选 "spiral", "figure8", "lemniscate", "linear", "all"
-        simulation_time: 仿真总时间(s)
+        simulation_time: 仿真总时间 (s)
         num_points: 仿真点数
     """
     # 创建时间序列
@@ -22,7 +22,7 @@ def plot_trajectory(trajectory_type="all", simulation_time=200, num_points=1000)
     # 设置图形布局
     plt.figure(figsize=(18, 10))
 
-    # 使用2行2列的布局
+    # 使用 2 行 2 列的布局
     if trajectory_type == "all" or trajectory_type == "spiral":
         plot_specific_trajectory(trajectory, t_values, "spiral", 221)
 
@@ -46,8 +46,8 @@ def plot_specific_trajectory(trajectory, t_values, trajectory_type, subplot_posi
     """
     绘制特定类型的轨迹
 
-    参数:
-        trajectory: Trajectory对象
+    参数：
+        trajectory: Trajectory 对象
         t_values: 时间序列
         trajectory_type: 轨迹类型
         subplot_position: 子图位置
@@ -63,7 +63,7 @@ def plot_specific_trajectory(trajectory, t_values, trajectory_type, subplot_posi
     elif trajectory_type == "lemniscate":
         get_trajectory_method = trajectory.get_lemniscate_trajectory
     else:
-        raise ValueError(f"未知的轨迹类型: {trajectory_type}")
+        raise ValueError(f"未知的轨迹类型：{trajectory_type}")
 
     # 计算每个时间点的位置
     for t in t_values:
@@ -73,7 +73,7 @@ def plot_specific_trajectory(trajectory, t_values, trajectory_type, subplot_posi
         y_values.append(pos[1])
         z_values.append(pos[2])
 
-    # 绘制3D轨迹
+    # 绘制 3D 轨迹
     ax = plt.subplot(subplot_position, projection="3d")
     ax.plot(x_values, y_values, z_values, label=f"{trajectory_type} Trajectory")
     ax.set_xlabel("X Position (m)")
@@ -91,8 +91,8 @@ def plot_linear_trajectory(trajectory, t_values, subplot_position):
     """
     绘制直线轨迹
 
-    参数:
-        trajectory: Trajectory对象
+    参数：
+        trajectory: Trajectory 对象
         t_values: 时间序列
         subplot_position: 子图位置
     """
@@ -113,7 +113,7 @@ def plot_linear_trajectory(trajectory, t_values, subplot_position):
         y_values.append(pos[1])
         z_values.append(pos[2])
 
-    # 绘制3D轨迹
+    # 绘制 3D 轨迹
     ax = plt.subplot(subplot_position, projection="3d")
     ax.plot(x_values, y_values, z_values, label="Linear Trajectory")
     ax.set_xlabel("X Position (m)")
@@ -131,7 +131,7 @@ if __name__ == "__main__":
     # 添加命令行参数
     parser = argparse.ArgumentParser(description="绘制气艇轨迹")
     parser.add_argument("--type", type=str, default="all", choices=["spiral", "figure8", "lemniscate", "linear", "all"], help="要绘制的轨迹类型")
-    parser.add_argument("--time", type=float, default=200.0, help="仿真总时间(s)")
+    parser.add_argument("--time", type=float, default=200.0, help="仿真总时间 (s)")
     parser.add_argument("--points", type=int, default=1000, help="仿真点数")
 
     args = parser.parse_args()
@@ -144,7 +144,7 @@ if __name__ == "__main__":
 # 绘制所有轨迹
 python test_desired_trajectory.py --type all
 
-# 只绘制8字形轨迹
+# 只绘制 8 字形轨迹
 python test_desired_trajectory.py --type figure8 --time 2500 --points 2000
 
 # 只绘制莱洛曲线轨迹
