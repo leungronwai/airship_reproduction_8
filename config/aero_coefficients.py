@@ -1,6 +1,7 @@
 # aero_coefficients.py
 import numpy as np
 import parameters as params
+
 # 假设附加质量计算函数也在此文件中或可以导入
 # from added_mass_calculator import calculate_added_mass_inertia # 假设可用
 
@@ -13,38 +14,42 @@ import parameters as params
 # --- 几何参数 (Geometric Parameters) ---
 airship_a1 = params.airship_a1  # [m] 前椭球半长轴 (Front ellipsoid semi-major axis)
 airship_a2 = params.airship_a2  # [m] 后椭球半长轴 (Rear ellipsoid semi-major axis)
-airship_b  = params.airship_b  # [m] 半短轴 (Semi-minor axis)
+airship_b = params.airship_b  # [m] 半短轴 (Semi-minor axis)
 
-Lh = airship_a1 + airship_a2 # [m] 机身总长 (Total hull length) - 假设
-L_ref = Lh                 # [m] 参考长度 (Reference length) - 假设
+Lh = airship_a1 + airship_a2  # [m] 机身总长 (Total hull length) - 假设
+L_ref = Lh  # [m] 参考长度 (Reference length) - 假设
 # 体积中心 x 坐标 (Volume Center x-coordinate) - Placeholder,
-# 精确值依赖于双椭球的具体组合方式, 这里用平均 a 近似或假设原点在特定位置 / 
-xcv = airship_a1 +(3/8)*(airship_a2 - airship_a1)                  # [m] - Placeholder, assume origin or calc if needed Eq.22
+# 精确值依赖于双椭球的具体组合方式, 这里用平均 a 近似或假设原点在特定位置 /
+xcv = airship_a1 + (3 / 8) * (airship_a2 - airship_a1)  # [m] - Placeholder, assume origin or calc if needed Eq.22
 
 # 计算体积 (Calculate Volume)
 mean_a = (airship_a1 + airship_a2) / 2.0
-V_airship = (4.0/3.0) * np.pi * mean_a * airship_b**2 # [m^3]
+V_airship = (4.0 / 3.0) * np.pi * mean_a * airship_b**2  # [m^3]
 
-Sh = V_airship**(2.0/3.0) # [m^2] 机身参考面积 (Hull reference area)
-Sf = 3656.0              # [m^2] 翼/舵面参考面积 (Fin reference area)
-Sg = 202.0               # [m^2] 吊舱参考面积 (Gondola reference area)
+Sh = V_airship ** (2.0 / 3.0)  # [m^2] 机身参考面积 (Hull reference area)
+Sf = 3656.0  # [m^2] 翼/舵面参考面积 (Fin reference area)
+Sg = 202.0  # [m^2] 吊舱参考面积 (Gondola reference area)
 
 # 力臂 (Lever Arms)
-lf1 = 117.5 # [m] x-dist origin to aero center fins
-lf2 = 129.7 # [m] x-dist origin to geom center fins
+lf1 = 117.5  # [m] x-dist origin to aero center fins
+lf2 = 129.7  # [m] x-dist origin to geom center fins
 lf3 = 18.3  # [m] y,z-dist origin to aero center fins (Used for Cl1)
 lgx = 29.2  # [m] x-dist origin to aero center gondola
 lgz = 40.0  # [m] z-dist origin to aero center gondola (Used for Cl2)
 
 # --- 环境参数 (Environmental Parameters) ---
 # 这个值可能需要在仿真开始时从外部传入或在 parameters.py 中定义
-rho_air_at_altitude = params.rho_air_at_altitude # [kg/m^3] 空气密度 @ ~20km - Placeholder
+rho_air_at_altitude = params.rho_air_at_altitude  # [kg/m^3] 空气密度 @ ~20km - Placeholder
 
 # --- 基础气动系数和导数 (Basic Aero Coeffs & Derivatives from Table 2) ---
-CDh0 = 0.025; CDf0 = 0.006; CDg0 = 0.01
-CDch = 0.5; CDcf = 1.0; CDcg = 1.0
-dCL_dalpha_f = 5.73 # (∂CL/∂α)f
-dCL_ddelta_f = 1.24 # (∂CL/∂δ)f
+CDh0 = 0.025
+CDf0 = 0.006
+CDg0 = 0.01
+CDch = 0.5
+CDcf = 1.0
+CDcg = 1.0
+dCL_dalpha_f = 5.73  # (∂CL/∂α)f
+dCL_ddelta_f = 1.24  # (∂CL/∂δ)f
 
 # --- 效率和积分因子 (Efficiency & Integral Factors from Table 2) ---
 eta_f = 0.29
@@ -100,13 +105,14 @@ J2 = J2_table
 # k1, k2 需要先通过 calculate_added_mass_inertia 计算得到 /  k1, k2 must first be calculated using calculate_added_mass_inertia
 # 这里使用占位符，实际应在调用 get_aero_coefficients 前计算好
 # Here, placeholders are used; actual values should be calculated before calling get_aero_coefficients
-k1_placeholder = 0.1 # Placeholder - MUST BE CALCULATED/PROVIDED
-k2_placeholder = 0.9 # Placeholder - MUST BE CALCULATED/PROVIDED
+k1_placeholder = 0.1  # Placeholder - MUST BE CALCULATED/PROVIDED
+k2_placeholder = 0.9  # Placeholder - MUST BE CALCULATED/PROVIDED
 
 
 # ==============================================================================
 #  计算高阶气动系数的函数 (Function to Calculate Higher-Order Aero Coeffs)
 # ==============================================================================
+
 
 def get_aero_coefficients(k1=k1_placeholder, k2=k2_placeholder):
     """
@@ -126,36 +132,37 @@ def get_aero_coefficients(k1=k1_placeholder, k2=k2_placeholder):
 
     # 使用模块级定义的参数 (Use module-level defined parameters)
     # Eq. 66-81
-    coeffs['Cx1'] = -(CDh0 * Sh + CDf0 * Sf + CDg0 * Sg)
-    coeffs['Cx2'] = (k2 - k1) * eta_k * I1 * Sh
+    coeffs["Cx1"] = -(CDh0 * Sh + CDf0 * Sf + CDg0 * Sg)
+    coeffs["Cx2"] = (k2 - k1) * eta_k * I1 * Sh
     # 假设 Eq 73 (Cz1=Cz4) 和 Eq 70 (Cz2=Cz4) 是笔误，或者 Cz4 依赖于不同导数 / Assume Cz4 is a typo or Cz4 depends on different derivatives
     # 按照最直接的解释 Cy4, Cz4 公式计算 / Calculate Cy4, Cz4 based on the most direct interpretation
 
     # coeffs['Cz4'] = 0.5 * dCL_ddelta_f * Sf * eta_f # 假设舵面效率相同 / Assume control surface efficiency is the same
-    coeffs['Cz1'] = coeffs['Cx2']
-    coeffs['Cy1'] = coeffs['Cx2']
+    coeffs["Cz1"] = coeffs["Cx2"]
+    coeffs["Cy1"] = coeffs["Cx2"]
 
-    coeffs['Cy2'] = -0.5 * dCL_dalpha_f * Sf * eta_f
-    coeffs['Cz2'] = coeffs['Cy2'] #
+    coeffs["Cy2"] = -0.5 * dCL_dalpha_f * Sf * eta_f
+    coeffs["Cz2"] = coeffs["Cy2"]  #
 
-    coeffs['Cy3'] = -(CDch * J1 * Sh + CDcf * Sf + CDcg * Sg)
-    coeffs['Cy4'] = 0.5 * dCL_ddelta_f * Sf * eta_f
-    coeffs['Cz4'] = coeffs['Cy4']
-    coeffs['Cz3'] = -(CDch * J1 * Sh + CDcf * Sf)
+    coeffs["Cy3"] = -(CDch * J1 * Sh + CDcf * Sf + CDcg * Sg)
+    coeffs["Cy4"] = 0.5 * dCL_ddelta_f * Sf * eta_f
+    coeffs["Cz4"] = coeffs["Cy4"]
+    coeffs["Cz3"] = -(CDch * J1 * Sh + CDcf * Sf)
 
-    coeffs['Cl1'] = dCL_ddelta_f * Sf * eta_f * lf3
-    coeffs['Cl2'] = -CDcg * Sg * lgz
-    coeffs['Cm1'] = -(k1 - k2) * eta_k * I3 * Sh * L_ref
-    coeffs['Cm2'] = -0.5 * dCL_dalpha_f * Sf * eta_f * lf1
-    coeffs['Cm3'] = -(CDch * J2 * Sh * L_ref + CDcf * Sf * lf2)
-    coeffs['Cm4'] = 0.5 * dCL_ddelta_f * Sf * eta_f * lf1
+    coeffs["Cl1"] = dCL_ddelta_f * Sf * eta_f * lf3
+    coeffs["Cl2"] = -CDcg * Sg * lgz
+    coeffs["Cm1"] = -(k1 - k2) * eta_k * I3 * Sh * L_ref
+    coeffs["Cm2"] = -0.5 * dCL_dalpha_f * Sf * eta_f * lf1
+    coeffs["Cm3"] = -(CDch * J2 * Sh * L_ref + CDcf * Sf * lf2)
+    coeffs["Cm4"] = 0.5 * dCL_ddelta_f * Sf * eta_f * lf1
     # Eq. 81 Cnj = -Cmj --- HIGHLY SUSPECT ---
-    coeffs['Cn1'] = -coeffs['Cm1']
-    coeffs['Cn2'] = -coeffs['Cm2']
-    coeffs['Cn3'] = -coeffs['Cm3']
-    coeffs['Cn4'] = -coeffs['Cm4'] # <-- 使用了 Cm4 / Using Cm4
+    coeffs["Cn1"] = -coeffs["Cm1"]
+    coeffs["Cn2"] = -coeffs["Cm2"]
+    coeffs["Cn3"] = -coeffs["Cm3"]
+    coeffs["Cn4"] = -coeffs["Cm4"]  # <-- 使用了 Cm4 / Using Cm4
 
     return coeffs
+
 
 # ==============================================================================
 #  (可选) 计算附加质量和惯性的函数 (Optional: Function to Calculate Added Mass/Inertia)
@@ -169,59 +176,73 @@ def calculate_added_mass_inertia_local(a1=airship_a1, a2=airship_a2, b=airship_b
     In practice, k1, k2 might be calculated externally and passed to get_aero_coefficients.
     """
     # --- 重复附加质量计算逻辑 (Repeat added mass calculation logic) ---
-    if b <= 0: raise ValueError("b must be positive")
+    if b <= 0:
+        raise ValueError("b must be positive")
     a = (a1 + a2) / 2.0
-    if a <= 0: raise ValueError("a must be positive")
-    if b > a: print(f"警告: 扁椭球 b={b} > a={a}，附加质量公式可能不准确。")
+    if a <= 0:
+        raise ValueError("a must be positive")
+    if b > a:
+        print(f"警告: 扁椭球 b={b} > a={a}，附加质量公式可能不准确。")
 
     V = (4.0 / 3.0) * np.pi * a * b**2
     m_air = rho * V
     tolerance = 1e-9
 
     if abs(a - b) < tolerance:
-        k1 = 0.5; k2 = 0.5; k3 = 0.5
+        k1 = 0.5
+        k2 = 0.5
+        k3 = 0.5
     else:
         a_sq = a**2
         term_inside_sqrt = 1.0 - (b**2 / a_sq)
-        if term_inside_sqrt < -tolerance: # 允许小的负数容差 / Allow a small negative number tolerance
-             print(f"警告: 偏心率计算sqrt内部为负 ({term_inside_sqrt:.2e})，假设为球体。")
-             k1 = 0.5; k2 = 0.5; k3 = 0.5
+        if term_inside_sqrt < -tolerance:  # 允许小的负数容差 / Allow a small negative number tolerance
+            print(f"警告: 偏心率计算sqrt内部为负 ({term_inside_sqrt:.2e})，假设为球体。")
+            k1 = 0.5
+            k2 = 0.5
+            k3 = 0.5
         else:
-             term_inside_sqrt = max(0, term_inside_sqrt) # 避免负数 / Avoid negative numbers
-             e = np.sqrt(term_inside_sqrt)
-             if abs(1.0 - e) < tolerance: raise ValueError("e is near 1.")
-             e_sq = e**2
+            term_inside_sqrt = max(0, term_inside_sqrt)  # 避免负数 / Avoid negative numbers
+            e = np.sqrt(term_inside_sqrt)
+            if abs(1.0 - e) < tolerance:
+                raise ValueError("e is near 1.")
+            e_sq = e**2
 
-             if abs(e) < tolerance : # 避免 f 和 g 中的除零 / Avoid division by zero in f and g
-                 # 接近球体的情况，用极限或直接设为球体值 / Near-spherical case, use limit or set to spherical value
-                 k1 = 0.5; k2 = 0.5; k3 = 0.5
-             else:
-                 f_log = np.log((1.0 + e) / (1.0 - e))
-                 e_cubed = e**3
-                 if abs(e_cubed) < tolerance: raise ValueError("e^3 near zero.")
-                 g = (1.0 - e_sq) / e_cubed
-                 alpha_prime = 2.0 * g * (f_log / 2.0 - e)
-                 if abs(e_sq) < tolerance: raise ValueError("e^2 near zero.")
-                 beta_prime = (1.0 / e_sq) - (g * f_log / 2.0)
+            if abs(e) < tolerance:  # 避免 f 和 g 中的除零 / Avoid division by zero in f and g
+                # 接近球体的情况，用极限或直接设为球体值 / Near-spherical case, use limit or set to spherical value
+                k1 = 0.5
+                k2 = 0.5
+                k3 = 0.5
+            else:
+                f_log = np.log((1.0 + e) / (1.0 - e))
+                e_cubed = e**3
+                if abs(e_cubed) < tolerance:
+                    raise ValueError("e^3 near zero.")
+                g = (1.0 - e_sq) / e_cubed
+                alpha_prime = 2.0 * g * (f_log / 2.0 - e)
+                if abs(e_sq) < tolerance:
+                    raise ValueError("e^2 near zero.")
+                beta_prime = (1.0 / e_sq) - (g * f_log / 2.0)
 
-                 denom_k1 = 2.0 - alpha_prime
-                 if abs(denom_k1) < tolerance: raise ValueError("k1 denominator near zero.")
-                 k1 = alpha_prime / denom_k1
+                denom_k1 = 2.0 - alpha_prime
+                if abs(denom_k1) < tolerance:
+                    raise ValueError("k1 denominator near zero.")
+                k1 = alpha_prime / denom_k1
 
-                 denom_k2 = 2.0 - beta_prime
-                 if abs(denom_k2) < tolerance: raise ValueError("k2 denominator near zero.")
-                 k2 = beta_prime / denom_k2
+                denom_k2 = 2.0 - beta_prime
+                if abs(denom_k2) < tolerance:
+                    raise ValueError("k2 denominator near zero.")
+                k2 = beta_prime / denom_k2
 
-                 b_sq = b**2
-                 term1_num_k3 = (b_sq - a_sq) * (alpha_prime - beta_prime)
-                 term2_den_k3 = 2.0 * (b_sq - a_sq) + (b_sq + a_sq) * (beta_prime - alpha_prime)
-                 if abs(term2_den_k3) < tolerance:
-                     if abs(a-b) > tolerance:
-                         raise ValueError("k3 denominator near zero (non-sphere).")
-                     else:
-                         k3 = 0.5
-                 else:
-                     k3 = (1.0 / 5.0) * term1_num_k3 / term2_den_k3
+                b_sq = b**2
+                term1_num_k3 = (b_sq - a_sq) * (alpha_prime - beta_prime)
+                term2_den_k3 = 2.0 * (b_sq - a_sq) + (b_sq + a_sq) * (beta_prime - alpha_prime)
+                if abs(term2_den_k3) < tolerance:
+                    if abs(a - b) > tolerance:
+                        raise ValueError("k3 denominator near zero (non-sphere).")
+                    else:
+                        k3 = 0.5
+                else:
+                    k3 = (1.0 / 5.0) * term1_num_k3 / term2_den_k3
 
     # --- 返回 k1, k2 (以及可能需要的 M', I0') / Return k1, k2 (and possibly M', I0') ---
     M_prime = m_air * np.diag([k1, k2, k2])
@@ -234,7 +255,7 @@ def calculate_added_mass_inertia_local(a1=airship_a1, a2=airship_a2, b=airship_b
 #  主执行部分 (示例) (Main execution part - Example)
 # ==============================================================================
 if __name__ == "__main__":
-    # 这个部分只在直接运行 aero_coefficients.py 时执行，用于测试 
+    # 这个部分只在直接运行 aero_coefficients.py 时执行，用于测试
     # / This part only runs when aero_coefficients.py is directly executed, for testing
     print("--- 测试计算气动系数 ---")
     try:

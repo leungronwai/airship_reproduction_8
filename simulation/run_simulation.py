@@ -1,8 +1,11 @@
 # simulation/run_simulation.py
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import logging
 import numpy as np
 import matplotlib.pyplot as plt
-import time as timer # Use timer to avoid conflict with time variable t
+import time as timer  # Use timer to avoid conflict with time variable t
 
 from config import parameters as params
 from airship.utils import R_block
@@ -12,25 +15,21 @@ from airship.observer import FixedTimeDO
 from airship.controller import FixedTimeBLFController
 
 
-from airship.controller import AnyControllerClass  # 定义的NMPC类
+from airship.controller import AnyControllerClass  # 定义的 NMPC 类
 
 
 # 全局 logger（在这里做一次 basicConfig） / Global logger (basicConfig done here)
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
-
 
 
 def run_simulation(trajectory_type="default"):
     """
     1.初始化：创建气艇模型、轨迹生成器、控制器等对象
-   
 
 
-    
+
+
     """
 
     # --- 初始化 / Initialize ---
@@ -54,17 +53,16 @@ def run_simulation(trajectory_type="default"):
 
     # --- 仿真循环 / Simulation loop ---
     for i, t in enumerate(sim_time):
-        ''' 
+        """
         2.仿真循环：在**每个时间步**:
             a. 获取参考轨迹
-            b. 调用NMPC控制器计算控制输入
+            b. 调用 NMPC 控制器计算控制输入
             c. 更新气艇状态
-        '''
+        """
 
-
-        # 获取当前状态 (Get current state) 
+        # 获取当前状态 (Get current state)
         X = airship.get_state()
-        
+
         # 基于轨迹类型获取期望状态 (Get desired state based on trajectory type)
         if trajectory_type == "default":
             yc, yc_dot, yc_ddot, xc, xc_dot = trajectory.get_desired_state(t)
@@ -78,20 +76,16 @@ def run_simulation(trajectory_type="default"):
             yc, yc_dot, yc_ddot, xc, xc_dot = trajectory.get_lemniscate_trajectory(t)
         elif trajectory_type == "linear":
             # 直线轨迹，可以自定义起点和终点
-            start_point = np.array([0.0, 0.0, -19000.0]) 
-            end_point = np.array([5000.0, 5000.0, -19000.0])  
+            start_point = np.array([0.0, 0.0, -19000.0])
+            end_point = np.array([5000.0, 5000.0, -19000.0])
             yc, yc_dot, yc_ddot, xc, xc_dot = trajectory.get_linear_trajectory(
-                t, 
-                start_point=start_point,
-                end_point=end_point,
-                speed=15.0,  # 飞行速度 15 m/s
-                hover_at_end=True  # 到达终点后悬停
+                t, start_point=start_point, end_point=end_point, speed=15.0, hover_at_end=True  # 飞行速度 15 m/s  # 到达终点后悬停
             )
         else:
-            raise ValueError(f"未知的轨迹类型: {trajectory_type}")
-        
-        zeta_d, gamma_d = yc[0:3], yc[3:6] # Desired position/attitude vector
-        zeta_d_dot, gamma_d_dot = yc_dot[0:3], yc_dot[3:6] # Desired velocity vector
+            raise ValueError(f"未知的轨迹类型：{trajectory_type}")
+
+        zeta_d, gamma_d = yc[0:3], yc[3:6]  # Desired position/attitude vector
+        zeta_d_dot, gamma_d_dot = yc_dot[0:3], yc_dot[3:6]  # Desired velocity vector
 
         logger.debug(f"[{i}] Desired zeta_d={zeta_d}, gamma_d={gamma_d}")
 
@@ -159,17 +153,17 @@ def run_simulation(trajectory_type="default"):
     logger.info(f"Simulation finished in {end_time - start_time:.2f} seconds.")
 
     # --- 结果绘图 / Plotting results ---
-    plt.style.use('seaborn-v0_8-whitegrid')
+    plt.style.use("seaborn-v0_8-whitegrid")
 
-    # 图1: 三维轨迹跟踪 (3D Trajectory Tracking)
+    # 图 1: 三维轨迹跟踪 (3D Trajectory Tracking)
     fig1 = plt.figure("3D Trajectory")
-    ax3d = fig1.add_subplot(111, projection='3d')
-    ax3d.plot(state_history[0, :], state_history[1, :], state_history[2, :], label='Airship Trajectory (Actual)')
-    ax3d.plot(yc_history[0, :], yc_history[1, :], yc_history[2, :], '--', label='Desired Trajectory')
-    ax3d.set_xlabel('X [m]')
-    ax3d.set_ylabel('Y [m]')
-    ax3d.set_zlabel('Z [m]')
-    ax3d.set_title('3D Trajectory Tracking')
+    ax3d = fig1.add_subplot(111, projection="3d")
+    ax3d.plot(state_history[0, :], state_history[1, :], state_history[2, :], label="Airship Trajectory (Actual)")
+    ax3d.plot(yc_history[0, :], yc_history[1, :], yc_history[2, :], "--", label="Desired Trajectory")
+    ax3d.set_xlabel("X [m]")
+    ax3d.set_ylabel("Y [m]")
+    ax3d.set_zlabel("Z [m]")
+    ax3d.set_title("3D Trajectory Tracking")
     ax3d.legend()
     # Equal aspect ratio might be needed depending on scale
     min_lim = np.min(yc_history[0:3, :])
@@ -178,65 +172,65 @@ def run_simulation(trajectory_type="default"):
     # ax3d.set_ylim([min_lim, max_lim])
     # ax3d.set_zlim([np.min(state_history[2,:]), np.max(state_history[2,:])])
 
-    # 图2: 位置跟踪误差 (Position Tracking Error e1 vs Constraints)
+    # 图 2: 位置跟踪误差 (Position Tracking Error e1 vs Constraints)
     fig2, axs2 = plt.subplots(3, 1, sharex=True, figsize=(10, 8))
-    fig2.suptitle('Position Tracking Error (e1) vs Constraints')
-    pos_labels = ['e_x', 'e_y', 'e_z']
+    fig2.suptitle("Position Tracking Error (e1) vs Constraints")
+    pos_labels = ["e_x", "e_y", "e_z"]
     for i in range(3):
-        axs2[i].plot(sim_time, error_history[i, :], label=f'{pos_labels[i]} (Actual Error)')
-        axs2[i].plot(sim_time, kb_history[i, :], 'r--', label='Constraint kb')
-        axs2[i].plot(sim_time, -kb_history[i, :], 'r--')
-        axs2[i].set_ylabel(f'{pos_labels[i]} [m]')
+        axs2[i].plot(sim_time, error_history[i, :], label=f"{pos_labels[i]} (Actual Error)")
+        axs2[i].plot(sim_time, kb_history[i, :], "r--", label="Constraint kb")
+        axs2[i].plot(sim_time, -kb_history[i, :], "r--")
+        axs2[i].set_ylabel(f"{pos_labels[i]} [m]")
         axs2[i].legend()
         axs2[i].grid(True)
-    axs2[2].set_xlabel('Time [s]')
+    axs2[2].set_xlabel("Time [s]")
 
-    # 图3: 姿态跟踪误差 (Attitude Tracking Error e1 vs Constraints)
+    # 图 3: 姿态跟踪误差 (Attitude Tracking Error e1 vs Constraints)
     fig3, axs3 = plt.subplots(3, 1, sharex=True, figsize=(10, 8))
-    fig3.suptitle('Attitude Tracking Error (e1) vs Constraints')
-    att_labels = ['e_phi', 'e_theta', 'e_psi']
+    fig3.suptitle("Attitude Tracking Error (e1) vs Constraints")
+    att_labels = ["e_phi", "e_theta", "e_psi"]
     for i in range(3):
-        axs3[i].plot(sim_time, error_history[i + 3, :], label=f'{att_labels[i]} (Actual Error)')
-        axs3[i].plot(sim_time, kb_history[i + 3, :], 'r--', label='Constraint kb')
-        axs3[i].plot(sim_time, -kb_history[i + 3, :], 'r--')
-        axs3[i].set_ylabel(f'{att_labels[i]} [rad]')
+        axs3[i].plot(sim_time, error_history[i + 3, :], label=f"{att_labels[i]} (Actual Error)")
+        axs3[i].plot(sim_time, kb_history[i + 3, :], "r--", label="Constraint kb")
+        axs3[i].plot(sim_time, -kb_history[i + 3, :], "r--")
+        axs3[i].set_ylabel(f"{att_labels[i]} [rad]")
         axs3[i].legend()
         axs3[i].grid(True)
-    axs3[2].set_xlabel('Time [s]')
+    axs3[2].set_xlabel("Time [s]")
 
-    # 图4: 控制输入 (Control Inputs)
+    # 图 4: 控制输入 (Control Inputs)
     fig4, axs4 = plt.subplots(6, 1, sharex=True, figsize=(10, 12))
-    fig4.suptitle('Control Input Tau')
-    control_labels = ['Fx', 'Fy', 'Fz', 'Tx', 'Ty', 'Tz']
+    fig4.suptitle("Control Input Tau")
+    control_labels = ["Fx", "Fy", "Fz", "Tx", "Ty", "Tz"]
     for i in range(6):
-        axs4[i].plot(sim_time, control_history[i, :], label=f'{control_labels[i]}')
-        axs4[i].set_ylabel(f'{control_labels[i]} [N or Nm]')
+        axs4[i].plot(sim_time, control_history[i, :], label=f"{control_labels[i]}")
+        axs4[i].set_ylabel(f"{control_labels[i]} [N or Nm]")
         axs4[i].legend()
         axs4[i].grid(True)
-    axs4[5].set_xlabel('Time [s]')
+    axs4[5].set_xlabel("Time [s]")
 
-    # 图5: 扰动估计 (Disturbance Estimation)
+    # 图 5: 扰动估计 (Disturbance Estimation)
     fig5, axs5 = plt.subplots(6, 1, sharex=True, figsize=(10, 12))
-    fig5.suptitle('Disturbance Estimation')
-    dist_labels = ['d1', 'd2', 'd3', 'd4', 'd5', 'd6']
+    fig5.suptitle("Disturbance Estimation")
+    dist_labels = ["d1", "d2", "d3", "d4", "d5", "d6"]
     for i in range(6):
-        axs5[i].plot(sim_time, disturbance_history[i, :], 'k-', label=f'Actual {dist_labels[i]}')
-        axs5[i].plot(sim_time, estimate_history[i, :], 'r--', label=f'Estimated {dist_labels[i]}')
-        axs5[i].set_ylabel(f'{dist_labels[i]}')
+        axs5[i].plot(sim_time, disturbance_history[i, :], "k-", label=f"Actual {dist_labels[i]}")
+        axs5[i].plot(sim_time, estimate_history[i, :], "r--", label=f"Estimated {dist_labels[i]}")
+        axs5[i].set_ylabel(f"{dist_labels[i]}")
         axs5[i].legend()
         axs5[i].grid(True)
-    axs5[5].set_xlabel('Time [s]')
+    axs5[5].set_xlabel("Time [s]")
 
-    # 图6: 速度跟踪误差 e2 (Velocity Tracking Error e2)
+    # 图 6: 速度跟踪误差 e2 (Velocity Tracking Error e2)
     fig6, axs6 = plt.subplots(6, 1, sharex=True, figsize=(10, 12))
-    fig6.suptitle('Velocity Tracking Error (e2)')
-    vel_err_labels = ['e_zeta_dot_x', 'e_zeta_dot_y', 'e_zeta_dot_z', 'e_gamma_dot_phi', 'e_gamma_dot_theta', 'e_gamma_dot_psi']
+    fig6.suptitle("Velocity Tracking Error (e2)")
+    vel_err_labels = ["e_zeta_dot_x", "e_zeta_dot_y", "e_zeta_dot_z", "e_gamma_dot_phi", "e_gamma_dot_theta", "e_gamma_dot_psi"]
     for i in range(6):
-        axs6[i].plot(sim_time, error2_history[i, :], label=f'{vel_err_labels[i]}')
-        axs6[i].set_ylabel(f'{vel_err_labels[i]}')
+        axs6[i].plot(sim_time, error2_history[i, :], label=f"{vel_err_labels[i]}")
+        axs6[i].set_ylabel(f"{vel_err_labels[i]}")
         axs6[i].legend()
         axs6[i].grid(True)
-    axs6[5].set_xlabel('Time [s]')
+    axs6[5].set_xlabel("Time [s]")
 
     plt.show()
 
@@ -258,7 +252,7 @@ def run_nmpc_simulation():
         Qf=params.Qf,
         T_bounds=(params.T_MIN, params.T_MAX),
         mu_bounds=(params.MU_MIN, params.MU_MAX),
-        nu_bounds=(params.NU_MIN, params.NU_MAX)
+        nu_bounds=(params.NU_MIN, params.NU_MAX),
     )
 
     sim_time = np.arange(0, params.T_SPAN, params.DT)
@@ -306,21 +300,16 @@ def run_nmpc_simulation():
 
     # 可视化（简单轨迹）
     import matplotlib.pyplot as plt
+
     fig = plt.figure("NMPC 3D Trajectory")
-    ax = fig.add_subplot(111, projection='3d')
-    ax.plot(state_history[0, :], state_history[1, :], state_history[2, :], label='Airship')
-    ax.plot(yc_history[0, :], yc_history[1, :], yc_history[2, :], '--', label='Reference')
-    ax.set_xlabel('X'); ax.set_ylabel('Y'); ax.set_zlabel('Z')
+    ax = fig.add_subplot(111, projection="3d")
+    ax.plot(state_history[0, :], state_history[1, :], state_history[2, :], label="Airship")
+    ax.plot(yc_history[0, :], yc_history[1, :], yc_history[2, :], "--", label="Reference")
+    ax.set_xlabel("X")
+    ax.set_ylabel("Y")
+    ax.set_zlabel("Z")
     ax.legend()
     plt.show()
-
-
-
-
-
-
-
-
 
 
 # 注意：不要在模块顶层调用 run_simulation()，否则一导入就会执行。只在 if __name__=='__main__' 下调用它。
@@ -336,9 +325,8 @@ def run_nmpc_simulation():
 #         run_nmpc_simulation()  # "python run_simulation.py --mode blf " in terminal
 
 
-
-'''
-如何理解这句话： 注意：不要在模块顶层调用 run_simulation()，否则一导入就会执行。只在 if __name__=='__main__' 下调用它。
+"""
+如何理解这句话：注意：不要在模块顶层调用 run_simulation()，否则一导入就会执行。只在 if __name__=='__main__' 下调用它。
 在 Python 中，每个 .py 文件被当作一个“模块”载入时，解释器会从头到尾执行一遍这个文件里的顶层代码。如果你在模块的顶层直接写了
 
 # run_simulation.py
@@ -385,7 +373,7 @@ python simulation/run_simulation.py
 if __name__ == '__main__':
     run_simulation()
 
-这样既能保留“脚本直接跑” 的便利性，又能保证它“被当作库导入”时不会乱跑。
+这样既能保留“脚本直接跑”的便利性，又能保证它“被当作库导入”时不会乱跑。
 
 
-'''
+"""
