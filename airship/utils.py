@@ -1,9 +1,9 @@
 """
 utils.py
 """
-
+# pylint: disable=invalid-name
 import numpy as np
-import numba as nb
+
 from numba import njit, float64, int64
 
 

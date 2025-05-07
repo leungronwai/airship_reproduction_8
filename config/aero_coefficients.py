@@ -1,6 +1,15 @@
-# aero_coefficients.py
+'''
+aero_coefficients.py
+'''
+
+# pylint: disable=invalid-name
+# pylint: disable=undefined-variable
+# cspell:ignore coeffs ddelta eta_f Sh Sg Sf Cdcf dalpha arcsin coeff
 import numpy as np
-import parameters as params
+
+
+from config import parameters as params
+
 
 # 假设附加质量计算函数也在此文件中或可以导入
 # from added_mass_calculator import calculate_added_mass_inertia # 假设可用
@@ -19,7 +28,7 @@ airship_b = params.airship_b  # [m] 半短轴 (Semi-minor axis)
 Lh = airship_a1 + airship_a2  # [m] 机身总长 (Total hull length) - 假设
 L_ref = Lh  # [m] 参考长度 (Reference length) - 假设
 # 体积中心 x 坐标 (Volume Center x-coordinate) - Placeholder,
-# 精确值依赖于双椭球的具体组合方式, 这里用平均 a 近似或假设原点在特定位置 /
+# 精确值依赖于双椭球的具体组合方式，这里用平均 a 近似或假设原点在特定位置 /
 xcv = airship_a1 + (3 / 8) * (airship_a2 - airship_a1)  # [m] - Placeholder, assume origin or calc if needed Eq.22
 
 # 计算体积 (Calculate Volume)
@@ -59,7 +68,7 @@ I1_table = 0.33
 I3_table = -0.69
 J1_table = 1.31
 J2_table = 0.53
-# 注意: 如果需要根据几何形状用 Eq. 82-85 计算，取消注释下面的计算部分
+# 注意：如果需要根据几何形状用 Eq. 82-85 计算，取消注释下面的计算部分
 # Note: If calculation based on geometry (Eq. 82-85) is preferred, uncomment below
 
 # --- (可选) 根据几何计算积分因子 (Optional: Calculate Integral Factors from Geometry) ---
@@ -182,7 +191,7 @@ def calculate_added_mass_inertia_local(a1=airship_a1, a2=airship_a2, b=airship_b
     if a <= 0:
         raise ValueError("a must be positive")
     if b > a:
-        print(f"警告: 扁椭球 b={b} > a={a}，附加质量公式可能不准确。")
+        print(f"警告：扁椭球 b={b} > a={a}，附加质量公式可能不准确。")
 
     V = (4.0 / 3.0) * np.pi * a * b**2
     m_air = rho * V
@@ -196,7 +205,7 @@ def calculate_added_mass_inertia_local(a1=airship_a1, a2=airship_a2, b=airship_b
         a_sq = a**2
         term_inside_sqrt = 1.0 - (b**2 / a_sq)
         if term_inside_sqrt < -tolerance:  # 允许小的负数容差 / Allow a small negative number tolerance
-            print(f"警告: 偏心率计算sqrt内部为负 ({term_inside_sqrt:.2e})，假设为球体。")
+            print(f"警告：偏心率计算 sqrt 内部为负 ({term_inside_sqrt:.2e})，假设为球体。")
             k1 = 0.5
             k2 = 0.5
             k3 = 0.5

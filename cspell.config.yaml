@@ -1,0 +1,6 @@
+version: "0.2"
+language: en
+words:
+  - T_mag
+  - F_pos
+  - T_att

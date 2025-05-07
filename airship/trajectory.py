@@ -1,9 +1,16 @@
-# trajectory.py
+"""
+Trajectory generation module (trajectory.py)
+"""
+# pylint: disable=invalid-name
+# pylint: disable=line-too-long
 import numpy as np
 from airship.utils import R_zeta, R_y_inv
 
 
 class Trajectory:
+    """
+    Trajectory generation class (trajectory.py)
+    """
     def __init__(self):
         pass  # No specific initialization needed for this trajectory
 
@@ -56,7 +63,7 @@ class Trajectory:
         _, gamma_d_minus = self.get_spiral_pos_att(t - dt_small)
         gamma_d_dot = (gamma_d_plus - gamma_d_minus) / (2 * dt_small)
 
-        # 组合yc、yc_dot
+        # 组合 yc、yc_dot
         yc = np.concatenate((zeta_d, gamma_d))
         yc_dot = np.concatenate((zeta_d_dot, gamma_d_dot))
 
@@ -69,13 +76,13 @@ class Trajectory:
         wc = wc.flatten()
         xc = np.concatenate((vc, wc))
 
-        # xc_dot通过符号化导数简化近似
+        # xc_dot 通过符号化导数简化近似
         vc_dot = Rc_z.T @ zeta_d_ddot.reshape(-1, 1)
         vc_dot = vc_dot.flatten()
         wc_dot = np.zeros(3)  # 简化处理，假设角速度变化率较小
         xc_dot = np.concatenate((vc_dot, wc_dot))
 
-        # yc_ddot同样简化处理
+        # yc_ddot 同样简化处理
         gamma_d_ddot = np.zeros(3)
         yc_ddot = np.concatenate((zeta_d_ddot, gamma_d_ddot))
 
@@ -83,8 +90,8 @@ class Trajectory:
 
     def get_spiral_pos_att(self, t):
         """
-        计算螺旋轨迹在时间t的位置和姿态, 用于计算导数
-        避免递归调用define_spiral_trajectory
+        计算螺旋轨迹在时间 t 的位置和姿态，用于计算导数
+        避免递归调用 define_spiral_trajectory
         """
         # --- 轨迹参数 ---
         omega = 0.05  # 角速度 (rad/s)
@@ -111,31 +118,31 @@ class Trajectory:
 
         return zeta_d, gamma_d
 
-    # ********************* 8字形轨迹函数 *********************
+    # ********************* 8 字形轨迹函数 *********************
 
     def get_figure8_trajectory(self, t):
         """
-        生成一个水平8字形轨迹, 带有平滑的高度变化
+        生成一个水平 8 字形轨迹，带有平滑的高度变化
         返回 8 字形轨迹的期望状态及其导数
 
-        参数:
+        参数：
             t: 当前时间
 
-        返回:
-            yc, yc_dot, yc_ddot, xc, xc_dot: 与get_desired_state相同的输出格式
+        返回：
+            yc, yc_dot, yc_ddot, xc, xc_dot: 与 get_desired_state 相同的输出格式
         """
         dt_small = 1e-4
 
         # --- 轨迹参数 ---
-        a = 3000  # 8字形的宽度
-        b = 2000  # 8字形的高度
+        a = 3000  # 8 字形的宽度
+        b = 2000  # 8 字形的高度
         omega = 0.003  # 角速度，控制飞艇在轨迹上的移动速度
         h_center = -19000  # 中心高度
         h_amp = 500  # 高度振荡幅度
         omega_h = 0.002  # 高度变化的角速度
 
         # --- 位置计算 ---
-        # 8字形的参数方程
+        # 8 字形的参数方程
         xd = a * np.sin(omega * t)
         yd = b * np.sin(omega * t) * np.cos(omega * t)
         zd = h_center + h_amp * np.sin(omega_h * t)
@@ -143,26 +150,27 @@ class Trajectory:
 
         # --- 速度计算 ---
         xd_dot = a * omega * np.cos(omega * t)
-        yd_dot = b * omega * (np.cos(omega * t) * np.cos(omega * t) - np.sin(omega * t) * np.sin(omega * t))
+        yd_dot = b * omega * (np.cos(omega * t) * np.cos(omega * t)
+                              - np.sin(omega * t) * np.sin(omega * t)
+                              )
         zd_dot = h_amp * omega_h * np.cos(omega_h * t)
         zeta_d_dot = np.array([xd_dot, yd_dot, zd_dot])
 
         # --- 加速度计算（使用数值差分） ---
-        # 计算t+dt时刻的速度
+        # 计算 t+dt 时刻的速度
         xd_dot_plus = a * omega * np.cos(omega * (t + dt_small))
         yd_dot_plus = (
-            b
-            * omega
-            * (np.cos(omega * (t + dt_small)) * np.cos(omega * (t + dt_small)) - np.sin(omega * (t + dt_small)) * np.sin(omega * (t + dt_small)))
+            b * omega * (np.cos(omega * (t + dt_small)) * np.cos(omega * (t + dt_small))
+                         - np.sin(omega * (t + dt_small)) * np.sin(omega * (t + dt_small))
+                         )
         )
         zd_dot_plus = h_amp * omega_h * np.cos(omega_h * (t + dt_small))
 
-        # 计算t-dt时刻的速度
+        # 计算 t-dt 时刻的速度
         xd_dot_minus = a * omega * np.cos(omega * (t - dt_small))
         yd_dot_minus = (
-            b
-            * omega
-            * (np.cos(omega * (t - dt_small)) * np.cos(omega * (t - dt_small)) - np.sin(omega * (t - dt_small)) * np.sin(omega * (t - dt_small)))
+            b * omega * (np.cos(omega * (t - dt_small)) * np.cos(omega * (t - dt_small))
+               - np.sin(omega * (t - dt_small)) * np.sin(omega * (t - dt_small)))
         )
         zd_dot_minus = h_amp * omega_h * np.cos(omega_h * (t - dt_small))
 
@@ -188,7 +196,7 @@ class Trajectory:
         _, gamma_d_minus = self.get_figure8_pos_att(t - dt_small)
         gamma_d_dot = (gamma_d_plus - gamma_d_minus) / (2 * dt_small)
 
-        # --- 组合yc、yc_dot ---
+        # --- 组合 yc、yc_dot ---
         yc = np.concatenate((zeta_d, gamma_d))
         yc_dot = np.concatenate((zeta_d_dot, gamma_d_dot))
 
@@ -215,12 +223,12 @@ class Trajectory:
 
     def get_figure8_pos_att(self, t):
         """
-        仅计算8字形轨迹在时间t的位置和姿态，用于计算导数
-        避免递归调用get_figure8_trajectory
+        仅计算 8 字形轨迹在时间 t 的位置和姿态，用于计算导数
+        避免递归调用 get_figure8_trajectory
         """
         # --- 轨迹参数 ---
-        a = 3000  # 8字形的宽度
-        b = 2000  # 8字形的高度
+        a = 3000  # 8 字形的宽度
+        b = 2000  # 8 字形的高度
         omega = 0.003  # 角速度，控制飞艇在轨迹上的移动速度
         h_center = -19000  # 中心高度
         h_amp = 500  # 高度振荡幅度
@@ -234,7 +242,9 @@ class Trajectory:
 
         # --- 速度（用于计算姿态） ---
         xd_dot = a * omega * np.cos(omega * t)
-        yd_dot = b * omega * (np.cos(omega * t) * np.cos(omega * t) - np.sin(omega * t) * np.sin(omega * t))
+        yd_dot = b * omega * (np.cos(omega * t) * np.cos(omega * t)
+                              - np.sin(omega * t) * np.sin(omega * t)
+                              )
         zd_dot = h_amp * omega_h * np.cos(omega_h * t)
 
         # --- 姿态 ---
@@ -249,12 +259,12 @@ class Trajectory:
 
     def get_lemniscate_trajectory(self, t):
         """
-        生成莱洛曲线(Lemniscate)轨迹，形似无限符号，带有高度变化
+        生成莱洛曲线 (Lemniscate) 轨迹，形似无限符号，带有高度变化
 
-        参数:
+        参数：
             t: 当前时间
 
-        返回:
+        返回：
             yc, yc_dot, yc_ddot, xc, xc_dot: 期望状态及其导数
         """
         dt_small = 1e-4
@@ -276,34 +286,55 @@ class Trajectory:
         zeta_d = np.array([xd, yd, zd])
 
         # --- 速度计算（解析导数）---
-        xd_dot_num = -a * np.sin(theta) * denom - a * np.cos(theta) * 2 * np.sin(theta) * np.cos(theta)
-        yd_dot_num = a * (np.cos(theta) ** 2 - np.sin(theta) ** 2) * denom - a * np.sin(theta) * np.cos(theta) * 2 * np.sin(theta) * np.cos(theta)
+        xd_dot_num = (
+            -a * np.sin(theta) * denom
+            - a * np.cos(theta) * 2 * np.sin(theta) * np.cos(theta)
+        )
+        yd_dot_num = (
+            a * (np.cos(theta) ** 2 - np.sin(theta) ** 2) * denom
+            - a * np.sin(theta) * np.cos(theta) * 2 * np.sin(theta) * np.cos(theta)
+        )
         xd_dot = (xd_dot_num / denom**2) * omega
         yd_dot = (yd_dot_num / denom**2) * omega
         zd_dot = h_amp * h_freq * np.cos(h_freq * t)
         zeta_d_dot = np.array([xd_dot, yd_dot, zd_dot])
 
         # --- 使用数值差分计算加速度 ---
-        # 计算t+dt时刻的位置和速度
+        # 计算 t+dt 时刻的位置和速度
         theta_plus = omega * (t + dt_small)
         denom_plus = 1 + np.sin(theta_plus) ** 2
 
-        xd_dot_num_plus = -a * np.sin(theta_plus) * denom_plus - a * np.cos(theta_plus) * 2 * np.sin(theta_plus) * np.cos(theta_plus)
-        yd_dot_num_plus = a * (np.cos(theta_plus) ** 2 - np.sin(theta_plus) ** 2) * denom_plus - a * np.sin(theta_plus) * np.cos(
-            theta_plus
-        ) * 2 * np.sin(theta_plus) * np.cos(theta_plus)
+        xd_dot_num_plus = (
+            -a * np.sin(theta_plus) * denom_plus
+            - a * np.cos(theta_plus) * 2 * np.sin(theta_plus) * np.cos(theta_plus)
+        )
+        yd_dot_num_plus = (
+            a * (np.cos(theta_plus) ** 2 - np.sin(theta_plus) ** 2) * denom_plus
+            - a * np.sin(theta_plus)
+            * np.cos(theta_plus)
+            * 2
+            * np.sin(theta_plus)
+            * np.cos(theta_plus)
+        )
+
         xd_dot_plus = (xd_dot_num_plus / denom_plus**2) * omega
         yd_dot_plus = (yd_dot_num_plus / denom_plus**2) * omega
         zd_dot_plus = h_amp * h_freq * np.cos(h_freq * (t + dt_small))
 
-        # 计算t-dt时刻的位置和速度
+        # 计算 t-dt 时刻的位置和速度
         theta_minus = omega * (t - dt_small)
         denom_minus = 1 + np.sin(theta_minus) ** 2
 
-        xd_dot_num_minus = -a * np.sin(theta_minus) * denom_minus - a * np.cos(theta_minus) * 2 * np.sin(theta_minus) * np.cos(theta_minus)
-        yd_dot_num_minus = a * (np.cos(theta_minus) ** 2 - np.sin(theta_minus) ** 2) * denom_minus - a * np.sin(theta_minus) * np.cos(
-            theta_minus
-        ) * 2 * np.sin(theta_minus) * np.cos(theta_minus)
+        xd_dot_num_minus = (
+            -a * np.sin(theta_minus) * denom_minus
+            - a * np.cos(theta_minus) * 2 * np.sin(theta_minus) * np.cos(theta_minus)
+        )
+        yd_dot_num_minus = (
+            a * (np.cos(theta_minus) ** 2
+            - np.sin(theta_minus) ** 2) * denom_minus
+            - (a * np.sin(theta_minus) * np.cos(theta_minus)
+                * 2 * np.sin(theta_minus) * np.cos(theta_minus))
+        )
         xd_dot_minus = (xd_dot_num_minus / denom_minus**2) * omega
         yd_dot_minus = (yd_dot_num_minus / denom_minus**2) * omega
         zd_dot_minus = h_amp * h_freq * np.cos(h_freq * (t - dt_small))
@@ -328,7 +359,7 @@ class Trajectory:
         _, gamma_d_minus = self.get_lemniscate_pos_att(t - dt_small)
         gamma_d_dot = (gamma_d_plus - gamma_d_minus) / (2 * dt_small)
 
-        # --- 组合yc、yc_dot ---
+        # --- 组合 yc、yc_dot ---
         yc = np.concatenate((zeta_d, gamma_d))
         yc_dot = np.concatenate((zeta_d_dot, gamma_d_dot))
 
@@ -353,7 +384,7 @@ class Trajectory:
         return yc, yc_dot, yc_ddot, xc, xc_dot
 
     def get_lemniscate_pos_att(self, t):
-        """计算莱洛曲线在时间t的位置和姿态, 用于计算导数"""
+        """计算莱洛曲线在时间 t 的位置和姿态，用于计算导数"""
         # --- 轨迹参数 ---
         a = 2500
         omega = 0.004
@@ -371,8 +402,14 @@ class Trajectory:
         zeta_d = np.array([xd, yd, zd])
 
         # --- 速度计算 ---
-        xd_dot_num = -a * np.sin(theta) * denom - a * np.cos(theta) * 2 * np.sin(theta) * np.cos(theta)
-        yd_dot_num = a * (np.cos(theta) ** 2 - np.sin(theta) ** 2) * denom - a * np.sin(theta) * np.cos(theta) * 2 * np.sin(theta) * np.cos(theta)
+        xd_dot_num = (
+            -a * np.sin(theta) * denom
+            - a * np.cos(theta) * 2 * np.sin(theta) * np.cos(theta)
+        )
+        yd_dot_num = (
+            a * (np.cos(theta) ** 2 - np.sin(theta) ** 2) * denom
+            - a * np.sin(theta) * np.cos(theta) * 2 * np.sin(theta) * np.cos(theta)
+        )
         xd_dot = (xd_dot_num / denom**2) * omega
         yd_dot = (yd_dot_num / denom**2) * omega
         zd_dot = h_amp * h_freq * np.cos(h_freq * t)
@@ -390,14 +427,14 @@ class Trajectory:
         """
         生成一条直线轨迹，从起点飞向终点
 
-        参数:
+        参数：
             t: 当前时间
             start_point: 起点坐标 [x, y, z]，默认为原点
             end_point: 终点坐标 [x, y, z]，默认为 [5000, 5000, -19000]
             speed: 飞行速度，单位 m/s
             hover_at_end: 到达终点后是否悬停，否则继续沿直线飞行
 
-        返回:
+        返回：
             yc, yc_dot, yc_ddot, xc, xc_dot: 期望状态及导数
         """
         dt_small = 1e-4
@@ -461,7 +498,7 @@ class Trajectory:
         _, gamma_d_minus = self.get_linear_pos_att(t - dt_small, start_point, end_point, speed, hover_at_end)
         gamma_d_dot = (gamma_d_plus - gamma_d_minus) / (2 * dt_small)
 
-        # --- 组合yc、yc_dot ---
+        # --- 组合 yc、yc_dot ---
         yc = np.concatenate((zeta_d, gamma_d))
         yc_dot = np.concatenate((zeta_d_dot, gamma_d_dot))
 
@@ -488,8 +525,8 @@ class Trajectory:
 
     def get_linear_pos_att(self, t, start_point, end_point, speed, hover_at_end):
         """
-        计算直线轨迹在时间t的位置和姿态，用于计算导数
-        避免递归调用get_linear_trajectory
+        计算直线轨迹在时间 t 的位置和姿态，用于计算导数
+        避免递归调用 get_linear_trajectory
         """
         # 计算方向向量和距离
         direction = end_point - start_point
@@ -522,7 +559,8 @@ class Trajectory:
         # --- 姿态计算 ---
         if np.linalg.norm(zeta_d_dot) > 1e-6:  # 如果有速度
             phi_d = 0.0  # 保持零横滚
-            theta_d = np.arctan2(-zeta_d_dot[2], np.sqrt(zeta_d_dot[0] ** 2 + zeta_d_dot[1] ** 2))  # 俯仰角
+            theta_d = np.arctan2(-zeta_d_dot[2],
+                                 np.sqrt(zeta_d_dot[0] ** 2 + zeta_d_dot[1] ** 2))  # 俯仰角
             psi_d = np.arctan2(zeta_d_dot[1], zeta_d_dot[0])  # 航向角
         else:
             # 悬停状态下保持最后的姿态，这里简化为默认姿态

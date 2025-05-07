@@ -1,22 +1,34 @@
 # simulation/run_simulation.py
-import sys
-import os
+"""
+Main simulation script for airship trajectory tracking and controller evaluation.
+"""
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# pylint: disable=invalid-name
+
+
+# === 标准库 ===
+import os
+import sys
+import time as timer  # Use timer to avoid conflict with time variable t
 import logging
+
+# === 第三方库 ===
 import numpy as np
 import matplotlib.pyplot as plt
-import time as timer  # Use timer to avoid conflict with time variable t
 
+# === 本地模块 ===
 from config import parameters as params
 from airship.utils import R_block
 from airship.model import Airship
 from airship.trajectory import Trajectory
-from airship.observer import FixedTimeDO
-from airship.controller import FixedTimeBLFController
+from airship.controller import AnyController, NMPCThrustController
 
 
-from airship.controller import AnyControllerClass  # 定义的 NMPC 类
+# === 添加项目根目录到路径（如需从根目录运行） ===
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
+
 
 
 # 全局 logger（在这里做一次 basicConfig） / Global logger (basicConfig done here)
@@ -36,8 +48,7 @@ def run_simulation(trajectory_type="default"):
     # --- 初始化 / Initialize ---
     airship = Airship(params.X0)
     trajectory = Trajectory()
-    observer = FixedTimeDO()
-    controller = AnyControllerClass()
+    controller = AnyController()
 
     # --- 数据记录 / Data logging ---
     sim_time = np.arange(0, params.T_SPAN, params.DT)
@@ -54,19 +65,18 @@ def run_simulation(trajectory_type="default"):
 
     # --- 仿真循环 / Simulation loop ---
     for i, t in enumerate(sim_time):
-        """
-        2.仿真循环：在**每个时间步**:
-            a. 获取参考轨迹
-            b. 调用 NMPC 控制器计算控制输入
-            c. 更新气艇状态
-        """
+        # 2.仿真循环：在**每个时间步**:
+        #     a. 获取参考轨迹
+        #     b. 调用 NMPC 控制器计算控制输入
+        #     c. 更新气艇状态
+
 
         # 获取当前状态 (Get current state)
         X = airship.get_state()
 
         # 基于轨迹类型获取期望状态 (Get desired state based on trajectory type)
         if trajectory_type == "default":
-            yc, yc_dot, yc_ddot, xc, xc_dot = trajectory.get_desired_state(t)
+            yc, yc_dot, yc_ddot, xc, xc_dot = trajectory.get_linear_trajectory(t)
         elif trajectory_type == "spiral":
             yc, yc_dot, yc_ddot, xc, xc_dot = trajectory.get_spiral_trajectory(t)
             # 转换螺旋轨迹为所需格式...
@@ -237,15 +247,16 @@ def run_simulation(trajectory_type="default"):
 
 
 def run_nmpc_simulation():
-    from airship.controller import NMPCThrustController
-    from airship.trajectory import Trajectory
-    from airship.model import Airship
+    """
+    Run NMPC simulation.
+    """
 
     airship = Airship(params.X0)
     trajectory = Trajectory()
+
+
     controller = NMPCThrustController(
         model=airship,
-        params=params,
         dt=params.DT,
         N=params.N_HORIZON,
         Q=params.Q,
@@ -271,7 +282,7 @@ def run_nmpc_simulation():
         U_ref = []
         for j in range(params.N_HORIZON + 1):
             t_future = t + j * params.DT
-            yc_j, yc_dot_j, _, _, _ = trajectory.get_desired_state(t_future)
+            yc_j, yc_dot_j, _, _, _ = trajectory.get_linear_trajectory(t_future)
             X_ref.append(np.concatenate([yc_j, yc_dot_j]))
         for j in range(params.N_HORIZON):
             U_ref.append(np.array([8.0, 0.0, 0.0]))  # 可替换为 smarter guess
@@ -299,8 +310,7 @@ def run_nmpc_simulation():
         control_history[:, i] = u_cmd
         yc_history[:, i] = X_ref[0][0:6]
 
-    # 可视化（简单轨迹）
-    import matplotlib.pyplot as plt
+
 
     fig = plt.figure("NMPC 3D Trajectory")
     ax = fig.add_subplot(111, projection="3d")
@@ -326,55 +336,55 @@ def run_nmpc_simulation():
 #         run_nmpc_simulation()  # "python run_simulation.py --mode blf " in terminal
 
 
-"""
-如何理解这句话：注意：不要在模块顶层调用 run_simulation()，否则一导入就会执行。只在 if __name__=='__main__' 下调用它。
-在 Python 中，每个 .py 文件被当作一个“模块”载入时，解释器会从头到尾执行一遍这个文件里的顶层代码。如果你在模块的顶层直接写了
 
-# run_simulation.py
+# 如何理解这句话：注意：不要在模块顶层调用 run_simulation()，否则一导入就会执行。只在 if __name__=='__main__' 下调用它。
+# 在 Python 中，每个 .py 文件被当作一个“模块”载入时，解释器会从头到尾执行一遍这个文件里的顶层代码。如果你在模块的顶层直接写了
 
-def run_simulation():
-    # …做很多事…
-    pass
+# # run_simulation.py
 
-# 下面这一行在模块载入时就会执行
-run_simulation()
+# def run_simulation():
+#     # …做很多事…
+#     pass
 
-那么只要你在别的地方写了
+# # 下面这一行在模块载入时就会执行
+# run_simulation()
 
-import simulation.run_simulation
+# 那么只要你在别的地方写了
 
-就会立刻跑一次 run_simulation()——因为导入模块时，解释器会执行模块里的所有顶层语句。
+# import simulation.run_simulation
 
-⸻
+# 就会立刻跑一次 run_simulation()——因为导入模块时，解释器会执行模块里的所有顶层语句。
 
-用 if __name__ == '__main__' 来区分“被当脚本执行”还是“被别的模块导入”
+# ⸻
 
-在模块里加上这一段：
+# 用 if __name__ == '__main__' 来区分“被当脚本执行”还是“被别的模块导入”
 
-if __name__ == '__main__':
-    run_simulation()
+# 在模块里加上这一段：
 
-就能做到：
-	•	当你在命令行（或 IDE 的“Run”按钮）直接执行
+# if __name__ == '__main__':
+#     run_simulation()
 
-python simulation/run_simulation.py
+# 就能做到：
+# 	•	当你在命令行（或 IDE 的“Run”按钮）直接执行
 
-这时模块的 __name__ 等于 "__main__"，条件为真，于是会调用 run_simulation()，启动仿真。
+# python simulation/run_simulation.py
 
-	•	当别人通过 import simulation.run_simulation 载入这个模块时
-	•	模块的 __name__ 会是 "simulation.run_simulation"，条件不满足，run_simulation() 就不会自动执行。
-	•	这样，导入这个模块只会导入函数、类、全局变量，不会触发仿真流程。
+# 这时模块的 __name__ 等于 "__main__"，条件为真，于是会调用 run_simulation()，启动仿真。
 
-⸻
+# 	•	当别人通过 import simulation.run_simulation 载入这个模块时
+# 	•	模块的 __name__ 会是 "simulation.run_simulation"，条件不满足，run_simulation() 就不会自动执行。
+# 	•	这样，导入这个模块只会导入函数、类、全局变量，不会触发仿真流程。
 
-小结
-	•	不要在模块顶层直接调用 run_simulation()，否则“导入”就会“执行”。
-	•	要把启动代码放在：
+# ⸻
 
-if __name__ == '__main__':
-    run_simulation()
+# 小结
+# 	•	不要在模块顶层直接调用 run_simulation()，否则“导入”就会“执行”。
+# 	•	要把启动代码放在：
 
-这样既能保留“脚本直接跑”的便利性，又能保证它“被当作库导入”时不会乱跑。
+# if __name__ == '__main__':
+#     run_simulation()
+
+# 这样既能保留“脚本直接跑”的便利性，又能保证它“被当作库导入”时不会乱跑。
 
 
-"""
+

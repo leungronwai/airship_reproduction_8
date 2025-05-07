@@ -1,6 +1,10 @@
 {
     "cSpell.words": [
+        "casadi",
         "njit",
         "NMPC"
+    ],
+    "cSpell.ignoreWords": [
+        "F_pos"
     ]
 }

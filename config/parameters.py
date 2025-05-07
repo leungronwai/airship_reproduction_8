@@ -1,5 +1,11 @@
 # parameters.py
+
+# pylint: disable=invalid-name
+# cspell:ignore coeffs ddelta eta_f Sh Sg Sf Cdcf dalpha arcsin coeff ndarray linalg
+
 import numpy as np
+
+from config.aero_coefficients import calculate_added_mass_inertia_local, get_aero_coefficients
 
 # --- 仿真参数 (Simulation Parameters) ---
 DT = 0.1  # 仿真步长 (Simulation step size) [s]
@@ -51,16 +57,18 @@ Cnr = -1.0   # Yaw damping coefficient vs r
 
 # 在 simulation.py 或 parameters.py 的初始化部分
 # In simulation.py or parameters.py initialization section
-import aero_coefficients as aero
+
+
+
 
 try:
     # 计算 k1, k2 (假设函数在 aero.py 或其他地方)
     # Calculate k1, k2 (assuming functions are defined in aero.py or elsewhere)
-    k1_val, k2_val, _, _ = aero.calculate_added_mass_inertia_local()  # 或者从其他来源获取  or from other sources
+    k1_val, k2_val, _, _ = calculate_added_mass_inertia_local()  # 或者从其他来源获取  or from other sources
 
     # 计算气动系数
     # Calculate aerodynamic coefficients
-    AERO_COEFFS = aero.get_aero_coefficients(k1=k1_val, k2=k2_val)
+    AERO_COEFFS = get_aero_coefficients(k1=k1_val, k2=k2_val)
 
 except ValueError as e:
     print(f"初始化气动参数时出错 Error initializing aerodynamic parameters : {e}")
@@ -278,3 +286,33 @@ V_WIND_ERF = np.array([5.0, 2.0, 0.0])
 #     wind_z = 0.0
 #     return np.array([wind_x, wind_y, wind_z])
 # V_WIND_FUNC = get_wind_erf # 如果使用函数，则在这里指定 / If using function, specify here
+
+
+
+
+# === NMPC 控制器参数 ===
+# 预测视界长度
+N_HORIZON = 10
+
+# 状态权重矩阵 (位置和姿态的误差权重)
+Q = np.diag([10.0, 10.0, 10.0, 5.0, 5.0, 5.0,
+              1.0, 1.0, 1.0, 0.5, 0.5, 0.5])
+
+# 控制输入权重矩阵
+R = np.diag([0.1, 0.1, 0.1])
+
+# 终端状态权重矩阵
+Qf = np.diag([20.0, 20.0, 20.0, 10.0, 10.0, 10.0,
+               2.0, 2.0, 2.0, 1.0, 1.0, 1.0])
+
+# 推力边界 (N)
+T_MIN = 0.0
+T_MAX = 20.0
+
+# μ参数边界 (rad)
+MU_MIN = -np.pi/4
+MU_MAX = np.pi/4
+
+# ν参数边界 (rad)
+NU_MIN = -np.pi/4
+NU_MAX = np.pi/4
