@@ -14,7 +14,6 @@ from simulation.run_simulation import run
 from simulation.run_simulation import run_simulation, run_nmpc_simulation  # 引入两个仿真函数
 
 
-
 def setup_logger():
     """
     全局日志配置：只需在这里配置一次，项目中其他模块获取同一 logger 即可。
@@ -28,16 +27,10 @@ def setup_logger():
 
     logging.basicConfig(
         level=logging.DEBUG,  # 可以调整级别 / Adjust the level as needed
-        format='%(asctime)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.FileHandler(log_file, mode='w'),
-            logging.StreamHandler()  # 同时输出到终端 / Also output to terminal
-        ]
+        format="%(asctime)s - %(levelname)s - %(message)s",
+        handlers=[logging.FileHandler(log_file, mode="w"), logging.StreamHandler()],  # 同时输出到终端 / Also output to terminal
     )
     return logging.getLogger(__name__)
-
-
-    
 
 
 def main():
@@ -57,18 +50,11 @@ def main():
             raise ValueError(f"未知的仿真模式 / unknown simulation mode: {simulation_mode}")
     except Exception as e:
         logger.error(f"仿真过程中发生错误: {e} / Error during simulation: {e}")
-        traceback.print_exc() # 打印完整的错误堆栈 / Print the full error stack
+        traceback.print_exc()  # 打印完整的错误堆栈 / Print the full error stack
     else:
-        logger.info("仿真成功完成 / Simulation completed successfully") # 3. 结束日志 / End logging
+        logger.info("仿真成功完成 / Simulation completed successfully")  # 3. 结束日志 / End logging
 
 
-
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     print("[INFO]: starting information ")
     main()
-
-
-
-
-

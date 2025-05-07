@@ -19,8 +19,8 @@ class FixedTimeDO:
 
         # 初始化观测器状态 (Initialize observer states)
         self.z1_hat = np.zeros(6)
-        self.e2_hat = np.zeros(6) # Auxiliary state from Eq. 23
-        self.delta_hat = np.zeros(6) # Estimated disturbance delta
+        self.e2_hat = np.zeros(6)  # Auxiliary state from Eq. 23
+        self.delta_hat = np.zeros(6)  # Estimated disturbance delta
 
     def update(self, dt, e1, e2, tau, gamma, f_func):
         """更新扰动估计值"""
@@ -38,9 +38,7 @@ class FixedTimeDO:
 
         # 更新观测器状态 z1_hat (Eq. 25 first line)
         # ż̂₁ = -l₁ẑ₁ + z₂/l₂ + l₃z₂ + l₄sig^β₁(ẑ₁) + l₅sig^β₂(ẑ₁)
-        z1_hat_dot = (-self.l1 * self.z1_hat + z1 + self.l3 * z2 +
-                      self.l4 * sig(self.z1_hat, self.beta1) +
-                      self.l5 * sig(self.z1_hat, self.beta2))
+        z1_hat_dot = -self.l1 * self.z1_hat + z1 + self.l3 * z2 + self.l4 * sig(self.z1_hat, self.beta1) + self.l5 * sig(self.z1_hat, self.beta2)
         self.z1_hat = self.z1_hat + z1_hat_dot * dt
 
         # 计算扰动估计 δ̂* (Eq. 25 second line, rearranged)
@@ -51,7 +49,7 @@ class FixedTimeDO:
         # f_term = f_func(e1, e2, gamma, R, Rc, xc, xc_dot) # Requires many args
         # The observer needs f(e1,e2) associated with Eq.22: δ* = l1e2 + f(e1,e2) + RM⁻¹δ
         # δ̂ = MR⁻¹(δ̂* - l₁e₂ - f(e1, e2)) (from Eq. 25 third line)
-        f_term = f_func(e1, e2) # Pass necessary calculated 'f' value
+        f_term = f_func(e1, e2)  # Pass necessary calculated 'f' value
 
         # 计算最终扰动估计 δ̂ (Eq. 25 third line)
         self.delta_hat = self.M @ R.T @ (delta_star_hat - self.l1 * e2 - f_term)
