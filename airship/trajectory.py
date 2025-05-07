@@ -3,6 +3,7 @@ Trajectory generation module (trajectory.py)
 """
 # pylint: disable=invalid-name
 # pylint: disable=line-too-long
+
 import numpy as np
 from airship.utils import R_zeta, R_y_inv
 
