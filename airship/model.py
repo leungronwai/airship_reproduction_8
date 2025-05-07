@@ -1,9 +1,10 @@
 # model.py
-'''
+"""
 model.py
-'''
+"""
 import sys
 import os
+
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import numpy as np
@@ -15,11 +16,11 @@ from .utils import skew, R_zeta, R_y, S_omega, R_block
 from config import parameters as params
 
 
-
 class Airship:
     """
     气艇模型类
     """
+
     def __init__(self, initial_state):
         self.X = initial_state  # [zeta, gamma, v, omega] (12x1)
         self.M = params.M_cfg  # Combined inertia matrix from Eq. 9
@@ -291,7 +292,6 @@ class AirshipCasADiSymbolic:
         self.L_ref = params.L_ref
         self.V_wind = params.V_WIND_ERF
         self.AERO_COEFFS = params.AERO_COEFFS
-
 
     def rhs_symbolic(self, X, U, t=None, external_disturbance=None):
         """
