@@ -2,9 +2,11 @@
 utils.py
 """
 # pylint: disable=invalid-name
+# pylint: disable=too-many-lines
+
 import numpy as np
 
-from numba import njit, float64, int64
+from numba import njit, float64
 
 
 def skew(v):

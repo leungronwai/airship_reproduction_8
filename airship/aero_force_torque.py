@@ -19,7 +19,7 @@ def calculate_aero_forces_moments(
     """
     计算气动力和气动力矩。
 
-    参数：
+    args:
         q_dyn (float): 动压
         alpha (float): 攻角 (rad)
         beta (float): 侧滑角 (rad)
@@ -30,7 +30,7 @@ def calculate_aero_forces_moments(
         delta_ELVR (float): 右升降舵偏转角 (rad)
         use_casadi (bool): 是否使用 CasADi (而不是 NumPy)
 
-    返回：
+    return:
         tuple: (fa_BRF, ma_BRF) - 气动力和气动力矩向量
     """
     # 选择合适的数学库
