@@ -9,6 +9,7 @@ import numpy as np
 
 
 from config import parameters as params
+from config.parameters import calculate_added_mass_inertia
 
 
 # 假设附加质量计算函数也在此文件中或可以导入
@@ -172,91 +173,12 @@ def get_aero_coefficients(k1=k1_placeholder, k2=k2_placeholder):
     return coeffs
 
 
-# ==============================================================================
-#  (可选) 计算附加质量和惯性的函数 (Optional: Function to Calculate Added Mass/Inertia)
-# ==============================================================================
-# 这个函数也可以放在这里，或者放在单独的文件中  / This function can be placed here or in a separate file
+# 如果需要保持兼容性，可以添加一个简单的包装函数
 def calculate_added_mass_inertia_local(a1=airship_a1, a2=airship_a2, b=airship_b, rho=rho_air_at_altitude):
     """
-    在此文件内部计算附加质量和附加惯性矩阵 (仅用于演示)。
-    Calculates added mass/inertia internally within this file (for demonstration).
-    实际应用中，k1, k2 可能由外部计算并传入 get_aero_coefficients。
-    In practice, k1, k2 might be calculated externally and passed to get_aero_coefficients.
+    使用parameters模块中的函数计算附加质量和附加惯性矩阵。
     """
-    # --- 重复附加质量计算逻辑 (Repeat added mass calculation logic) ---
-    if b <= 0:
-        raise ValueError("b must be positive")
-    a = (a1 + a2) / 2.0
-    if a <= 0:
-        raise ValueError("a must be positive")
-    if b > a:
-        print(f"警告：扁椭球 b={b} > a={a}，附加质量公式可能不准确。")
-
-    V = (4.0 / 3.0) * np.pi * a * b**2
-    m_air = rho * V
-    tolerance = 1e-9
-
-    if abs(a - b) < tolerance:
-        k1 = 0.5
-        k2 = 0.5
-        k3 = 0.5
-    else:
-        a_sq = a**2
-        term_inside_sqrt = 1.0 - (b**2 / a_sq)
-        if term_inside_sqrt < -tolerance:  # 允许小的负数容差 / Allow a small negative number tolerance
-            print(f"警告：偏心率计算 sqrt 内部为负 ({term_inside_sqrt:.2e})，假设为球体。")
-            k1 = 0.5
-            k2 = 0.5
-            k3 = 0.5
-        else:
-            term_inside_sqrt = max(0, term_inside_sqrt)  # 避免负数 / Avoid negative numbers
-            e = np.sqrt(term_inside_sqrt)
-            if abs(1.0 - e) < tolerance:
-                raise ValueError("e is near 1.")
-            e_sq = e**2
-
-            if abs(e) < tolerance:  # 避免 f 和 g 中的除零 / Avoid division by zero in f and g
-                # 接近球体的情况，用极限或直接设为球体值 / Near-spherical case, use limit or set to spherical value
-                k1 = 0.5
-                k2 = 0.5
-                k3 = 0.5
-            else:
-                f_log = np.log((1.0 + e) / (1.0 - e))
-                e_cubed = e**3
-                if abs(e_cubed) < tolerance:
-                    raise ValueError("e^3 near zero.")
-                g = (1.0 - e_sq) / e_cubed
-                alpha_prime = 2.0 * g * (f_log / 2.0 - e)
-                if abs(e_sq) < tolerance:
-                    raise ValueError("e^2 near zero.")
-                beta_prime = (1.0 / e_sq) - (g * f_log / 2.0)
-
-                denom_k1 = 2.0 - alpha_prime
-                if abs(denom_k1) < tolerance:
-                    raise ValueError("k1 denominator near zero.")
-                k1 = alpha_prime / denom_k1
-
-                denom_k2 = 2.0 - beta_prime
-                if abs(denom_k2) < tolerance:
-                    raise ValueError("k2 denominator near zero.")
-                k2 = beta_prime / denom_k2
-
-                b_sq = b**2
-                term1_num_k3 = (b_sq - a_sq) * (alpha_prime - beta_prime)
-                term2_den_k3 = 2.0 * (b_sq - a_sq) + (b_sq + a_sq) * (beta_prime - alpha_prime)
-                if abs(term2_den_k3) < tolerance:
-                    if abs(a - b) > tolerance:
-                        raise ValueError("k3 denominator near zero (non-sphere).")
-                    else:
-                        k3 = 0.5
-                else:
-                    k3 = (1.0 / 5.0) * term1_num_k3 / term2_den_k3
-
-    # --- 返回 k1, k2 (以及可能需要的 M', I0') / Return k1, k2 (and possibly M', I0') ---
-    M_prime = m_air * np.diag([k1, k2, k2])
-    I0_prime = m_air * np.diag([0.0, k3, k3])
-
-    return k1, k2, M_prime, I0_prime
+    return calculate_added_mass_inertia(a1, a2, b, rho)
 
 
 # ==============================================================================
@@ -268,10 +190,12 @@ if __name__ == "__main__":
     print("--- 测试计算气动系数 ---")
     try:
         # 计算 k1, k2 (或从外部获取) / Calculate k1, k2 (or get from external)
-        k1_calc, k2_calc, _, _ = calculate_added_mass_inertia_local()
+        k1_calc, k2_calc, _, _ = calculate_added_mass_inertia(
+            airship_a1, airship_a2, airship_b, rho_air_at_altitude
+        )
         print(f"计算得到的 k1 = {k1_calc:.4f}, k2 = {k2_calc:.4f}")
 
-        # 使用计算得到的 k1, k2 计算气动系数 / Calculate aerodynamic coefficients using calculated k1, k2
+        # 使用计算得到的 k1, k2 计算气动系数 
         aero_coeffs_calculated = get_aero_coefficients(k1=k1_calc, k2=k2_calc)
 
         print("\n计算得到的气动系数 / Aerodynamic Coefficients:")

@@ -4,6 +4,7 @@ Airship dynamic model module (model.py)
 """
 # pylint: disable=invalid-name
 # cspell:ignore coeffs ddelta eta_f Sh Sg Sf Cdcf dalpha arcsin coeff ndarray linalg vertcat xdot
+# cspell:ignore arctan RUDT RUDB ELVL ELVR
 # === 标准库 ===
 import sys
 import os
@@ -15,7 +16,9 @@ import casadi as ca
 
 # === 本地模块 ===
 from config import parameters as params
+from airship.aero_force_torque import calculate_aero_forces_moments, calculate_relative_velocity, calculate_aoa_sideslip
 from .utils import skew, R_zeta, R_block
+
 
 
 # === 设置路径（如有需要） ===
@@ -75,10 +78,6 @@ class Airship:
         R = R_block(gamma)  # Combined rotation matrix diag(R_zeta, R_y)
         y_dot = R @ x_vec  # [zeta_dot, gamma_dot]  (相对于地面)
 
-        # --- 运动学 (Kinematics) ---
-        # R = R_block(gamma)
-        # y_dot = R @ x_vec.reshape(-1, 1)
-        # y_dot = y_dot.flatten()
 
         # --- 动力学 (Dynamics - Eq. 8 / Eq. 12 second part) ---
 
@@ -145,8 +144,7 @@ class Airship:
 
         # 计算相对速度 (Calculate relative velocity - - relative Airspeed in BRF)
         v_ground_brf_1d = v_1d  # Body Reference Frame - BRF
-        v_rel_brf_1d = v_ground_brf_1d - V_wind_BRF_1d
-        u_rel, v_rel_body, w_rel = v_rel_brf_1d[0], v_rel_brf_1d[1], v_rel_brf_1d[2]
+        v_rel_brf_1d, u_rel, v_rel_body, w_rel = calculate_relative_velocity(v_ground_brf_1d, V_wind_BRF_1d)
 
         # fa: Aerodynamic force in BRF  placeholder
         # 动压 (Dynamic Pressure  - based on relative speed)
@@ -154,8 +152,7 @@ class Airship:
         q_dyn = 0.5 * self.rho_air * V_rel_mag**2 if V_rel_mag > 1e-3 else 0  # Avoid division by zero
 
         # 攻角和侧滑角 (Angle of Attack & Sideslip Angle - based on relative speed) - 确保 u > 0
-        alpha = np.arctan2(w_rel, u_rel) if abs(u_rel) > 1e-3 else np.sign(w_rel) * np.pi / 2
-        beta = np.arcsin(v_rel_body / V_rel_mag) if V_rel_mag > 1e-3 else 0
+        alpha, beta = calculate_aoa_sideslip(u_rel, v_rel_body, w_rel, V_rel_mag)
 
         # --- 获取控制舵面偏转角 (Get Control Surface Deflections) ---
         # !!! 关键占位符：这些值需要由控制分配模块根据 tau[3:6] 确定 !!!
@@ -165,75 +162,12 @@ class Airship:
         delta_ELVL = np.deg2rad(0.0)  # [rad] - Placeholder
         delta_ELVR = np.deg2rad(0.0)  # [rad] - Placeholder
 
-        # --- 加载气动系数 (Load aerodynamic coefficients from parameters) ---
-        # --- 占位符气动系数 (Placeholder Aero Coefficients) ---
-        # airship_model.py (rhs 方法中)
-        # ...
-        # --- 加载气动系数 (Load aerodynamic coefficients from dictionary) ---
-        # 假设 AERO_COEFFS 字典可以通过 params 或 self 访问 / Assuming AERO_COEFFS dict can be accessed via params or self
-        # aero_data = params.AERO_COEFFS # or self.aero_coeffs
-        aero_data = params.AERO_COEFFS  # 如果作为全局变量或参数传入 / If AERO_COEFFS is passed as a global variable or parameter
-
-        Cx1 = aero_data["Cx1"]
-        Cx2 = aero_data["Cx2"]
-        Cy1 = aero_data["Cy1"]
-        Cy2 = aero_data["Cy2"]
-        Cy3 = aero_data["Cy3"]
-        Cy4 = aero_data["Cy4"]
-        Cz1 = aero_data["Cz1"]
-        Cz2 = aero_data["Cz2"]
-        Cz3 = aero_data["Cz3"]
-        Cz4 = aero_data["Cz4"]
-        Cl1 = aero_data["Cl1"]
-        Cl2 = aero_data["Cl2"]
-        Cm1 = aero_data["Cm1"]
-        Cm2 = aero_data["Cm2"]
-        Cm3 = aero_data["Cm3"]
-        Cm4 = aero_data["Cm4"]
-        Cn1 = aero_data["Cn1"]
-        Cn2 = aero_data["Cn2"]
-        Cn3 = aero_data["Cn3"]
-        Cn4 = aero_data["Cn4"]
-
-        # --- 计算气动力 (Calculate Aerodynamic Forces - Eq. 23-25) ---
-        # 预计算三角函数 (Pre-calculate trigonometric terms)
-        sin_a = np.sin(alpha)
-        cos_a = np.cos(alpha)
-        sin_b = np.sin(beta)
-        cos_b = np.cos(beta)
-        sin_abs_a = np.sin(np.abs(alpha))
-        sin_abs_b = np.sin(np.abs(beta))
-        sin_2a = np.sin(2 * alpha)
-        sin_2b = np.sin(2 * beta)
-        cos_a_half = np.cos(alpha / 2.0)
-        sin_a_half = np.sin(alpha / 2.0)
-        cos_b_half = np.cos(beta / 2.0)
-
-        # X 力 (X Force - Eq. 23)
-        Fax = q_dyn * (Cx1 * cos_a**2 * cos_b**2 + Cx2 * sin_2a * sin_a_half)
-
-        # Y 力 (Y Force - Eq. 24)
-        Fay = q_dyn * (Cy1 * cos_b_half * sin_2b + Cy2 * sin_2b + Cy3 * sin_b * sin_abs_b + Cy4 * (delta_RUDT + delta_RUDB))
-
-        # Z 力 (Z Force - Eq. 25)
-        Faz = q_dyn * (Cz1 * cos_a_half * sin_2a + Cz2 * sin_2a + Cz3 * sin_a * sin_abs_a + Cz4 * (delta_ELVL + delta_ELVR))
-
-        fa_BRF = np.array([[Fax], [Fay], [Faz]])  # 气动力矢量  - Aerodynamic Forces in BRF
-
-        # --- 计算气动力矩 (Calculate Aerodynamic Moments - Eq. 26-28) ---
-        # L 力矩 (Roll Moment - Eq. 26)
-        moment_L = q_dyn * (Cl1 * (delta_ELVL - delta_ELVR + delta_RUDB - delta_RUDT) + Cl2 * sin_b * sin_abs_b)
-
-        # M 力矩 (Pitch Moment - Eq. 27)
-        moment_M = q_dyn * (Cm1 * cos_a_half * sin_2a + Cm2 * sin_2a + Cm3 * sin_a * sin_abs_a + Cm4 * (delta_ELVL + delta_ELVR))
-
-        # N 力矩 (Yaw Moment - Eq. 28)
-        # !!! 警告：根据图片公式，Cn4 项依赖于升降舵，这在物理上非常可疑。通常偏航力矩应依赖于方向舵。
-        # !!! Warning: According to the formula image, the Cn4 term depends on elevators, which is physically highly suspect.
-        # !!! Yaw moment typically depends on rudders. Implementing as shown, but likely a typo in the source.
-        moment_N = q_dyn * (Cn1 * cos_b_half * sin_2b + Cn2 * sin_2b + Cn3 * sin_b * sin_abs_b + Cn4 * (delta_ELVL + delta_ELVR))  # <-- Suspect term
-
-        ma_BRF = np.array([[moment_L], [moment_M], [moment_N]])  # 气动力矩矢量  - Aerodynamic Moments in BRF
+        # --- 计算气动力和力矩 (Calculate Aerodynamic Forces and Moments) ---
+        fa_BRF, ma_BRF = calculate_aero_forces_moments(
+            q_dyn, alpha, beta,
+            params.AERO_COEFFS,
+            delta_RUDT, delta_RUDB, delta_ELVL, delta_ELVR
+        )
 
         # --- 计算推力和推力矩 (Calculate Thrust and torque) ---
         T_total = tau[0:3].reshape(3, 1)  # 推力矢量 - Thrust vector
@@ -367,52 +301,14 @@ class AirshipCasADiSymbolic:
         V_wind_BRF = Rz.T @ V_wind_ERF
 
         # Calculate relative velocity
-        v_rel_brf = v - V_wind_BRF
-        u_rel, v_rel_body, w_rel = v_rel_brf[0], v_rel_brf[1], v_rel_brf[2]
+        v_rel_brf, u_rel, v_rel_body, w_rel = calculate_relative_velocity(v, V_wind_BRF)
 
         # Dynamic pressure
         V_rel_mag = ca.norm_2(v_rel_brf)
         q_dyn = 0.5 * self.rho_air * V_rel_mag**2
 
         # Angle of attack and sideslip angle
-        alpha = ca.atan2(w_rel, u_rel)
-        beta = ca.asin(v_rel_body / (V_rel_mag + 1e-6))  # Add small epsilon to avoid division by zero
-
-        # --- Aerodynamic forces and moments ---
-        # Get aerodynamic coefficients
-        Cx1 = self.AERO_COEFFS["Cx1"]
-        Cx2 = self.AERO_COEFFS["Cx2"]
-        Cy1 = self.AERO_COEFFS["Cy1"]
-        Cy2 = self.AERO_COEFFS["Cy2"]
-        Cy3 = self.AERO_COEFFS["Cy3"]
-        Cy4 = self.AERO_COEFFS["Cy4"]
-        Cz1 = self.AERO_COEFFS["Cz1"]
-        Cz2 = self.AERO_COEFFS["Cz2"]
-        Cz3 = self.AERO_COEFFS["Cz3"]
-        Cz4 = self.AERO_COEFFS["Cz4"]
-        Cl1 = self.AERO_COEFFS["Cl1"]
-        Cl2 = self.AERO_COEFFS["Cl2"]
-        Cm1 = self.AERO_COEFFS["Cm1"]
-        Cm2 = self.AERO_COEFFS["Cm2"]
-        Cm3 = self.AERO_COEFFS["Cm3"]
-        Cm4 = self.AERO_COEFFS["Cm4"]
-        Cn1 = self.AERO_COEFFS["Cn1"]
-        Cn2 = self.AERO_COEFFS["Cn2"]
-        Cn3 = self.AERO_COEFFS["Cn3"]
-        Cn4 = self.AERO_COEFFS["Cn4"]
-
-        # Pre-calculate trigonometric terms
-        sin_a = ca.sin(alpha)
-        cos_a = ca.cos(alpha)
-        sin_b = ca.sin(beta)
-        cos_b = ca.cos(beta)
-        sin_abs_a = ca.sin(ca.fabs(alpha))
-        sin_abs_b = ca.sin(ca.fabs(beta))
-        sin_2a = ca.sin(2 * alpha)
-        sin_2b = ca.sin(2 * beta)
-        cos_a_half = ca.cos(alpha / 2.0)
-        sin_a_half = ca.sin(alpha / 2.0)
-        cos_b_half = ca.cos(beta / 2.0)
+        alpha, beta = calculate_aoa_sideslip(u_rel, v_rel_body, w_rel, V_rel_mag, use_casadi=True)
 
         # --- 获取控制舵面偏转角 (Get Control Surface Deflections) ---
         # !!! 关键占位符：这些值需要由控制分配模块根据 tau[3:6] 确定 !!!
@@ -422,27 +318,13 @@ class AirshipCasADiSymbolic:
         delta_ELVL = np.deg2rad(0.0)  # [rad] - Placeholder
         delta_ELVR = np.deg2rad(0.0)  # [rad] - Placeholder
 
-        # X Force - Eq. 23
-        Fax = q_dyn * (Cx1 * cos_a**2 * cos_b**2 + Cx2 * sin_2a * sin_a_half)
-
-        # Y Force - Eq. 24
-        Fay = q_dyn * (Cy1 * cos_b_half * sin_2b + Cy2 * sin_2b + Cy3 * sin_b * sin_abs_b + Cy4 * (delta_RUDT + delta_RUDB))
-
-        # Z Force - Eq. 25
-        Faz = q_dyn * (Cz1 * cos_a_half * sin_2a + Cz2 * sin_2a + Cz3 * sin_a * sin_abs_a + Cz4 * (delta_ELVL + delta_ELVR))
-
-        fa_BRF = ca.vertcat(Fax, Fay, Faz)
-
-        # Roll Moment - Eq. 26
-        moment_L = q_dyn * (Cl1 * (delta_ELVL - delta_ELVR + delta_RUDB - delta_RUDT) + Cl2 * sin_b * sin_abs_b)
-
-        # Pitch Moment - Eq. 27
-        moment_M = q_dyn * (Cm1 * cos_a_half * sin_2a + Cm2 * sin_2a + Cm3 * sin_a * sin_abs_a + Cm4 * (delta_ELVL + delta_ELVR))
-
-        # Yaw Moment - Eq. 28
-        moment_N = q_dyn * (Cn1 * cos_b_half * sin_2b + Cn2 * sin_2b + Cn3 * sin_b * sin_abs_b + Cn4 * (delta_ELVL + delta_ELVR))
-
-        ma_BRF = ca.vertcat(moment_L, moment_M, moment_N)
+        # 使用提取的函数计算气动力和力矩
+        fa_BRF, ma_BRF = calculate_aero_forces_moments(
+            q_dyn, alpha, beta,
+            self.AERO_COEFFS,
+            delta_RUDT, delta_RUDB, delta_ELVL, delta_ELVR,
+            use_casadi=True
+        )
 
         # --- Control inputs ---
         T_total = U[0:3]  # Thrust vector
