@@ -4,6 +4,7 @@ Main simulation script for airship trajectory tracking and controller evaluation
 """
 
 # pylint: disable=invalid-name
+# cspell:ignore coeffs ddelta eta_f Sh Sg Sf Cdcf dalpha arcsin coeff ndarray linalg vertcat xdot nlpsol xlabel ylabel zlabel
 
 
 # === 标准库 ===

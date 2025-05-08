@@ -226,6 +226,9 @@ def calculate_added_mass_inertia(a1, a2, b, rho_air_):
 
     return _M_prime, _I0_prime
 
+# 确保将函数导出，可以通过 __all__ 变量指定
+__all__ = ['calculate_added_mass_inertia', 'other_functions', '...']
+
 
 # --- 计算附加质量/惯性 (Calculate Added Mass/Inertia) ---
 try:
