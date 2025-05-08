@@ -10,6 +10,7 @@ from numba import njit
 
 from config import parameters as params
 from airship.model import AirshipCasADiSymbolic
+from airship.thrust import thrust_params_to_tau, calculate_thrust_direction
 
 
 
@@ -122,7 +123,7 @@ class AnyController:
         # Convert PID control output to thrust parameters and control torque
         if u_thrust is not None:
             # 使用提供的初始推力参数 / Use provided initial thrust parameters
-            tau = self._thrust_params_to_tau(u_thrust)
+            tau = thrust_params_to_tau(u_thrust, self.rp_r, self.rp_l)
             # 添加 PID 控制修正 / Add PID control correction
             tau[0:3] += F_pos
             tau[3:6] += T_att
@@ -130,53 +131,13 @@ class AnyController:
             # 根据控制需求计算合适的推力参数
             # Calculate suitable thrust parameters based on control needs
             T_mag = np.linalg.norm(F_pos)  # 推力大小 / Thrust magnitude
-            if T_mag > 0.001:
-                # 计算推力方向 / Calculate thrust direction
-                mu = np.arctan2(F_pos[1], F_pos[0])  # 水平面内角度 / Angle in horizontal plane
-                nu = np.arctan2(F_pos[2], np.sqrt(F_pos[0] ** 2 + F_pos[1] ** 2))  # 垂直面内角度
-            else:
-                mu, nu = 0.0, 0.0
+            mu, nu = calculate_thrust_direction(F_pos)
 
             thrust_params = [T_mag, mu, nu]
-            tau = self._thrust_params_to_tau(thrust_params)
+            tau = thrust_params_to_tau(thrust_params, self.rp_r, self.rp_l)
 
             # 添加姿态控制力矩 / Add attitude control torque
             tau[3:6] += T_att
-
-        return tau
-
-    def _thrust_params_to_tau(self, thrust_params):
-        """
-        将推力参数转换为力和力矩向量 / Convert thrust parameters to force and torque vector
-
-        参数：
-            thrust_params: [T, μ, v]
-
-        返回：
-            tau: [Fx, Fy, Fz, Tx, Ty, Tz]
-        """
-        T_mag, mu, nu = thrust_params
-
-        # 计算右侧推力向量 / Calculate right thrust vector
-        thrust_vector_r = np.array([T_mag * np.cos(mu) * np.cos(nu), T_mag * np.sin(mu), T_mag * np.cos(mu) * np.sin(nu)])
-
-        # 计算左侧推力向量 / Calculate left thrust vector
-        thrust_vector_l = np.array([T_mag * np.cos(mu) * np.cos(nu), T_mag * np.sin(mu), T_mag * np.cos(mu) * np.sin(nu)])
-
-        # 总推力 / Total thrust
-        T_total = thrust_vector_r + thrust_vector_l
-
-        # 获取推力作用点 / Get the thrust application points
-        rp_r = self.rp_r.flatten()
-        rp_l = self.rp_l.flatten()
-
-        # 计算力矩 / Calculate torque
-        tau_r = np.cross(rp_r, thrust_vector_r)
-        tau_l = np.cross(rp_l, thrust_vector_l)
-        tau_vec = tau_r + tau_l
-
-        # 组合力和力矩 / Combine force and torque
-        tau = np.concatenate([T_total, tau_vec])
 
         return tau
 
@@ -448,35 +409,7 @@ class NMPCThrustController:
         Returns:
             tau: 6 维力和力矩向量
         """
-
-        import numpy as np
-
         # --- Control inputs ---
-        T_mag = u_thrust[0]  # 推力大小 / Thrust magnitude
-        mu = u_thrust[1]  # 水平面内的推力偏转角  / Thrust deflection angle in the horizontal plane
-        nu = u_thrust[2]  # 垂直面内的推力偏转角 / Thrust deflection angle in the vertical plane
 
-        # 计算右侧和左侧推力矢量 (假设对称) / Calculate right and left thrust vectors (assuming symmetry)
-        # 计算推力向量 / Calculate thrust vector
-        # --- Thrust vector ---
-        thrust_vector_r = ca.vertcat(T_mag * ca.cos(mu) * ca.cos(nu), T_mag * ca.sin(mu), T_mag * ca.cos(mu) * ca.sin(nu))
 
-        thrust_vector_l = ca.vertcat(T_mag * ca.cos(mu) * ca.cos(nu), T_mag * ca.sin(mu), T_mag * ca.cos(mu) * ca.sin(nu))
-
-        T_total = thrust_vector_r + thrust_vector_l
-
-        # 获取推力作用点 / Get the thrust application points
-        rp_r = self.params.rp_r.flatten()
-        rp_l = self.params.rp_l.flatten()
-
-        # 计算力矩 / --- Thrust torque ---
-        tau_r = ca.cross(rp_r, thrust_vector_r.flatten()).reshape(3, 1)
-        tau_l = ca.cross(rp_l, thrust_vector_l.flatten()).reshape(3, 1)
-
-        # total Thrust momentsa
-        tau_vec = tau_r + tau_l
-
-        # 组合力和力矩
-        tau = np.concatenate([T_total, tau_vec])  # 6D force and torque vector
-
-        return tau  # return force and torque vector of thrust
+        return thrust_params_to_tau(u_thrust, self.rp_r, self.rp_l)
