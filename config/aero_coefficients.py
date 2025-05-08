@@ -9,7 +9,9 @@ import numpy as np
 
 
 from config import parameters as params
-from config.parameters import calculate_added_mass_inertia
+
+# 导入物理计算函数
+from airship.physics import calculate_added_mass_inertia
 
 
 # 假设附加质量计算函数也在此文件中或可以导入
@@ -71,39 +73,7 @@ J2_table = 0.53
 # 注意：如果需要根据几何形状用 Eq. 82-85 计算，取消注释下面的计算部分
 # Note: If calculation based on geometry (Eq. 82-85) is preferred, uncomment below
 
-# --- (可选) 根据几何计算积分因子 (Optional: Calculate Integral Factors from Geometry) ---
-"""
-f = (Lh - airship_a1) / airship_a2
-f_sq = f**2
-if abs(1.0 - f_sq) < 1e-9:
-    sqrt_1_fsq = 0.0
-    asin_f = np.sign(f) * np.pi / 2.0
-else:
-    sqrt_1_fsq = np.sqrt(1.0 - f_sq)
-    f_clipped = np.clip(f, -1.0, 1.0)
-    asin_f = np.arcsin(f_clipped)
 
-V_pow_2_3 = V_airship**(2.0/3.0)
-if abs(V_pow_2_3) < 1e-9: raise ValueError("V^(2/3) is near zero.")
-if abs(L_ref) < 1e-9: raise ValueError("Reference length L is near zero.")
-
-I1_geom = (np.pi * airship_b**2 / V_pow_2_3) * (1.0 - f_sq)
-term_I3_paren = (airship_a1 - 2.0 * airship_a2 * f**3 - 3.0 * airship_a1 * f_sq)
-term_I3_xcv = xcv / L_ref * I1_geom
-I3_geom = (np.pi * airship_b**2 / (3.0 * L_ref * V_pow_2_3)) * term_I3_paren - term_I3_xcv
-term_J1_paren = (airship_a1 * np.pi / 2.0 + airship_a2 * sqrt_1_fsq + 2.0 * airship_a2 * asin_f)
-J1_geom = (airship_b / (2.0 * V_pow_2_3)) * term_J1_paren
-term_J2_frac = (airship_a1 - xcv) / L_ref
-term_J2_sqrt_pow = (1.0 - f_sq)**(1.5)
-term_J2_b = (2.0 * airship_b / (3.0 * L_ref * V_pow_2_3)) * (airship_a2**2 - airship_a1**2 - airship_a2**2 * term_J2_sqrt_pow)
-J2_geom = J1_geom * term_J2_frac + term_J2_b
-
-# 选择使用哪个积分因子来源 (Choose which integral factor source to use)
-I1 = I1_table # 或 I1 = I1_geom
-I3 = I3_table # 或 I3 = I3_geom
-J1 = J1_table # 或 J1 = J1_geom
-J2 = J2_table # 或 J2 = J2_geom
-"""
 # 默认使用表格值 (Defaulting to table values)
 I1 = I1_table
 I3 = I3_table
@@ -138,6 +108,8 @@ def get_aero_coefficients(k1=k1_placeholder, k2=k2_placeholder):
         dict: 包含所有计算出的气动系数的字典。
     """
     coeffs = {}
+
+
 
     # 使用模块级定义的参数 (Use module-level defined parameters)
     # Eq. 66-81
@@ -176,7 +148,7 @@ def get_aero_coefficients(k1=k1_placeholder, k2=k2_placeholder):
 # 如果需要保持兼容性，可以添加一个简单的包装函数
 def calculate_added_mass_inertia_local(a1=airship_a1, a2=airship_a2, b=airship_b, rho=rho_air_at_altitude):
     """
-    使用parameters模块中的函数计算附加质量和附加惯性矩阵。
+    使用 parameters 模块中的函数计算附加质量和附加惯性矩阵。
     """
     return calculate_added_mass_inertia(a1, a2, b, rho)
 

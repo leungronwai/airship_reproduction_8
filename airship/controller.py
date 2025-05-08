@@ -11,7 +11,7 @@ from numba import njit
 from config import parameters as params
 from airship.model import AirshipCasADiSymbolic
 from airship.thrust import thrust_params_to_tau, calculate_thrust_direction
-
+from airship.observer import NMPCDisturbanceObserver
 
 
 
@@ -157,7 +157,7 @@ class NMPCThrustController:
     NMPC 控制器，使用直接推力分配 (T, μ, v)。
     """
 
-    def __init__(self, model, dt, N, Q, R, Qf, T_bounds, mu_bounds, nu_bounds):
+    def __init__(self, model, dt, N, Q, R, Qf, T_bounds, mu_bounds, nu_bounds, use_disturbance_compensation=True):
         """
         :param model:    Airship 实例，用于仿真/ Airship instance with a casadi-compatible dynamics (rhs)
         :param dt:       采样时间 sampling time
@@ -166,6 +166,7 @@ class NMPCThrustController:
         :param T_bounds: (T_min, T_max)
         :param mu_bounds:(mu_min, mu_max)
         :param nu_bounds:(nu_min, nu_max)
+        :param use_disturbance_compensation: 是否使用扰动补偿 / Whether to use disturbance compensation
         """
         self.model = model
         self.params = params
@@ -202,6 +203,24 @@ class NMPCThrustController:
 
         # 构建非线性规划（NLP）问题，用于非线性模型预测控制（NMPC）的优化求解
         self._build_nlp(X, U)
+
+        # 添加扰动补偿选项
+        self.use_disturbance_compensation = use_disturbance_compensation
+        self.disturbance_observer = NMPCDisturbanceObserver() if use_disturbance_compensation else None
+
+        # 扰动补偿因子（控制扰动补偿强度）
+        self.disturbance_compensation_factor = params.do_compensation_gain if hasattr(params, 'do_compensation_gain') else 0.9
+
+        # 上一次的误差和控制输入（用于观测器）
+        self.prev_e1 = np.zeros(6)
+        self.prev_e2 = np.zeros(6)
+        self.prev_tau = np.zeros(6)
+        self.prev_gamma = np.zeros(3)
+        self.last_disturbance_estimate = np.zeros(6)
+
+
+
+
 
     def _build_continuous_dynamics(self, X, U):  # 构建飞艇的连续时间动力学模型
         # 用 AirshipCasADiSymbolic 构造符号表达式
@@ -297,9 +316,20 @@ class NMPCThrustController:
         self.num_w = w_flat.size()[0]
         self.num_g = g_flat.size()[0]
 
-    def step(self, x0, X_ref_traj, U_ref_traj, x_init=None):
+    def step(self, x0, X_ref_traj, U_ref_traj, x_init=None, e1=None, e2=None):
         """
         用于在每个控制周期内解决非线性模型预测控制 NMPC 优化问题，计算当前时刻的最优控制输入  u_0
+
+        Args:
+            x0: 当前状态 [zeta, gamma, v, omega]
+            X_ref_traj: 参考轨迹列表 [x_ref_0, x_ref_1, ..., x_ref_N]
+            U_ref_traj: 参考控制输入列表 [u_ref_0, u_ref_1, ..., u_ref_{N-1}]
+            x_init: 初始猜测（可选）
+            e1: 位置/姿态误差（可选，用于扰动观测器）
+            e2: 速度误差（可选，用于扰动观测器）
+
+        Returns:
+            u0: 最优控制输入 [T, mu, nu]
 
         1.输入：
             当前状态 ( x_0 )：飞艇的当前状态（如位置、姿态、速度等）。
@@ -391,12 +421,47 @@ class NMPCThrustController:
         # 使用 CasADi 的 nlpsol 求解器解决 NLP 问题，得到优化变量的最优解
         sol = self.solver(x0=w0, lbx=lbx, ubx=ubx, lbg=lbg, ubg=ubg, p=np.concatenate([p_xref, p_uref]))
 
-        w_opt = sol["x"].full().flatten()
+        w_opt = self.solver(x0=w0, lbx=lbx, ubx=ubx, lbg=lbg, ubg=ubg, p=np.concatenate([p_xref, p_uref]))
 
         # --- 提取第一个控制输入 U0 / 提取最优控制输入 ---
         # 从优化变量中提取第一个控制输入 ( u_0 )，即当前时刻的最优控制输入
-        u0 = w_opt[12:15]  # 紧跟在 X0 后的就是 U0 = [T, mu, nu]
+        u0 = w_opt["x"].full().flatten()[12:15]  # 紧跟在 X0 后的就是 U0 = [T, mu, nu]
+
+        # 将推力参数转换为力和力矩
+        tau = self.thrust_to_force_torque(u0)
+
+        # 如果启用扰动补偿且提供了误差信息
+        if self.use_disturbance_compensation and e1 is not None and e2 is not None:
+            # 提取当前姿态
+            gamma = x0[3:6]
+
+            # 使用观测器更新扰动估计
+            delta_hat = self.disturbance_observer.update(
+                self.dt, e1, e2, self.prev_tau, gamma,
+                f_func=None  # 在 NMPC 中，f 项通常由模型内部处理
+            )
+
+            # 保存扰动估计
+            self.last_disturbance_estimate = delta_hat
+
+            # 应用扰动补偿到控制输入
+            # tau = tau - delta_hat * self.disturbance_compensation_factor
+
+            # 保存当前状态用于下次更新
+            self.prev_e1 = e1
+            self.prev_e2 = e2
+            self.prev_tau = tau
+            self.prev_gamma = gamma
+
         return u0
+
+
+    def get_disturbance_estimate(self):
+        """获取当前的扰动估计"""
+        if self.use_disturbance_compensation:
+            return self.last_disturbance_estimate
+        else:
+            return np.zeros(6)
 
     @njit
     def thrust_to_force_torque(self, u_thrust):

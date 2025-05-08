@@ -243,7 +243,7 @@ def run_simulation(trajectory_type="default"):
     plt.show()
 
 
-def run_nmpc_simulation():
+def run_nmpc_simulation(use_disturbance_compensation=True):
     """
     Run NMPC simulation.
     """
@@ -262,38 +262,80 @@ def run_nmpc_simulation():
         T_bounds=(params.T_MIN, params.T_MAX),
         mu_bounds=(params.MU_MIN, params.MU_MAX),
         nu_bounds=(params.NU_MIN, params.NU_MAX),
+        use_disturbance_compensation=use_disturbance_compensation  # 启用扰动补偿
     )
 
+    # 仿真时间和步数
     sim_time = np.arange(0, params.T_SPAN, params.DT)
     n_steps = len(sim_time)
 
+    # 状态历史记录
     state_history = np.zeros((12, n_steps))
     control_history = np.zeros((3, n_steps))  # [T, mu, nu]
     yc_history = np.zeros((6, n_steps))  # zeta + gamma
+    disturbance_history = np.zeros((6, n_steps))  # 实际扰动
+    disturbance_estimate_history = np.zeros((6, n_steps))  # 扰动估计
+    error_history = np.zeros((6, n_steps))  # e1 = y - yc
+    error2_history = np.zeros((6, n_steps))  # e2 = y_dot - yc_dot
 
+    # 初始状态
     X = airship.get_state()
 
+
+    # 仿真循环
     for i, t in enumerate(sim_time):
+        # 获取当前位置和姿态
+        zeta = X[0:3]
+        gamma = X[3:6]
+        v = X[6:9]
+        omega = X[9:12]
+        x_vec = X[6:12]
+
         # 获取参考轨迹
         X_ref = []
         U_ref = []
+        # 基本参考轨迹（当前时刻）
+        yc, yc_dot, _, xc, _ = trajectory.get_linear_trajectory(t)
+
+        # 生成预测时域内的参考轨迹
         for j in range(params.N_HORIZON + 1):
             t_future = t + j * params.DT
             yc_j, yc_dot_j, _, _, _ = trajectory.get_linear_trajectory(t_future)
             X_ref.append(np.concatenate([yc_j, yc_dot_j]))
-        for j in range(params.N_HORIZON):
-            U_ref.append(np.array([8.0, 0.0, 0.0]))  # 可替换为 smarter guess
 
-        # NMPC 控制器返回 u = [T, μ, ν]
-        u_cmd = controller.step(X, X_ref, U_ref)
+        # 生成参考控制输入（简单初始猜测）
+        for j in range(params.N_HORIZON):
+            U_ref.append(np.array([8.0, 0.0, 0.0]))  # 可替换为更智能的猜测
+
+        # 计算误差（用于扰动观测器）
+        R = R_block(gamma)
+        y = np.concatenate((zeta, gamma))
+        y_dot = R @ x_vec
+
+        e1 = y - yc
+        e2 = y_dot - yc_dot
+
+        # 获取实际扰动
+        actual_delta = params.disturbance_delta(t)
+
+        # NMPC 控制器计算最优控制输入
+        u_cmd = controller.step(X, X_ref, U_ref, e1=e1, e2=e2)
+
+        # 获取扰动估计
+        delta_hat = controller.get_disturbance_estimate()
+
+        # 将推力参数转换为力和力矩
         tau = controller.thrust_to_force_torque(u_cmd)
 
-        # 积分系统（RK4）
+        # 补偿扰动（扰动已经在控制器内部处理）
+        tau_compensated = tau - delta_hat * controller.disturbance_compensation_factor
+
+        # 积分系统（RK4）- 考虑实际扰动
         def f(t_rk, x_rk):
-            return airship.rhs(t_rk, x_rk, tau, lambda _: np.zeros(6))
+            return airship.rhs(t_rk, x_rk, tau_compensated, lambda _: actual_delta)
 
         # RK4 步进
-        X_next = rk4_step(f, t, X, params.DT, tau, lambda _: np.zeros(6))
+        X_next = rk4_step(f, t, X, params.DT)
 
         # 状态更新
         airship.X = X_next
@@ -302,10 +344,20 @@ def run_nmpc_simulation():
         # 记录
         state_history[:, i] = X
         control_history[:, i] = u_cmd
-        yc_history[:, i] = X_ref[0][0:6]
+        yc_history[:, i] = yc
+        disturbance_history[:, i] = actual_delta
+        disturbance_estimate_history[:, i] = delta_hat
+        error_history[:, i] = e1
+        error2_history[:, i] = e2
 
+        # 显示进度
+        if i % (n_steps // 10) == 0:
+            logger.info("NMPC Simulation progress: %d%%", int(i / n_steps * 100))
 
+    # 绘图
+    plt.style.use("seaborn-v0_8-whitegrid")
 
+    # 三维轨迹图
     fig = plt.figure("NMPC 3D Trajectory")
     ax = fig.add_subplot(111, projection="3d")
     ax.plot(state_history[0, :], state_history[1, :], state_history[2, :], label="Airship")
@@ -314,7 +366,32 @@ def run_nmpc_simulation():
     ax.set_ylabel("Y")
     ax.set_zlabel("Z")
     ax.legend()
+
+    # 扰动估计图
+    fig2, axs2 = plt.subplots(6, 1, sharex=True, figsize=(10, 12))
+    fig2.suptitle("Disturbance Estimation")
+    dist_labels = ["d1", "d2", "d3", "d4", "d5", "d6"]
+    for i in range(6):
+        axs2[i].plot(sim_time, disturbance_history[i, :], "k-", label=f"Actual {dist_labels[i]}")
+        axs2[i].plot(sim_time, disturbance_estimate_history[i, :], "r--", label=f"Estimated {dist_labels[i]}")
+        axs2[i].set_ylabel(f"{dist_labels[i]}")
+        axs2[i].legend()
+        axs2[i].grid(True)
+    axs2[5].set_xlabel("Time [s]")
+
+    # 轨迹误差图
+    fig3, axs3 = plt.subplots(6, 1, sharex=True, figsize=(10, 12))
+    fig3.suptitle("Tracking Error")
+    err_labels = ["e_x", "e_y", "e_z", "e_phi", "e_theta", "e_psi"]
+    for i in range(6):
+        axs3[i].plot(sim_time, error_history[i, :], label=f"{err_labels[i]}")
+        axs3[i].set_ylabel(f"{err_labels[i]}")
+        axs3[i].legend()
+        axs3[i].grid(True)
+    axs3[5].set_xlabel("Time [s]")
+
     plt.show()
+
 
 
 # 注意：不要在模块顶层调用 run_simulation()，否则一导入就会执行。只在 if __name__=='__main__' 下调用它。
