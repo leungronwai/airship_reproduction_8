@@ -97,3 +97,26 @@ def R_block(gamma):
     R[0:3, 0:3] = Rz
     R[3:6, 3:6] = Ry
     return R
+
+
+
+def rk4_step(f, t, X, dt, *args):
+    """
+    使用 RK4 方法计算单步积分。
+
+    参数：
+        f: 动力学函数，形式为 f(t, X, *args)，返回 dX/dt。
+        t: 当前时间。
+        X: 当前状态向量。
+        dt: 时间步长。
+        *args: 传递给动力学函数的额外参数。
+
+    返回：
+        X_next: 下一时刻的状态向量。
+    """
+    k1 = f(t, X, *args)
+    k2 = f(t + 0.5 * dt, X + 0.5 * dt * k1, *args)
+    k3 = f(t + 0.5 * dt, X + 0.5 * dt * k2, *args)
+    k4 = f(t + dt, X + dt * k3, *args)
+    X_next = X + (dt / 6.0) * (k1 + 2 * k2 + 2 * k3 + k4)
+    return X_next
