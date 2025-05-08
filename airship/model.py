@@ -22,6 +22,8 @@ from .utils import skew, R_zeta, R_block
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 
+
+
 class Airship:
     """
     气艇模型类
@@ -286,24 +288,24 @@ class AirshipCasADiSymbolic:
     """
     气艇符号模型类
     """
-    def __init__(self, params):
-        self.params = params
-        self.m = params.m
-        self.g = params.g
-        self.I0 = params.I0
-        self.M = params.M_cfg
-        self.M_inv = params.M_inv
+    def __init__(self, input_params):
+        self.params = input_params
+        self.m = input_params.m
+        self.g = input_params.g
+        self.I0 = input_params.I0
+        self.M = input_params.M_cfg
+        self.M_inv = input_params.M_inv
         self.M_upper_left = self.M[0:3, 0:3]
-        self.rc = params.rc.flatten()
-        self.rb = params.rb.flatten()
-        self.rp_r = params.rp_r.flatten()
-        self.rp_l = params.rp_l.flatten()
-        self.Vol_airship = params.Vol_airship
-        self.rho_air = params.rho_air
-        self.S_ref = params.S_ref
-        self.L_ref = params.L_ref
-        self.V_wind = params.V_WIND_ERF
-        self.AERO_COEFFS = params.AERO_COEFFS
+        self.rc = input_params.rc.flatten()
+        self.rb = input_params.rb.flatten()
+        self.rp_r = input_params.rp_r.flatten()
+        self.rp_l = input_params.rp_l.flatten()
+        self.Vol_airship = input_params.Vol_airship
+        self.rho_air = input_params.rho_air
+        self.S_ref = input_params.S_ref
+        self.L_ref = input_params.L_ref
+        self.V_wind = input_params.V_WIND_ERF
+        self.AERO_COEFFS = input_params.AERO_COEFFS
 
     def rhs_symbolic(self, X, U, t=None, external_disturbance=None):
         """

@@ -18,7 +18,7 @@ import matplotlib.pyplot as plt
 
 # === 本地模块 ===
 from config import parameters as params
-from airship.utils import R_block
+from airship.utils import R_block, rk4_step
 from airship.model import Airship
 from airship.trajectory import Trajectory
 from airship.controller import AnyController, NMPCThrustController
@@ -133,11 +133,7 @@ def run_simulation(trajectory_type="default"):
             return airship.rhs(t_rk, X_rk, tau, lambda t_ignore: actual_delta)
 
         # RK4 Step
-        k1 = airship_ode(t, X)
-        k2 = airship_ode(t + 0.5 * params.DT, X + 0.5 * params.DT * k1)
-        k3 = airship_ode(t + 0.5 * params.DT, X + 0.5 * params.DT * k2)
-        k4 = airship_ode(t + params.DT, X + params.DT * k3)
-        X_next = X + (params.DT / 6.0) * (k1 + 2 * k2 + 2 * k3 + k4)
+        X_next = rk4_step(airship_ode, t, X, params.DT)
 
         # 更新状态 (Update state)
         airship.X = X_next
@@ -295,11 +291,8 @@ def run_nmpc_simulation():
         def f(t_rk, x_rk):
             return airship.rhs(t_rk, x_rk, tau, lambda _: np.zeros(6))
 
-        k1 = f(t, X)
-        k2 = f(t + 0.5 * params.DT, X + 0.5 * params.DT * k1)
-        k3 = f(t + 0.5 * params.DT, X + 0.5 * params.DT * k2)
-        k4 = f(t + params.DT, X + params.DT * k3)
-        X_next = X + (params.DT / 6.0) * (k1 + 2 * k2 + 2 * k3 + k4)
+        # RK4 步进
+        X_next = rk4_step(f, t, X, params.DT, tau, lambda _: np.zeros(6))
 
         # 状态更新
         airship.X = X_next

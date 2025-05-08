@@ -3,6 +3,7 @@ controller.py - Contains implementation of AnyController and
 NMPCThrustController classes for airship control.
 """
 # pylint: disable=invalid-name
+# cspell:ignore coeffs ddelta eta_f Sh Sg Sf Cdcf dalpha arcsin coeff ndarray linalg vertcat xdot nlpsol
 import numpy as np
 import casadi as ca
 from numba import njit

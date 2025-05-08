@@ -17,8 +17,7 @@ from config import parameters as params
 # ==============================================================================
 #  定义基础几何、环境和气动参数 (Define Basic Geometric, Env, Aero Params)
 # ==============================================================================
-# 这些值通常来自设计规格、风洞测试或 CFD
-# These values typically come from design specs, wind tunnel tests, or CFD
+
 
 # --- 几何参数 (Geometric Parameters) ---
 airship_a1 = params.airship_a1  # [m] 前椭球半长轴 (Front ellipsoid semi-major axis)
