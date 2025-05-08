@@ -39,6 +39,8 @@ def setup_logger():
     return logging.getLogger(__name__)
 
 
+
+
 def main():
     """
     主函数
@@ -47,14 +49,15 @@ def main():
     logger.info("程序启动 / Program started")
 
     # ==== 控制仿真模式和轨迹类型（手动切换）/ Control simulation mode and trajectory type ====
-    simulation_mode = "blf"  # 控制器选择："blf" 或 "nmpc"
+    simulation_mode = "nmpc"  # 控制器选择："blf" 或 "nmpc"
     trajectory_type = "linear"  # 轨迹选择："default", "spiral", "figure8", "lemniscate", "linear"
+    use_disturbance_compensation = True  # 是否使用扰动补偿
 
     try:
         if simulation_mode == "blf":
             run_simulation(trajectory_type=trajectory_type)
         elif simulation_mode == "nmpc":
-            run_nmpc_simulation()
+            run_nmpc_simulation(use_disturbance_compensation=use_disturbance_compensation)
         else:
             raise ValueError(f"未知的仿真模式 / unknown simulation mode: {simulation_mode}")
     except Exception as e:
