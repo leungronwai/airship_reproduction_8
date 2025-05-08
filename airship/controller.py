@@ -4,6 +4,7 @@ NMPCThrustController classes for airship control.
 """
 # pylint: disable=invalid-name
 # cspell:ignore coeffs ddelta eta_f Sh Sg Sf Cdcf dalpha arcsin coeff ndarray linalg vertcat xdot nlpsol
+# cspell:ignore nlpsol IPOPT traj uref xref mtimes
 import numpy as np
 import casadi as ca
 from numba import njit
@@ -223,6 +224,14 @@ class NMPCThrustController:
 
 
     def _build_continuous_dynamics(self, X, U):  # 构建飞艇的连续时间动力学模型
+        """
+        Args:
+            X: 状态变量符号表达式
+            U: 控制输入符号表达式
+
+        Returns:
+            f_cont: 状态导数符号表达式
+        """
         # 用 AirshipCasADiSymbolic 构造符号表达式
         symbolic_model = AirshipCasADiSymbolic(self.params)  # self.model 是 Airship 实例
         # 生成符号函数 f_cont(X, U) -> dX/dt
@@ -232,6 +241,13 @@ class NMPCThrustController:
 
     def _build_nlp(self, X_sym, U_sym):
         """
+        Args:
+            X_sym: 状态变量符号表达式
+            U_sym: 控制输入符号表达式
+
+        Returns:
+            nlp_prob: 非线性规划问题
+
         _build_nlp 的核心逻辑
            1.优化变量：
            包括预测时域内的所有状态 ( x_k ) 和控制输入 ( u_k )。
@@ -246,7 +262,7 @@ class NMPCThrustController:
            确保控制输入和状态在物理限制范围内。
 
            4.求解器：
-           使用 CasADi 的 nlpsol 创建求解器（如 IPOPT），用于求解优化问题。
+           使用 CasADi 的 nlpsol 创建求解器 (如 IPOPT),用于求解优化问题。
 
 
         """
@@ -294,7 +310,9 @@ class NMPCThrustController:
             e2 = Xk[6:12] - x_ref_k[6:12]
 
             # 累积代价 / Accumulate cost
-            J += ca.mtimes([e1.T, Q[0:6, 0:6], e1]) + ca.mtimes([e2.T, Q[6:12, 6:12], e2]) + ca.mtimes([(Uk - u_ref_k).T, R, (Uk - u_ref_k)])
+            J += (ca.mtimes([e1.T, Q[0:6, 0:6], e1]) + ca.mtimes([e2.T, Q[6:12, 6:12], e2])
+            + ca.mtimes([(Uk - u_ref_k).T, R, (Uk - u_ref_k)])
+            )
 
             Xk = Xk_next  # 滚动更新 / Roll update
 
@@ -457,7 +475,13 @@ class NMPCThrustController:
 
 
     def get_disturbance_estimate(self):
-        """获取当前的扰动估计"""
+        """获取当前的扰动估计
+        Args:
+            None
+
+        Returns:
+            disturbance_estimate: 当前的扰动估计
+        """
         if self.use_disturbance_compensation:
             return self.last_disturbance_estimate
         else:

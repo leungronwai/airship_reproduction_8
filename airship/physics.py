@@ -32,6 +32,9 @@ def calculate_added_mass_inertia(a1, a2, b, rho_air_):
                A tuple containing two NumPy arrays: (M_prime, I0_prime)
                M_prime (np.ndarray): 附加质量矩阵 (Added mass matrix, 3x3).
                I0_prime (np.ndarray): 附加惯性矩阵 (Added inertia matrix, 3x3).
+               k1 (float): 附加质量因子 1 (Added mass factor 1).
+               k2 (float): 附加质量因子 2 (Added mass factor 2).
+               k3 (float): 附加质量因子 3 (Added mass factor 3).
 
     Raises:
         ValueError: 如果几何参数无效 (If geometric parameters are invalid).
