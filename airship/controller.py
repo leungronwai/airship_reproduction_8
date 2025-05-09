@@ -479,6 +479,7 @@ class NMPCThrustController:
 
     def get_current_disturbance_estimate(self):
         """获取当前的扰动估计
+         启用了扰动补偿，则返回的是最近一次通过扰动观测器估计的扰动值
         Args:
             None
 
