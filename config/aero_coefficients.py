@@ -10,8 +10,6 @@ import numpy as np
 
 from config import parameters as params
 
-# 导入物理计算函数
-from airship.physics import calculate_added_mass_inertia
 
 
 # 假设附加质量计算函数也在此文件中或可以导入
