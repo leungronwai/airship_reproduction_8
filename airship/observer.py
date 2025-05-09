@@ -13,7 +13,7 @@ Fixed-time Disturbance Observer (DO) for Airship
 import numpy as np
 import casadi as ca
 from config import parameters as params
-from .utils import sig, R_block
+from .utils import R_block
 
 
 

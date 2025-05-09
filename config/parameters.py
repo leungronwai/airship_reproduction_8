@@ -1,4 +1,7 @@
+"""
 # parameters.py
+"""
+
 
 # pylint: disable=invalid-name
 # cspell:ignore coeffs ddelta eta_f Sh Sg Sf Cdcf dalpha arcsin coeff ndarray linalg
@@ -70,7 +73,9 @@ except ValueError as e:
 
 # 组合惯性矩阵 (Combined Inertia Matrices - Eq. 9)  Configuration
 M_cfg = np.zeros((6, 6))
-rc_skew = np.array([[0, -rc[2, 0], rc[1, 0]], [rc[2, 0], 0, -rc[0, 0]], [-rc[1, 0], rc[0, 0], 0]])
+rc_skew = np.array([[0, -rc[2, 0],rc[1, 0]],
+                    [rc[2, 0], 0, -rc[0, 0]],
+                    [-rc[1, 0], rc[0, 0], 0]])
 M_cfg[0:3, 0:3] = m * np.identity(3) + M_prime
 M_cfg[0:3, 3:6] = -m * rc_skew
 M_cfg[3:6, 0:3] = m * rc_skew
@@ -88,7 +93,6 @@ try:
     # 计算气动系数
     # Calculate aerodynamic coefficients
     AERO_COEFFS = get_aero_coefficients(k1=k1_val, k2=k2_val)
-
 except ValueError as e:
     print(f"初始化气动参数时出错 Error initializing aerodynamic parameters : {e}")
     AERO_COEFFS = None  # 或者设置默认值并停止  or set default values and stop
@@ -117,6 +121,7 @@ def disturbance_delta(t):
     return 5000 * d  # Paper scales by 5000
 
 
+# === 风速定义 (Wind Definition) ===
 # 你需要添加一个表示风速的参数。风速通常在地球参考系（ERF）中定义。它可以是常数，也可以是时间和/或位置的函数。
 # / You need to add a parameter representing the wind speed. The wind speed is usually defined in the Earth Reference Frame (ERF).
 # It can be a constant, or a function of time and/or position.
