@@ -129,7 +129,7 @@ def get_aero_coefficients(k1=0, k2=0):
     coeffs["Cm2"] = -0.5 * dCL_dalpha_f * Sf * eta_f * lf1
     coeffs["Cm3"] = -(CDch * J2 * Sh * L_ref + CDcf * Sf * lf2)
     coeffs["Cm4"] = 0.5 * dCL_ddelta_f * Sf * eta_f * lf1
-    # Eq. 81 Cnj = -Cmj --- HIGHLY SUSPECT ---
+
     coeffs["Cn1"] = -coeffs["Cm1"]
     coeffs["Cn2"] = -coeffs["Cm2"]
     coeffs["Cn3"] = -coeffs["Cm3"]

@@ -10,7 +10,7 @@ import numpy as np
 
 # 导入物理计算函数
 from airship.physics import calculate_added_mass_inertia
-from config.aero_coefficients import get_aero_coefficients
+
 
 
 # === 仿真参数 (Simulation Parameters) ===
@@ -89,6 +89,9 @@ try:
     # 计算 k1, k2
     # Calculate k1, k2 (assuming functions are defined in aero.py or elsewhere)
     k1_val, k2_val, _, = k1, k2, k3
+
+    from config.aero_coefficients import get_aero_coefficients # noqa: E402 # 延迟导入避免循环依赖
+    # from config.aero_coefficients import get_aero_coefficients  # pylint: disable=import-outside-toplevel
 
     # 计算气动系数
     # Calculate aerodynamic coefficients

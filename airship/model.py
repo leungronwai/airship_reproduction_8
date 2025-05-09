@@ -143,8 +143,8 @@ class Airship:
         V_wind_BRF_1d = V_wind_BRF.flatten()
 
         # 计算相对速度 (Calculate relative velocity - - relative Airspeed in BRF)
-        v_ground_brf_1d = v_1d  # Body Reference Frame - BRF
-        v_rel_brf_1d, u_rel, v_rel_body, w_rel = calculate_relative_velocity(v_ground_brf_1d, V_wind_BRF_1d)
+        v_airship_brf_1d = v_1d  # Body Reference Frame - BRF
+        v_rel_brf_1d, u_rel, v_rel_body, w_rel = calculate_relative_velocity(v_airship_brf_1d, V_wind_BRF_1d)
 
         # fa: Aerodynamic force in BRF  placeholder
         # 动压 (Dynamic Pressure  - based on relative speed)
@@ -268,8 +268,13 @@ class AirshipCasADiSymbolic:
         R = R_block(gamma)  # Combined rotation matrix
         y_dot = R @ ca.vertcat(v, omega)  # [zeta_dot, gamma_dot]
 
+
+
         # === 动力学 (Dynamics) ===
 
+        #=================================================================
+        #                     Coriolis and Centrifugal Effects
+        #=================================================================
         # --- Calculate N term (Coriolis and centrifugal effects) ---
         omega_cross_v = ca.cross(omega, v)
         omega_cross_rc = ca.cross(omega, self.rc)
@@ -281,24 +286,29 @@ class AirshipCasADiSymbolic:
         N2 = omega_cross_I0_omega + self.m * rc_cross_omega_cross_v
         N_term = ca.vertcat(N1, N2)
 
-        # --- Calculate F term (forces and moments) ---
-        # Gravity force and moment
+        # =============================================================
+        #                     Gravity force and moment
+        # =============================================================
         Rz = R_zeta(gamma)
         fg_earth = ca.vertcat(0, 0, self.m * self.g)  # Gravity in Earth Frame
         fg_BRF = Rz.T @ fg_earth  # Rotate gravity vector to Body Frame
         mg_BRF = ca.cross(self.rc, fg_BRF)  # Torque due to gravity acting at CG (rc is CV->CG)
 
-        # Buoyancy force and moment
+
+        #========================================================================
+        #                     Buoyancy force and moment
+        #========================================================================
         F_buoy_earth = ca.vertcat(0, 0, -self.rho_air * self.Vol_airship * self.g)
         fb_BRF = Rz.T @ F_buoy_earth
         mb_BRF = ca.cross(-self.rb, fb_BRF)  # Torque due to buoyancy acting at CB (assumed at CV, so arm is -rb)
 
-        # --- Wind and relative velocity ---
-        # Wind velocity in ERF
-        V_wind_ERF = self.V_wind
 
-        # Transform wind to BRF
-        V_wind_BRF = Rz.T @ V_wind_ERF
+        #========================================================================
+        #                     aerodynamic forces and moments
+        #========================================================================
+        # === Wind and relative velocity calculation ===
+        V_wind_ERF = self.V_wind  # Wind velocity in ERF
+        V_wind_BRF = Rz.T @ V_wind_ERF  # Transform wind to BRF
 
         # Calculate relative velocity
         v_rel_brf, u_rel, v_rel_body, w_rel = calculate_relative_velocity(v, V_wind_BRF)
@@ -310,7 +320,7 @@ class AirshipCasADiSymbolic:
         # Angle of attack and sideslip angle
         alpha, beta = calculate_aoa_sideslip(u_rel, v_rel_body, w_rel, V_rel_mag, use_casadi=True)
 
-        # --- 获取控制舵面偏转角 (Get Control Surface Deflections) ---
+        # === 获取控制舵面偏转角 (Get Control Surface Deflections) ===
         # !!! 关键占位符：这些值需要由控制分配模块根据 tau[3:6] 确定 !!!
         # !!! Critical Placeholder: These values need to be determined by a Control Allocation module based on tau[3:6] !!!
         delta_RUDT = np.deg2rad(0.0)  # [rad] - Placeholder
@@ -326,11 +336,19 @@ class AirshipCasADiSymbolic:
             use_casadi=True
         )
 
-        # --- Control inputs ---
+
+
+        #========================================================================
+        #                     Thrust and torque
+        #========================================================================
         T_total = U[0:3]  # Thrust vector
         tau_vec = U[3:6]
 
-        # --- Combine all forces and moments ---
+
+
+        #==================================================================
+        #                     Combine forces and moments
+        #==================================================================
         F_forces = fg_BRF - fb_BRF + fa_BRF + T_total
         F_torques = mg_BRF + mb_BRF + ma_BRF + tau_vec
         F_term = ca.vertcat(F_forces, F_torques)
