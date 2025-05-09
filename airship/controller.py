@@ -474,7 +474,7 @@ class NMPCThrustController:
         return u0
 
 
-    def get_disturbance_estimate(self):
+    def get_current_disturbance_estimate(self):
         """获取当前的扰动估计
         Args:
             None

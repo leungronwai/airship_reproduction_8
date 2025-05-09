@@ -10,12 +10,12 @@
 
 import numpy as np
 
+
 def calculate_aero_forces_moments(
-    q_dyn, alpha, beta,
-    aero_coeffs,
-    delta_RUDT=0.0, delta_RUDB=0.0, delta_ELVL=0.0, delta_ELVR=0.0,
-    use_casadi=False
-):
+        q_dyn, alpha, beta,
+        aero_coeffs,
+        delta_RUDT=0.0, delta_RUDB=0.0, delta_ELVL=0.0, delta_ELVR=0.0,
+        use_casadi=False):
     """
     计算气动力和气动力矩。
 
@@ -40,6 +40,7 @@ def calculate_aero_forces_moments(
         vertcat = ca.vertcat
     else:
         math_lib = np  # 使用 NumPy
+
         def vertcat(*args):
             return np.array([args]).T  # 简单的 vertcat 模拟
 
@@ -86,15 +87,15 @@ def calculate_aero_forces_moments(
 
     # === 计算气动力 ===
     # X 力 (X Force - Eq. 23)
-    Fax = q_dyn * (Cx1 * cos_a**2 * cos_b**2 + Cx2 * sin_2a * sin_a_half)
+    Fax = q_dyn * (Cx1 * cos_a ** 2 * cos_b ** 2 + Cx2 * sin_2a * sin_a_half)
 
     # Y 力 (Y Force - Eq. 24)
     Fay = q_dyn * (Cy1 * cos_b_half * sin_2b + Cy2 * sin_2b +
-                    Cy3 * sin_b * sin_abs_b + Cy4 * (delta_RUDT + delta_RUDB))
+                   Cy3 * sin_b * sin_abs_b + Cy4 * (delta_RUDT + delta_RUDB))
 
     # Z 力 (Z Force - Eq. 25)
     Faz = q_dyn * (Cz1 * cos_a_half * sin_2a + Cz2 * sin_2a +
-                    Cz3 * sin_a * sin_abs_a + Cz4 * (delta_ELVL + delta_ELVR))
+                   Cz3 * sin_a * sin_abs_a + Cz4 * (delta_ELVL + delta_ELVR))
 
     # 组合力
     if use_casadi:
@@ -105,15 +106,15 @@ def calculate_aero_forces_moments(
     # === 计算气动力矩 ===
     # L 力矩 (Roll Moment - Eq. 26)
     moment_L = q_dyn * (Cl1 * (delta_ELVL - delta_ELVR + delta_RUDB - delta_RUDT) +
-                         Cl2 * sin_b * sin_abs_b)
+                        Cl2 * sin_b * sin_abs_b)
 
     # M 力矩 (Pitch Moment - Eq. 27)
     moment_M = q_dyn * (Cm1 * cos_a_half * sin_2a + Cm2 * sin_2a +
-                         Cm3 * sin_a * sin_abs_a + Cm4 * (delta_ELVL + delta_ELVR))
+                        Cm3 * sin_a * sin_abs_a + Cm4 * (delta_ELVL + delta_ELVR))
 
     # N 力矩 (Yaw Moment - Eq. 28)
     moment_N = q_dyn * (Cn1 * cos_b_half * sin_2b + Cn2 * sin_2b +
-                         Cn3 * sin_b * sin_abs_b + Cn4 * (delta_ELVL + delta_ELVR))
+                        Cn3 * sin_b * sin_abs_b + Cn4 * (delta_ELVL + delta_ELVR))
 
     # 组合力矩
     if use_casadi:
@@ -124,18 +125,18 @@ def calculate_aero_forces_moments(
     return fa_BRF, ma_BRF
 
 
-def calculate_relative_velocity(v_ground_brf, V_wind_BRF):
+def calculate_relative_velocity(v_airship_brf, V_wind_BRF):
     """
     计算相对风速。
 
     参数：
-        v_ground_brf: 体轴系中的地速
+        v_airship_brf: 体轴系中的地速
         V_wind_BRF: 体轴系中的风速
 
     返回：
         tuple: (v_rel, u_rel, v_rel_body, w_rel) - 相对风速向量及其分量
     """
-    v_rel = v_ground_brf - V_wind_BRF
+    v_rel = v_airship_brf - V_wind_BRF
 
     # 提取分量
     if isinstance(v_rel, np.ndarray) and v_rel.ndim > 1:
@@ -152,7 +153,7 @@ def calculate_relative_velocity(v_ground_brf, V_wind_BRF):
 
 def calculate_aoa_sideslip(u_rel, v_rel_body, w_rel, V_rel_mag=None, use_casadi=False):
     """
-    计算攻角和侧滑角。
+    计算攻角和侧滑角。aoa is angle of attack
 
     参数：
         u_rel: 相对风速 X 分量
@@ -179,9 +180,9 @@ def calculate_aoa_sideslip(u_rel, v_rel_body, w_rel, V_rel_mag=None, use_casadi=
     # 计算相对风速大小 (如果未提供)
     if V_rel_mag is None:
         if use_casadi:
-            V_rel_mag = math_lib.sqrt(u_rel**2 + v_rel_body**2 + w_rel**2)
+            V_rel_mag = math_lib.sqrt(u_rel ** 2 + v_rel_body ** 2 + w_rel ** 2)
         else:
-            V_rel_mag = math_lib.sqrt(u_rel**2 + v_rel_body**2 + w_rel**2)
+            V_rel_mag = math_lib.sqrt(u_rel ** 2 + v_rel_body ** 2 + w_rel ** 2)
             if V_rel_mag < 1e-3:
                 return alpha, 0.0
 

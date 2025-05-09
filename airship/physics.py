@@ -164,20 +164,3 @@ def calculate_added_mass_inertia(a1, a2, b, rho_air_):
     return _M_prime, _I0_prime, k1_, k2_, k3_
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

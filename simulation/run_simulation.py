@@ -321,8 +321,8 @@ def run_nmpc_simulation(use_disturbance_compensation=True):
         # NMPC 控制器计算最优控制输入
         u_cmd = controller.step(X, X_ref, U_ref, e1=e1, e2=e2)
 
-        # 获取扰动估计
-        delta_hat = controller.get_disturbance_estimate()
+        # 获取当前扰动估计
+        delta_hat = controller.get_current_disturbance_estimate()
 
         # 将推力参数转换为力和力矩
         tau = controller.thrust_to_force_torque(u_cmd)
