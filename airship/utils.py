@@ -1,5 +1,7 @@
 """
 utils.py
+refer to Nonlinear adaptive trajectory tracking control for a stratospheric airship with parametric uncertainty
+    Error-constrained fixed-time trajectory tracking control for a stratospheric airship with disturbances
 """
 # pylint: disable=invalid-name
 # pylint: disable=too-many-lines

@@ -272,7 +272,7 @@ def run_nmpc_simulation(use_disturbance_compensation=True):
     # 状态历史记录
     state_history = np.zeros((12, n_steps))
     control_history = np.zeros((3, n_steps))  # [T, mu, nu]
-    yc_history = np.zeros((6, n_steps))  # zeta + gamma
+    yc_history = np.zeros((6, n_steps))  # zeta + gamma 位置和姿态
     disturbance_history = np.zeros((6, n_steps))  # 实际扰动
     disturbance_estimate_history = np.zeros((6, n_steps))  # 扰动估计
     error_history = np.zeros((6, n_steps))  # e1 = y - yc
@@ -291,9 +291,9 @@ def run_nmpc_simulation(use_disturbance_compensation=True):
         omega = X[9:12]
         x_vec = X[6:12]
 
-        # 获取参考轨迹
-        X_ref = []
-        U_ref = []
+        # === 获取参考轨迹 ===
+        X_ref = [] # 用于存储预测时域内的参考状态轨迹
+        U_ref = [] # 用于存储预测时域内的参考控制输入
         # 基本参考轨迹（当前时刻）
         yc, yc_dot, _, xc, _ = trajectory.get_linear_trajectory(t)
 
