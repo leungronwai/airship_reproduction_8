@@ -22,7 +22,7 @@ from airship.physics import calculate_added_mass_inertia
 # ==============================================================================
 
 
-# --- 几何参数 (Geometric Parameters) ---
+# === 几何参数 (Geometric Parameters) ===
 airship_a1 = params.airship_a1  # [m] 前椭球半长轴 (Front ellipsoid semi-major axis)
 airship_a2 = params.airship_a2  # [m] 后椭球半长轴 (Rear ellipsoid semi-major axis)
 airship_b = params.airship_b  # [m] 半短轴 (Semi-minor axis)
@@ -48,11 +48,10 @@ lf3 = 18.3  # [m] y,z-dist origin to aero center fins (Used for Cl1)
 lgx = 29.2  # [m] x-dist origin to aero center gondola
 lgz = 40.0  # [m] z-dist origin to aero center gondola (Used for Cl2)
 
-# --- 环境参数 (Environmental Parameters) ---
-# 这个值可能需要在仿真开始时从外部传入或在 parameters.py 中定义
+# === 环境参数 (Environmental Parameters) ===
 rho_air_at_altitude = params.rho_air_at_altitude  # [kg/m^3] 空气密度 @ ~20km - Placeholder
 
-# --- 基础气动系数和导数 (Basic Aero Coeffs & Derivatives from Table 2) ---
+# === 基础气动系数和导数 (Basic Aero Coeffs & Derivatives from Table 2) ===
 CDh0 = 0.025
 CDf0 = 0.006
 CDg0 = 0.01
@@ -62,7 +61,7 @@ CDcg = 1.0
 dCL_dalpha_f = 5.73  # (∂CL/∂α)f
 dCL_ddelta_f = 1.24  # (∂CL/∂δ)f
 
-# --- 效率和积分因子 (Efficiency & Integral Factors from Table 2) ---
+# === 效率和积分因子 (Efficiency & Integral Factors from Table 2) ===
 eta_f = 0.29
 eta_k = 1.19
 # 使用表格中的积分因子值 (Using integral factor values from Table 2)
@@ -80,12 +79,8 @@ I3 = I3_table
 J1 = J1_table
 J2 = J2_table
 
-# --- 附加质量计算 (需要 k1, k2) / Added Mass Calculation (requires k1, k2) ---
-# k1, k2 需要先通过 calculate_added_mass_inertia 计算得到 /  k1, k2 must first be calculated using calculate_added_mass_inertia
-# 这里使用占位符，实际应在调用 get_aero_coefficients 前计算好
-# Here, placeholders are used; actual values should be calculated before calling get_aero_coefficients
-k1_placeholder = 0.1  # Placeholder - MUST BE CALCULATED/PROVIDED
-k2_placeholder = 0.9  # Placeholder - MUST BE CALCULATED/PROVIDED
+
+
 
 
 # ==============================================================================
@@ -93,7 +88,7 @@ k2_placeholder = 0.9  # Placeholder - MUST BE CALCULATED/PROVIDED
 # ==============================================================================
 
 
-def get_aero_coefficients(k1=k1_placeholder, k2=k2_placeholder):
+def get_aero_coefficients(k1=0, k2=0):
     """
     计算气动系数 Cx1...Cn4。
     Calculates aerodynamic coefficients Cx1...Cn4.
@@ -145,12 +140,7 @@ def get_aero_coefficients(k1=k1_placeholder, k2=k2_placeholder):
     return coeffs
 
 
-# 如果需要保持兼容性，可以添加一个简单的包装函数
-def calculate_added_mass_inertia_local(a1=airship_a1, a2=airship_a2, b=airship_b, rho=rho_air_at_altitude):
-    """
-    使用 parameters 模块中的函数计算附加质量和附加惯性矩阵。
-    """
-    return calculate_added_mass_inertia(a1, a2, b, rho)
+
 
 
 # ==============================================================================
@@ -161,14 +151,10 @@ if __name__ == "__main__":
     # / This part only runs when aero_coefficients.py is directly executed, for testing
     print("--- 测试计算气动系数 ---")
     try:
-        # 计算 k1, k2 (或从外部获取) / Calculate k1, k2 (or get from external)
-        k1_calc, k2_calc, _, _ = calculate_added_mass_inertia(
-            airship_a1, airship_a2, airship_b, rho_air_at_altitude
-        )
-        print(f"计算得到的 k1 = {k1_calc:.4f}, k2 = {k2_calc:.4f}")
-
-        # 使用计算得到的 k1, k2 计算气动系数 
-        aero_coeffs_calculated = get_aero_coefficients(k1=k1_calc, k2=k2_calc)
+        # 使用计算得到的 k1, k2 计算气动系数
+        inertia_k1 = params.k1
+        inertia_k2 = params.k2
+        aero_coeffs_calculated = get_aero_coefficients(k1=inertia_k1, k2=inertia_k2)
 
         print("\n计算得到的气动系数 / Aerodynamic Coefficients:")
         for coeff, value in aero_coeffs_calculated.items():
