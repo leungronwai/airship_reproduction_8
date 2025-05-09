@@ -394,68 +394,6 @@ def run_nmpc_simulation(use_disturbance_compensation=True):
 
 
 
-# 注意：不要在模块顶层调用 run_simulation()，否则一导入就会执行。只在 if __name__=='__main__' 下调用它。
-# if __name__ == '__main__':
-#     from argparse import ArgumentParser
-#     parser = ArgumentParser()
-#     parser.add_argument('--mode', choices=['blf', 'nmpc'], default='nmpc')
-#     args = parser.parse_args()
-
-#     if args.mode == 'blf':  # run " python run_simulation.py " in terminal
-#         run_simulation()
-#     else:
-#         run_nmpc_simulation()  # "python run_simulation.py --mode blf " in terminal
-
-
-
-# 如何理解这句话：注意：不要在模块顶层调用 run_simulation()，否则一导入就会执行。只在 if __name__=='__main__' 下调用它。
-# 在 Python 中，每个 .py 文件被当作一个“模块”载入时，解释器会从头到尾执行一遍这个文件里的顶层代码。如果你在模块的顶层直接写了
-
-# # run_simulation.py
-
-# def run_simulation():
-#     # …做很多事…
-#     pass
-
-# # 下面这一行在模块载入时就会执行
-# run_simulation()
-
-# 那么只要你在别的地方写了
-
-# import simulation.run_simulation
-
-# 就会立刻跑一次 run_simulation()——因为导入模块时，解释器会执行模块里的所有顶层语句。
-
-# ⸻
-
-# 用 if __name__ == '__main__' 来区分“被当脚本执行”还是“被别的模块导入”
-
-# 在模块里加上这一段：
-
-# if __name__ == '__main__':
-#     run_simulation()
-
-# 就能做到：
-# 	•	当你在命令行（或 IDE 的“Run”按钮）直接执行
-
-# python simulation/run_simulation.py
-
-# 这时模块的 __name__ 等于 "__main__"，条件为真，于是会调用 run_simulation()，启动仿真。
-
-# 	•	当别人通过 import simulation.run_simulation 载入这个模块时
-# 	•	模块的 __name__ 会是 "simulation.run_simulation"，条件不满足，run_simulation() 就不会自动执行。
-# 	•	这样，导入这个模块只会导入函数、类、全局变量，不会触发仿真流程。
-
-# ⸻
-
-# 小结
-# 	•	不要在模块顶层直接调用 run_simulation()，否则“导入”就会“执行”。
-# 	•	要把启动代码放在：
-
-# if __name__ == '__main__':
-#     run_simulation()
-
-# 这样既能保留“脚本直接跑”的便利性，又能保证它“被当作库导入”时不会乱跑。
 
 
 
