@@ -3,7 +3,7 @@ Trajectory generation module (trajectory.py)
 """
 # pylint: disable=invalid-name
 # pylint: disable=line-too-long
-# cspell:ignore R_zeta R_y_inv Rc_z Rc_y_inv
+# cspell:ignore R_zeta R_y_inv Rc_z Rc_y_inv ddot arctan2 linalg
 
 import numpy as np
 from airship.utils import R_zeta, R_y_inv

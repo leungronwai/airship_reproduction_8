@@ -3,6 +3,7 @@ utils.py
 """
 # pylint: disable=invalid-name
 # pylint: disable=too-many-lines
+# cspell:ignore R_zeta R_y_inv Rc_z Rc_y_inv ddot arctan2 linalg
 
 import numpy as np
 
@@ -14,11 +15,13 @@ def skew(v):
     if v.shape != (3,) and v.shape != (3, 1):
         raise ValueError(f"Input must be a 3D vector, got shape {v.shape}")
     v = v.flatten()  # Ensure it's 1D
-    return np.array([[0, -v[2], v[1]], [v[2], 0, -v[0]], [-v[1], v[0], 0]])
+    return np.array([[0, -v[2], v[1]],
+                    [v[2], 0, -v[0]],
+                    [-v[1], v[0], 0]])
 
 
 def sig(x, alpha):
-    """计算 x 的分数阶幂次：sign(x) * |x|^alpha"""
+    """计算 x 的分数阶幂次 : sign(x) * |x|^alpha"""
     # Element-wise operation
     return np.sign(x) * np.power(np.abs(x), alpha)
 
