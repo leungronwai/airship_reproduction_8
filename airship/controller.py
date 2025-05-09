@@ -223,21 +223,26 @@ class NMPCThrustController:
 
 
 
-    def _build_continuous_dynamics(self, X, U):  # 构建飞艇的连续时间动力学模型
+    def _build_continuous_dynamics(self, X, U):
         """
+        构建飞艇的连续时间动力学模型 # 用 AirshipCasADiSymbolic 构造符号表达式
+        在后续步骤中用于构建离散时间动力学模型 (通过数值积分方法，如 RK4)
+
         Args:
             X: 状态变量符号表达式
             U: 控制输入符号表达式
 
         Returns:
             f_cont: 状态导数符号表达式
+
+            返回 状态导数 ( dX/dt )
+
+
         """
-        # 用 AirshipCasADiSymbolic 构造符号表达式
-        symbolic_model = AirshipCasADiSymbolic(self.params)  # self.model 是 Airship 实例
+        symbolic_model = AirshipCasADiSymbolic(self.params)
         # 生成符号函数 f_cont(X, U) -> dX/dt
         f_cont = ca.Function("f_cont", [X, U], [symbolic_model.rhs_symbolic(X, U)])
-        return f_cont  # 返回 状态导数 ( \dot{X} ) 即 ( \frac{dX}{dt} )
-        # 在后续步骤中用于构建离散时间动力学模型（通过数值积分方法，如 RK4）
+        return f_cont
 
     def _build_nlp(self, X_sym, U_sym):
         """
@@ -273,12 +278,12 @@ class NMPCThrustController:
         Qf = self.Qf
 
         # 决策变量  / Decision variables
-        w = []  # 优化变量
-        g = []  # 约束条件
-        J = 0  # 代价函数
+        w = []  # 优化变量，包括预测时域内的所有状态 ( x_k ) 和控制输入 ( u_k )
+        g = []  # 约束条件，包括动力学约束和控制输入约束
+        J = 0  # 代价函数，用于最小化轨迹跟踪误差和控制输入代价。通过权重矩阵 Q, R, Q_f 来调整不同项的重要性。
 
         # 初始状态符号量 / Initial state symbol
-        Xk = ca.SX.sym("X0", 12)  #  初始状态 X0
+        Xk = ca.SX.sym("X0", 12)  #  初始状态 X0 12 维
         w += [Xk]  # 添加到优化变量中
 
         # 定义参考状态和控制输入的符号变量，用于传递参考轨迹
@@ -305,13 +310,13 @@ class NMPCThrustController:
             u_ref_k = self.p_uref[3 * k : 3 * (k + 1)]  # 参考控制输入
 
             # 计算误差并累积目标函数
-            # 计算状态误差和控制输入误差
-            e1 = Xk[0:6] - x_ref_k[0:6]
-            e2 = Xk[6:12] - x_ref_k[6:12]
+            e1 = Xk[0:6] - x_ref_k[0:6] # 位置误差和姿态误差
+            e2 = Xk[6:12] - x_ref_k[6:12] # 速度误差和角速度误差
 
-            # 累积代价 / Accumulate cost
-            J += (ca.mtimes([e1.T, Q[0:6, 0:6], e1]) + ca.mtimes([e2.T, Q[6:12, 6:12], e2])
-            + ca.mtimes([(Uk - u_ref_k).T, R, (Uk - u_ref_k)])
+            # 累积代价 / ca.mtimes: 用于矩阵乘法，计算误差的加权平方和
+            J += (ca.mtimes([e1.T, Q[0:6, 0:6], e1])
+                  + ca.mtimes([e2.T, Q[6:12, 6:12], e2])
+                  + ca.mtimes([(Uk - u_ref_k).T, R, (Uk - u_ref_k)])
             )
 
             Xk = Xk_next  # 滚动更新 / Roll update
@@ -374,7 +379,7 @@ class NMPCThrustController:
             控制输入和状态的物理限制。
             4.求解器：
 
-            使用 CasADi 的 nlpsol 求解器（如 IPOPT）解决优化问题。
+            使用 CasADi 的 nlpsol 求解器 如 (IPOPT) 解决优化问题。
 
 
 
@@ -418,8 +423,8 @@ class NMPCThrustController:
         ubx = []
 
         # 对第一个状态 X0 设为当前状态
-        lbx += list(x0)
-        ubx += list(x0)
+        lbx += list(x0) # 存储优化变量的下界（lower bounds）
+        ubx += list(x0) # 存储优化变量的上界（upper bounds）
 
         for k in range(N):
             # 控制变量 (输入) Uk 的约束
@@ -437,8 +442,6 @@ class NMPCThrustController:
 
         # --- 求解器调用 / 调用 NLP 求解器 ---
         # 使用 CasADi 的 nlpsol 求解器解决 NLP 问题，得到优化变量的最优解
-        sol = self.solver(x0=w0, lbx=lbx, ubx=ubx, lbg=lbg, ubg=ubg, p=np.concatenate([p_xref, p_uref]))
-
         w_opt = self.solver(x0=w0, lbx=lbx, ubx=ubx, lbg=lbg, ubg=ubg, p=np.concatenate([p_xref, p_uref]))
 
         # --- 提取第一个控制输入 U0 / 提取最优控制输入 ---
@@ -501,4 +504,4 @@ class NMPCThrustController:
         # --- Control inputs ---
 
 
-        return thrust_params_to_tau(u_thrust, self.rp_r, self.rp_l)
+        return thrust_params_to_tau(u_thrust, self.rp_r, self.rp_l, use_casadi=True)
