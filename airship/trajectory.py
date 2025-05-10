@@ -3,7 +3,8 @@ Trajectory generation module (trajectory.py)
 """
 # pylint: disable=invalid-name
 # pylint: disable=line-too-long
-# cspell:ignore R_zeta R_y_inv Rc_z Rc_y_inv ddot arctan2 linalg
+# cspell:ignore R_zeta R_y_inv Rc_z Rc_y_inv ddot arctan2 linalg xdot phiddot phidot    psiddot
+# cspell:ignore phidot phiddot psidot psiddot thetaddot ydot
 
 import numpy as np
 from airship.utils import R_zeta, R_y_inv
@@ -438,6 +439,39 @@ class Trajectory:
 
         返回：
             yc, yc_dot, yc_ddot, xc, xc_dot: 期望状态及导数
+
+
+        说明：
+            - yc:
+
+                表示期望状态向量，包含飞艇的期望位置和姿态。
+                具体包括：
+                    位置：[x, y, z]，即飞艇在空间中的期望位置。
+                    姿态：[φ, θ, ψ]，即飞艇的期望姿态角（横滚角、俯仰角、航向角）。
+            - yc_dot:
+
+                表示期望状态的一阶导数，即期望速度向量。
+                具体包括：
+                    线速度：[vx, vy, vz]，即飞艇在空间中的期望线速度。
+                    角速度：[ωφ, ωθ, ωψ]，即飞艇的期望角速度。
+            - yc_ddot:
+
+                表示期望状态的二阶导数，即期望加速度向量。
+                具体包括：
+                    线加速度：[ax, ay, az]，即飞艇在空间中的期望线加速度。
+                    角加速度：[αφ, αθ, αψ]，即飞艇的期望角加速度。
+            - xc:
+
+                表示控制指令向量，包含期望的线速度和角速度。
+                具体包括：
+                    线速度指令：[vx, vy, vz]，即飞艇的期望线速度。
+                    角速度指令：[ωφ, ωθ, ωψ]，即飞艇的期望角速度。
+            - xc_dot:
+
+                表示控制指令的一阶导数，即控制指令的变化率。
+                具体包括：
+                    线速度变化率：[dvx/dt, dvy/dt, dvz/dt]，即线速度的时间变化率。
+                    角速度变化率：[dωφ/dt, dωθ/dt, dωψ/dt]，即角速度的时间变化率。
         """
         dt_small = 1e-4
 

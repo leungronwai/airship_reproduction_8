@@ -1,10 +1,13 @@
 # simulation/run_simulation.py
+
+
 """
 Main simulation script for airship trajectory tracking and controller evaluation.
 """
 
 # pylint: disable=invalid-name
 # cspell:ignore coeffs ddelta eta_f Sh Sg Sf Cdcf dalpha arcsin coeff ndarray linalg vertcat xdot nlpsol xlabel ylabel zlabel
+# cspell: ignore whitegrid figsize sharex suptitle
 
 
 # === 标准库 ===
@@ -254,14 +257,14 @@ def run_nmpc_simulation(use_disturbance_compensation=True):
 
     controller = NMPCThrustController(
         model=airship,
-        dt=params.DT,
-        N=params.N_HORIZON,
-        Q=params.Q,
-        R=params.R,
-        Qf=params.Qf,
-        T_bounds=(params.T_MIN, params.T_MAX),
-        mu_bounds=(params.MU_MIN, params.MU_MAX),
-        nu_bounds=(params.NU_MIN, params.NU_MAX),
+        dt=params.DT, # 时间步长
+        N=params.N_HORIZON, # 预测时域
+        Q=params.Q, # 状态误差权重
+        R=params.R, # 控制输入权重
+        Qf=params.Qf, # 终端状态误差权重
+        T_bounds=(params.T_MIN, params.T_MAX), # 推力约束
+        mu_bounds=(params.MU_MIN, params.MU_MAX), # 俯仰角约束
+        nu_bounds=(params.NU_MIN, params.NU_MAX), # 偏航角约束
         use_disturbance_compensation=use_disturbance_compensation  # 启用扰动补偿
     )
 
@@ -269,7 +272,7 @@ def run_nmpc_simulation(use_disturbance_compensation=True):
     sim_time = np.arange(0, params.T_SPAN, params.DT)
     n_steps = len(sim_time)
 
-    # 状态历史记录
+    # 状态历史数据记录
     state_history = np.zeros((12, n_steps))
     control_history = np.zeros((3, n_steps))  # [T, mu, nu]
     yc_history = np.zeros((6, n_steps))  # zeta + gamma 位置和姿态
@@ -278,61 +281,77 @@ def run_nmpc_simulation(use_disturbance_compensation=True):
     error_history = np.zeros((6, n_steps))  # e1 = y - yc
     error2_history = np.zeros((6, n_steps))  # e2 = y_dot - yc_dot
 
-    # 初始状态
+    # 获取气艇的当前状态，包括位置、姿态、速度、角速度
     X = airship.get_state()
 
 
     # 仿真循环
     for i, t in enumerate(sim_time):
-        # 获取当前位置和姿态
-        zeta = X[0:3]
-        gamma = X[3:6]
-        v = X[6:9]
-        omega = X[9:12]
-        x_vec = X[6:12]
+        # '''
+        # 在每个时间步：
+        #     1.获取当前状态。
+        #     2.获取参考轨迹。
+        #     3.计算误差。
+        #     4.调用 NMPC 控制器计算控制输入。
+        #     5.更新气艇状态。
+        #     6.记录数据。
+        #
 
-        # === 获取参考轨迹 ===
+        # 获取当前位置和姿态
+        zeta = X[0:3]  # 位置
+        gamma = X[3:6]  # 姿态
+        v = X[6:9]  # 速度
+        omega = X[9:12]  # 角速度
+        x_vec = X[6:12]  # 状态向量
+
+
+
+        # 基本参考轨迹（当前时刻）
+        # yc：参考位置和姿态 [zeta_d, gamma_d]。
+        # yc_dot：参考速度和角速度 [zeta_d_dot, gamma_d_dot]。
+        # xc：参考状态 [zeta_d, gamma_d, v_d, omega_d]。
+        yc, yc_dot, _, xc, _ = trajectory.get_linear_trajectory(t) # 获取当前时刻的参考状态和导数
+
+        # === 通过循环生成预测时域内的参考状态轨迹 X_ref 和参考控制输入 U_ref ===
         X_ref = [] # 用于存储预测时域内的参考状态轨迹
         U_ref = [] # 用于存储预测时域内的参考控制输入
-        # 基本参考轨迹（当前时刻）
-        yc, yc_dot, _, xc, _ = trajectory.get_linear_trajectory(t)
 
         # 生成预测时域内的参考轨迹
-        for j in range(params.N_HORIZON + 1):
-            t_future = t + j * params.DT
-            yc_j, yc_dot_j, _, _, _ = trajectory.get_linear_trajectory(t_future)
-            X_ref.append(np.concatenate([yc_j, yc_dot_j]))
+        for j in range(params.N_HORIZON + 1): # j 从 0 到 N_HORIZON
+            t_future = t + j * params.DT #
+            yc_j, yc_dot_j, _, _, _ = trajectory.get_linear_trajectory(t_future) # 获取预测时域内的参考状态和导数
+            X_ref.append(np.concatenate([yc_j, yc_dot_j])) # 将参考状态和导数存储到 X_ref 中
 
         # 生成参考控制输入（简单初始猜测）
         for j in range(params.N_HORIZON):
             U_ref.append(np.array([8.0, 0.0, 0.0]))  # 可替换为更智能的猜测
 
-        # 计算误差（用于扰动观测器）
-        R = R_block(gamma)
-        y = np.concatenate((zeta, gamma))
-        y_dot = R @ x_vec
+        # 计算当前状态与参考状态之间的误差（用于扰动观测器）
+        R = R_block(gamma)  # 姿态旋转矩阵
+        y = np.concatenate((zeta, gamma))  # 当前位置和姿态
+        y_dot = R @ x_vec  # 当前速度和角速度
 
-        e1 = y - yc
-        e2 = y_dot - yc_dot
+        e1 = y - yc #位置和姿态误差
+        e2 = y_dot - yc_dot #速度和角速度误差
 
         # 获取实际扰动
         actual_delta = params.disturbance_delta(t)
 
         # NMPC 控制器计算最优控制输入
-        u_cmd = controller.step(X, X_ref, U_ref, e1=e1, e2=e2)
+        u_cmd = controller.step(X, X_ref, U_ref, e1=e1, e2=e2) # 控制输入 [T, mu, nu]
 
         # 获取当前扰动估计
         delta_hat = controller.get_current_disturbance_estimate()
 
         # 将推力参数转换为力和力矩
-        tau = controller.thrust_to_force_torque(u_cmd)
+        tau = controller.thrust_to_force_torque(u_cmd) # 气艇的推力和力矩 [Fx, Fy, Fz, Tx, Ty, Tz]
 
         # 补偿扰动（扰动已经在控制器内部处理）
         tau_compensated = tau - delta_hat * controller.disturbance_compensation_factor
 
-        # 积分系统（RK4）- 考虑实际扰动
-        def f(t_rk, x_rk):
-            return airship.rhs(t_rk, x_rk, tau_compensated, lambda _: actual_delta)
+        # 更新气艇状态（RK4）- 考虑实际扰动
+        def f(t_rk, x_rk, tau_comp=tau_compensated):
+            return airship.rhs(t_rk, x_rk, tau_comp, lambda _: actual_delta)
 
         # RK4 步进
         X_next = rk4_step(f, t, X, params.DT)
