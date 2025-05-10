@@ -4,7 +4,7 @@ Airship dynamic model module (model.py)
 """
 # pylint: disable=invalid-name
 # cspell:ignore coeffs ddelta eta_f Sh Sg Sf Cdcf dalpha arcsin coeff ndarray linalg vertcat xdot
-# cspell:ignore arctan RUDT RUDB ELVL ELVR
+# cspell:ignore arctan RUDT RUDB ELVL ELVR unmodeled
 # === 标准库 ===
 import sys
 import os

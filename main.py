@@ -60,9 +60,9 @@ def main():
             run_nmpc_simulation(use_disturbance_compensation=use_disturbance_compensation)
         else:
             raise ValueError(f"未知的仿真模式 / unknown simulation mode: {simulation_mode}")
-    except Exception as e:
+    except (ValueError, RuntimeError, TypeError, AttributeError) as e:
         logger.error("仿真过程中发生错误：%s", e)
-        traceback.print_exc()  # 打印完整的错误堆栈 / Print the full error stack
+        traceback.print_exc()
     else:
         logger.info("仿真成功完成 / Simulation completed successfully")  # 3. 结束日志 / End logging
 

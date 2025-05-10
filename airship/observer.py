@@ -21,6 +21,9 @@ from .utils import R_block
 
 class NMPCDisturbanceObserver:
     """
+    估计扰动：通过观测气艇的状态误差（位置误差、速度误差等），估计外部扰动的大小和方向。
+    补偿扰动：将估计的扰动值反馈给控制器，用于补偿外部扰动对气艇轨迹跟踪的影响。
+    支持 NMPC 控制器：提供符号化的扰动观测器方程，用于 NMPC 控制器的预测模型。
     专门为 NMPC 控制器设计的扰动观测器，使用 CasADi 符号计算
     """
     def __init__(self):
@@ -36,9 +39,9 @@ class NMPCDisturbanceObserver:
         self.M_inv = params.M_inv
 
         # 初始化观测器状态
-        self.z1_hat = np.zeros(6)
-        self.e2_hat = np.zeros(6)
-        self.delta_hat = np.zeros(6)
+        self.z1_hat = np.zeros(6) # 位置和速度误差的估计
+        self.e2_hat = np.zeros(6) # 速度误差的估计
+        self.delta_hat = np.zeros(6) # 扰动估计
 
         # 用于扰动滤波的参数
         self.filter_coeff = params.do_filter_coeff if hasattr(params, 'do_filter_coeff') else 0.7
@@ -54,7 +57,7 @@ class NMPCDisturbanceObserver:
         self._create_symbolic_observer()
 
     def _create_symbolic_observer(self):
-        """创建 CasADi 符号版本的观测器，用于 NMPC 预测
+        """创建 CasADi 符号版本的观测器方程，用于 NMPC 控制器的预测模型
         # 注意：本函数没有返回值，是因为它构造了一个 CasADi 符号函数
         # observer_update_func, 并将其绑定到类变量 self.observer_update_func,
         # 供其他方法（如 update()）调用。
@@ -66,17 +69,17 @@ class NMPCDisturbanceObserver:
         # 定义符号变量
         # __import__() 是 Python 的底层函数，用于 动态导入模块，等价于 import casadi as ca
         # ca = __import__("casadi") # 导入 casadi 库
-        e1_sym = ca.SX.sym("e1", 6)
-        e2_sym = ca.SX.sym("e2", 6)
-        tau_sym = ca.SX.sym("tau", 6)
-        gamma_sym = ca.SX.sym("gamma", 3)
-        dt_sym = ca.SX.sym("dt", 1)
-        z1_hat_sym = ca.SX.sym("z1_hat", 6)
-        e2_hat_sym = ca.SX.sym("e2_hat", 6)
+        e1_sym = ca.SX.sym("e1", 6) # 位置/姿态误差向量
+        e2_sym = ca.SX.sym("e2", 6) # 速度和角速度误差。
+        tau_sym = ca.SX.sym("tau", 6) # 控制输入（力和力矩）
+        gamma_sym = ca.SX.sym("gamma", 3) # 姿态角（欧拉角）
+        dt_sym = ca.SX.sym("dt", 1) # 时间步长
+        z1_hat_sym = ca.SX.sym("z1_hat", 6) # 观测器的内部状态
+        e2_hat_sym = ca.SX.sym("e2_hat", 6) # 观测器的内部状态
 
         # 构建观测器方程
         R_sym = R_block(gamma_sym)  # 假设 R_block 已经支持 CasADi 符号
-        RM_inv_sym = R_sym @ self.M_inv
+        RM_inv_sym = R_sym @ self.M_inv # 旋转矩阵和质量矩阵的组合，用于将控制输入转换到速度误差的变化率。
 
         # e2_hat 更新
         e2_hat_dot_sym = -self.l1 * e2_hat_sym + RM_inv_sym @ tau_sym
@@ -102,6 +105,7 @@ class NMPCDisturbanceObserver:
             """
             return ca.sign(x) * (ca.fabs(x) ** alpha)  # np.pow(ca.fabs(x), alpha)
 
+        # z1_hat 更新
         z1_hat_dot_sym = (-self.l1 * z1_hat_sym + z1_sym + self.l3 * z2_sym +
                           self.l4 * sig_sym(z1_hat_sym, self.beta1) +
                           self.l5 * sig_sym(z1_hat_sym, self.beta2))
@@ -115,7 +119,7 @@ class NMPCDisturbanceObserver:
         # 计算扰动估计
         delta_hat_raw_sym = self.M @ ca.transpose(R_sym) @ (delta_star_hat_sym - self.l1 * e2_sym - f_term_sym)
 
-        # 创建更新函数
+        # 创建更新函数、生成符号化函数
         self.observer_update_func = ca.Function(
             'observer_update',
             [e1_sym, e2_sym, tau_sym, gamma_sym, dt_sym, z1_hat_sym, e2_hat_sym],
@@ -131,9 +135,9 @@ class NMPCDisturbanceObserver:
         参数：
             dt: 时间步长
             e1: 位置/姿态误差向量
-            e2: 速度误差向量
-            tau: 控制输入
-            gamma: 姿态角
+            e2: 速度/角速度误差向量
+            tau: 控制输入（力和力矩）
+            gamma: 姿态角（欧拉角）
             f_func: 计算 f(e1,e2) 的函数 (可选)
 
         返回：
@@ -165,7 +169,7 @@ class NMPCDisturbanceObserver:
         self.delta_hat = self.filter_coeff * self.prev_delta_hat + (1 - self.filter_coeff) * delta_hat_raw
         self.prev_delta_hat = self.delta_hat
 
-        # 应用补偿增益
+        # 应用补偿增益/可直接用于补偿的扰动估计值
         delta_hat_compensated = self.delta_hat * self.compensation_gain
 
         # 记录历史
@@ -178,7 +182,7 @@ class NMPCDisturbanceObserver:
         return delta_hat_compensated
 
     def get_current_disturbance_estimate(self):
-        """返回当前扰动估计
+        """返回当前扰动估计值
 
         Returns:
             _type_: _description_
@@ -186,11 +190,14 @@ class NMPCDisturbanceObserver:
         return self.delta_hat
 
     def get_compensated_estimate(self):
-        """返回考虑补偿系数的扰动估计"""
+        """返回考虑补偿系数的扰动估计值
+           返回考虑补偿增益的扰动估计值
+        """
         return self.delta_hat * self.compensation_gain
 
     def reset(self):
         """重置观测器状态
+        用于重置观测器的状态变量和历史记录
 
         """
         self.z1_hat = np.zeros(6)
