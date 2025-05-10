@@ -103,20 +103,22 @@ class Airship:
 
         N_term = np.vstack((N1, N2)).flatten()  # Combine N1 and N2 into 6x1 vector
 
-        # --- 计算 F 项 (Calculate F term - Eq. 11) ---
+        # === 计算 F 项 (Calculate F term - Eq. 11) ===
         # F = [ F_forces ; F_torques ]
         # F_forces = fg - fb + fa
         # F_torques = mg + mb + ma
 
+        # === 计算重力力和力矩 (Calculate Gravity Force and Torque) ===
         # fg: Gravity force in BRF
         Rz = R_zeta(gamma)  # Rotation from BRF to ERF
         gravity_ERF = np.array([[0], [0], [self.m * self.g]])  # Gravity in Earth Frame
         fg_BRF = Rz.T @ gravity_ERF  # Rotate gravity vector to Body Frame
 
         # mg: Gravity torque in BRF
-        # Torque = r_cg x F_g. Since F_g acts at CG, r_cg = 0.
+        # Torque = r_cg x F_g.  Since F_g acts at CG, r_cg = 0.
         mg_BRF = np.cross(rc_1d, fg_BRF.flatten()).reshape(3, 1)  # Torque due to gravity acting at CG (rc is CV->CG)
 
+        # === 计算浮力和浮力矩 (Calculate Buoyancy Force and Torque) ===
         # fb: Buoyancy force in BRF
         # Requires displaced volume V and air density rho_air.
         F_buoyancy_ERF = np.array([[0], [0], [-self.Vol_airship * self.rho_air * self.g]])  # 向上为负 Z
@@ -126,12 +128,12 @@ class Airship:
         # Torque = r_cb x F_b. r_cb = vector from CV to CB. Assume r_cb = -rc_vec.
         # Requires fb_BRF which is assumed zero here.
         # Torque due to buoyancy acting at CB (assumed at CV, so arm is -rb)
-        mb_BRF = np.cross(-rb_1d, fb_BRF.flatten()).reshape(3, 1)
+        mb_BRF = np.cross(-rb_1d, fb_BRF.flatten(), axis=0).reshape(3, 1)
         # If fb_BRF was non-zero:
         # r_cb = -self.rb_vec
         # mb_BRF = np.cross(r_cb.flatten(), fb_BRF.flatten(), axis=0).reshape(3,1)
 
-        # --- 新增：计算相对速度 (New: Calculate Relative Velocity) ---
+        # === 新增：计算相对速度 (New: Calculate Relative Velocity) ===
         # 获取风速 (Get wind velocity)
         # 如果使用常数风速：/ if using constant wind speed:
         V_wind_ERF = self.V_wind_erf_const
@@ -146,6 +148,8 @@ class Airship:
         v_airship_brf_1d = v_1d  # Body Reference Frame - BRF
         v_rel_brf_1d, u_rel, v_rel_body, w_rel = calculate_relative_velocity(v_airship_brf_1d, V_wind_BRF_1d)
 
+
+        # === 计算气动力和力矩 (Calculate Aerodynamic Forces and Moments) ===
         # fa: Aerodynamic force in BRF  placeholder
         # 动压 (Dynamic Pressure  - based on relative speed)
         V_rel_mag = np.linalg.norm(v_rel_brf_1d)
@@ -169,11 +173,11 @@ class Airship:
             delta_RUDT, delta_RUDB, delta_ELVL, delta_ELVR
         )
 
-        # --- 计算推力和推力矩 (Calculate Thrust and torque) ---
+        # === 计算推力和推力矩 (Calculate Thrust and torque) ===
         T_total = tau[0:3].reshape(3, 1)  # 推力矢量 - Thrust vector
         tau_vec = tau[3:6].reshape(3, 1)  # 推力矩矢量 - Torque vector
 
-        # 组合力和力矩 (Combine Forces and Torques)
+        # === 组合力和力矩 (Combine Forces and Torques) ===
         F_forces = fg_BRF - fb_BRF + fa_BRF + T_total
         print(F_forces.shape)
         F_torques = mg_BRF + mb_BRF + ma_BRF + tau_vec
@@ -181,7 +185,7 @@ class Airship:
 
         F_term = np.vstack((F_forces, F_torques)).flatten()  # Combine forces and torques into 6x1 vector
 
-        # --- 获取扰动 (Get Disturbance) ---
+        # === 获取扰动 (Get Disturbance) ===
         # This is the external/unmodeled disturbance delta from the paper
         d = disturbance_func(t)
 

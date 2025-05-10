@@ -219,6 +219,9 @@ class NMPCThrustController:
         self.prev_gamma = np.zeros(3)
         self.last_disturbance_estimate = np.zeros(6)
 
+        # 添加存储完整控制序列的属性
+        self.last_optimal_sequence = None
+
 
 
 
