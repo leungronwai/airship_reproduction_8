@@ -178,6 +178,8 @@ class Airship:
         print(type(tau)) # 确保 tau 是 NumPy 数组
         if isinstance(tau, ca.DM) or isinstance(tau, ca.SX):
             tau = np.array(tau.full()).flatten()  # 转换为 NumPy 数组并展平为 1D
+
+        print(type(tau))
         T_total = tau[0:3].reshape(3, 1)  # 推力矢量 - Thrust vector
         tau_vec = tau[3:6].reshape(3, 1)  # 推力矩矢量 - Torque vector
 
