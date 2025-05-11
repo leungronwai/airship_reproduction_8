@@ -28,28 +28,31 @@ def thrust_params_to_tau(thrust_params, rp_r, rp_l, use_casadi=False):
     # 选择合适的数学库
     if use_casadi:
         ca = __import__("casadi")
-        T_mag, mu, nu = thrust_params
+        # 使用 CasADi 的矩阵操作提取元素
+        T_mag = thrust_params[0]
+        mu = thrust_params[1]
+        nu = thrust_params[2]
 
-        # 计算右侧推力向量
+        # 计算右侧推力向量  ca.vertcat 默认生成列向量（shape=(3,1)），无需额外调整。
         thrust_vector_r = ca.vertcat(
             T_mag * ca.cos(mu) * ca.cos(nu),
             T_mag * ca.sin(mu),
             T_mag * ca.cos(mu) * ca.sin(nu)
-        )
+        ) # CasADi 的 vertcat 默认生成列向量 (3x1)
 
         # 计算左侧推力向量
         thrust_vector_l = ca.vertcat(
             T_mag * ca.cos(mu) * ca.cos(nu),
             T_mag * ca.sin(mu),
             T_mag * ca.cos(mu) * ca.sin(nu)
-        )
+        ) # CasADi 的 vertcat 默认生成列向量 (3x1)
 
         # 总推力
         T_total = thrust_vector_r + thrust_vector_l
 
-        # 计算力矩
-        tau_r = ca.cross(rp_r, thrust_vector_r.flatten()).reshape(3, 1)
-        tau_l = ca.cross(rp_l, thrust_vector_l.flatten()).reshape(3, 1)
+        # 计算力矩  ca.cross 支持输入为列向量（shape=(3,1)），无需展平为一维向量。
+        tau_r = ca.cross(rp_r, thrust_vector_r) # CasADi 的 cross 支持 (3x1) 矩阵
+        tau_l = ca.cross(rp_l, thrust_vector_l) # CasADi 的 cross 支持 (3x1) 矩阵
         tau_vec = tau_r + tau_l
 
         # 组合力和力矩
@@ -64,21 +67,21 @@ def thrust_params_to_tau(thrust_params, rp_r, rp_l, use_casadi=False):
             T_mag * np.cos(mu) * np.cos(nu),
             T_mag * np.sin(mu),
             T_mag * np.cos(mu) * np.sin(nu)
-        ])
+        ]) # NumPy 的 array 默认生成一维向量 (3,)
 
         # 计算左侧推力向量
         thrust_vector_l = np.array([
             T_mag * np.cos(mu) * np.cos(nu),
             T_mag * np.sin(mu),
             T_mag * np.cos(mu) * np.sin(nu)
-        ])
+        ]) # NumPy 的 array 默认生成一维向量 (3,)
 
         # 总推力
         T_total = thrust_vector_r + thrust_vector_l
 
-        # 计算力矩
-        tau_r = np.cross(rp_r, thrust_vector_r)
-        tau_l = np.cross(rp_l, thrust_vector_l)
+        # 计算力矩 np.cross 支持输入为一维向量（shape=(3,)）或列向量（shape=(3,1)）。
+        tau_r = np.cross(rp_r.flatten(), thrust_vector_r.flatten()).reshape(3, 1) # NumPy 的 cross 支持 (3,) 或 (3,1)
+        tau_l = np.cross(rp_l.flatten(), thrust_vector_l.flatten()).reshape(3, 1) # NumPy 的 cross 支持 (3,) 或 (3,1)
         tau_vec = tau_r + tau_l
 
         # 组合力和力矩

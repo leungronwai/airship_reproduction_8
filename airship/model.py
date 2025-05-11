@@ -17,6 +17,7 @@ import casadi as ca
 # === 本地模块 ===
 from config import parameters as params
 from airship.aero_force_torque import calculate_aero_forces_moments, calculate_relative_velocity, calculate_aoa_sideslip
+from airship.thrust import thrust_params_to_tau
 from .utils import skew, R_zeta, R_block
 
 
@@ -174,6 +175,9 @@ class Airship:
         )
 
         # === 计算推力和推力矩 (Calculate Thrust and torque) ===
+        print(type(tau)) # 确保 tau 是 NumPy 数组
+        if isinstance(tau, ca.DM) or isinstance(tau, ca.SX):
+            tau = np.array(tau.full()).flatten()  # 转换为 NumPy 数组并展平为 1D
         T_total = tau[0:3].reshape(3, 1)  # 推力矢量 - Thrust vector
         tau_vec = tau[3:6].reshape(3, 1)  # 推力矩矢量 - Torque vector
 
@@ -345,9 +349,15 @@ class AirshipCasADiSymbolic:
         #========================================================================
         #                     Thrust and torque
         #========================================================================
+        # 检查 U 的维度
         print(U.shape)
-        T_total = U[0:3]  # Thrust vector
-        tau_vec = U[3:6]
+        # 直接将推力参数转换为力和力矩
+        U_vec = thrust_params_to_tau(U, self.rp_r, self.rp_l, use_casadi=True)
+
+
+        print(U_vec.shape)
+        T_total = U_vec[0:3]  # Thrust vector
+        tau_vec = U_vec[3:6]
 
 
 

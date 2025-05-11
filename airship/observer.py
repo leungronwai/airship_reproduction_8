@@ -175,8 +175,8 @@ class NMPCDisturbanceObserver:
         # 记录历史
         self.history.append({
             'delta_hat_raw': np.array(delta_hat_raw).flatten(),
-            'delta_hat_filtered': self.delta_hat.copy(),
-            'delta_hat_compensated': delta_hat_compensated.copy()
+            'delta_hat_filtered': self.delta_hat.full().flatten(),
+            'delta_hat_compensated': delta_hat_compensated.full().flatten()
         })
 
         return delta_hat_compensated
