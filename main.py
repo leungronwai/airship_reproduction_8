@@ -1,7 +1,7 @@
-'''
+"""
 # main.py
 
-'''
+"""
 import sys
 import os
 import logging
@@ -57,7 +57,8 @@ def main():
         if simulation_mode == "blf":
             run_simulation(trajectory_type=trajectory_type)
         elif simulation_mode == "nmpc":
-            run_nmpc_simulation(use_disturbance_compensation=use_disturbance_compensation)
+            run_nmpc_simulation(use_disturbance_compensation=use_disturbance_compensation,
+                                trajectory_type=trajectory_type)
         else:
             raise ValueError(f"未知的仿真模式 / unknown simulation mode: {simulation_mode}")
     except (ValueError, RuntimeError, TypeError, AttributeError) as e:
