@@ -12,7 +12,51 @@ from airship.utils import R_zeta, R_y_inv
 
 class Trajectory:
     """
-    Trajectory generation class (trajectory.py)
+    轨迹生成模块
+
+
+        参数：
+            t: 当前时间
+            start_point: 起点坐标 [x, y, z]，默认为原点
+            end_point: 终点坐标 [x, y, z]，默认为 [5000, 5000, -19000]
+            speed: 飞行速度，单位 m/s
+            hover_at_end: 到达终点后是否悬停，否则继续沿直线飞行
+
+        返回：
+            yc, yc_dot, yc_ddot, xc, xc_dot: 期望状态及导数
+
+
+        说明：
+            - yc:
+
+                表示期望状态向量，包含飞艇的期望位置和姿态。
+                具体包括：
+                    位置：[x, y, z]，即飞艇在空间中的期望位置。
+                    姿态：[φ, θ, ψ]，即飞艇的期望姿态角（横滚角、俯仰角、航向角）。
+            - yc_dot:
+
+                表示期望状态的一阶导数，即期望速度向量。
+                具体包括：
+                    线速度：[vx, vy, vz]，即飞艇在空间中的期望线速度。
+                    角速度：[ωφ, ωθ, ωψ]，即飞艇的期望角速度。
+            - yc_ddot:
+
+                表示期望状态的二阶导数，即期望加速度向量。
+                具体包括：
+                    线加速度：[ax, ay, az]，即飞艇在空间中的期望线加速度。
+                    角加速度：[αφ, αθ, αψ]，即飞艇的期望角加速度。
+            - xc:
+
+                表示控制指令向量，包含期望的线速度和角速度。
+                具体包括：
+                    线速度指令：[vx, vy, vz]，即飞艇的期望线速度。
+                    角速度指令：[ωφ, ωθ, ωψ]，即飞艇的期望角速度。
+            - xc_dot:
+
+                表示控制指令的一阶导数，即控制指令的变化率。
+                具体包括：
+                    线速度变化率：[dvx/dt, dvy/dt, dvz/dt]，即线速度的时间变化率。
+                    角速度变化率：[dωφ/dt, dωθ/dt, dωψ/dt]，即角速度的时间变化率。
     """
     def __init__(self):
         pass  # No specific initialization needed for this trajectory
@@ -22,7 +66,15 @@ class Trajectory:
     # └─────────────────────────────────────────────────────┘
 
     def get_spiral_trajectory(self, t):
-        """生成一个螺旋轨迹，带有高度变化"""
+
+        """
+        生成一个螺旋轨迹，带有高度变化
+        args:
+            t: 当前时间
+        returns:
+            yc, yc_dot, yc_ddot, xc, xc_dot
+        """
+
         dt_small = 1e-4
 
         # --- 轨迹参数 ---
@@ -535,8 +587,8 @@ class Trajectory:
         gamma_d_dot = (gamma_d_plus - gamma_d_minus) / (2 * dt_small)
 
         # --- 组合 yc、yc_dot ---
-        yc = np.concatenate((zeta_d, gamma_d))
-        yc_dot = np.concatenate((zeta_d_dot, gamma_d_dot))
+        yc = np.concatenate((zeta_d, gamma_d)) # 位置和姿态
+        yc_dot = np.concatenate((zeta_d_dot, gamma_d_dot)) # 线速度和姿态角速度
 
         # --- 速度指令 vc, wc ---
         Rc_z = R_zeta(gamma_d)
@@ -545,17 +597,17 @@ class Trajectory:
         vc = vc.flatten()
         wc = Rc_y_inv @ gamma_d_dot.reshape(-1, 1)
         wc = wc.flatten()
-        xc = np.concatenate((vc, wc))
+        xc = np.concatenate((vc, wc)) # 包含期望的线速度和角速度 (控制指令向量)
 
         # --- xc_dot 通过符号化导数简化近似 ---
         vc_dot = Rc_z.T @ zeta_d_ddot.reshape(-1, 1)
         vc_dot = vc_dot.flatten()
-        wc_dot = np.zeros(3)  # 简化处理，假设角速度变化率较小
-        xc_dot = np.concatenate((vc_dot, wc_dot))
+        wc_dot = np.zeros(3)  #
+        xc_dot = np.concatenate((vc_dot, wc_dot)) # 控制指令的一阶导数，即控制指令的变化率 线速度变化率和角速度变化率
 
         # --- yc_ddot 同样简化处理 ---
         gamma_d_ddot = np.zeros(3)
-        yc_ddot = np.concatenate((zeta_d_ddot, gamma_d_ddot))
+        yc_ddot = np.concatenate((zeta_d_ddot, gamma_d_ddot)) # 期望状态的二阶导数，即期望线加速度和角加速度向量。
 
         return yc, yc_dot, yc_ddot, xc, xc_dot
 
@@ -563,6 +615,15 @@ class Trajectory:
         """
         计算直线轨迹在时间 t 的位置和姿态，用于计算导数
         避免递归调用 get_linear_trajectory
+        args:
+            t: 当前时间
+            start_point: 起点坐标 [x, y, z]
+            end_point: 终点坐标 [x, y, z]
+            speed: 飞行速度，单位 m/s
+            hover_at_end: 到达终点后是否悬停，否则继续沿直线飞行
+        return:
+            zeta_d: 期望位置
+            gamma_d: 期望姿态
         """
         # 计算方向向量和距离
         direction = end_point - start_point

@@ -3,14 +3,15 @@ utils.py
 refer to Nonlinear adaptive trajectory tracking control for a stratospheric airship with parametric uncertainty
     Error-constrained fixed-time trajectory tracking control for a stratospheric airship with disturbances
 """
+import casadi
 # pylint: disable=invalid-name
 # pylint: disable=too-many-lines
 # cspell:ignore R_zeta R_y_inv Rc_z Rc_y_inv ddot arctan2 linalg
 # cspell:ignore cphi cth cpsi sphi sth spsi
 
 import numpy as np
+import casadi as ca
 
-from numba import njit, float64
 
 
 def skew(v):
@@ -31,7 +32,7 @@ def sig(x, alpha):
     return np.sign(x) * np.power(np.abs(x), alpha)
 
 
-@njit(float64[:](float64[:]), cache=True)
+
 def R_zeta(gamma):
     """
     计算旋转矩阵 R_zeta (BRF to ERF) - Eq. 6
@@ -56,7 +57,6 @@ def R_zeta(gamma):
     return R_b2i
 
 
-@njit(float64[:](float64[:]), cache=True)
 def R_y(gamma):
     """
     计算角速度变换矩阵 R_y - Eq. 7
@@ -70,10 +70,8 @@ def R_y(gamma):
     phi, theta, psi = gamma[0], gamma[1], gamma[2]
     cphi, sphi = np.cos(phi), np.sin(phi)
     cth, sth = np.cos(theta), np.sin(theta)
-    if abs(cth) < 1e-6:  # 避免奇异性 (Avoid singularity)
-        print("Warning: cos(theta) is close to zero, R_y is singular.")
-        # Handle singularity appropriately, maybe saturation or alternative formulation
-        cth = 1e-6 * np.sign(cth) if cth != 0 else 1e-6
+
+    cth_safe = ca.if_else(ca.fabs(cth) < 1e-6, 1e-6, cth)
 
     R_i2b = np.array([[1, sphi * sth / cth, cphi * sth / cth],
                       [0, cphi, -sphi],
@@ -81,7 +79,7 @@ def R_y(gamma):
     return R_i2b
 
 
-@njit(float64[:](float64[:]), cache=True)
+
 def R_y_inv(gamma):
     """
     计算角速度变换矩阵 R_y 的逆 - Eq. 16
@@ -130,7 +128,7 @@ def S_omega(omega):
     return S
 
 
-@njit(float64[:](float64[:]), cache=True)
+
 def R_block(gamma):
     """
     构建块对角旋转/变换矩阵 R = diag(Rz, Ry)

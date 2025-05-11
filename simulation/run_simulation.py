@@ -246,7 +246,7 @@ def run_simulation(trajectory_type="default"):
     plt.show()
 
 
-def run_nmpc_simulation(use_disturbance_compensation=True):
+def run_nmpc_simulation(use_disturbance_compensation=True, trajectory_type="linear"):
     """
     Run NMPC simulation.
     """
@@ -258,7 +258,7 @@ def run_nmpc_simulation(use_disturbance_compensation=True):
     controller = NMPCThrustController(
         model=airship,
         dt=params.DT, # 时间步长
-        N=params.N_HORIZON, # 预测时域
+        N=params.N_HORIZON, # 预测时域长度
         Q=params.Q, # 状态误差权重
         R=params.R, # 控制输入权重
         Qf=params.Qf, # 终端状态误差权重
@@ -267,6 +267,9 @@ def run_nmpc_simulation(use_disturbance_compensation=True):
         nu_bounds=(params.NU_MIN, params.NU_MAX), # 偏航角约束
         use_disturbance_compensation=use_disturbance_compensation  # 启用扰动补偿
     )
+
+
+
 
     # 仿真时间和步数
     sim_time = np.arange(0, params.T_SPAN, params.DT)
@@ -283,6 +286,12 @@ def run_nmpc_simulation(use_disturbance_compensation=True):
 
     # 获取气艇的当前状态，包括位置、姿态、速度、角速度
     X = airship.get_state()
+
+    yc = None
+    yc_dot = None
+    xc = None
+    xc_current = None
+    xc_next = None
 
 
     # 仿真循环
@@ -305,26 +314,91 @@ def run_nmpc_simulation(use_disturbance_compensation=True):
         x_vec = X[6:12]  # 状态向量
 
 
-
         # 基本参考轨迹（当前时刻）
         # yc：参考位置和姿态 [zeta_d, gamma_d]。
         # yc_dot：参考速度和角速度 [zeta_d_dot, gamma_d_dot]。
         # xc：参考状态 [zeta_d, gamma_d, v_d, omega_d]。
-        yc, yc_dot, _, xc, _ = trajectory.get_linear_trajectory(t) # 获取当前时刻的参考状态和导数
+        if trajectory_type == "linear":
+            yc, yc_dot, _, xc, _ = trajectory.get_linear_trajectory(t)
+        elif trajectory_type == "spiral":
+            yc, yc_dot, _, xc, _ = trajectory.get_spiral_trajectory(t)
+        elif trajectory_type == "figure8":
+            yc, yc_dot, _, xc, _ = trajectory.get_figure8_trajectory(t)
+        elif trajectory_type == "lemniscate":
+            yc, yc_dot, _, xc, _ = trajectory.get_lemniscate_trajectory(t)
+
+
+
+
+
 
         # === 通过循环生成预测时域内的参考状态轨迹 X_ref 和参考控制输入 U_ref ===
         X_ref = [] # 用于存储预测时域内的参考状态轨迹
         U_ref = [] # 用于存储预测时域内的参考控制输入
 
         # 生成预测时域内的参考轨迹
-        for j in range(params.N_HORIZON + 1): # j 从 0 到 N_HORIZON
-            t_future = t + j * params.DT #
-            yc_j, yc_dot_j, _, _, _ = trajectory.get_linear_trajectory(t_future) # 获取预测时域内的参考状态和导数
-            X_ref.append(np.concatenate([yc_j, yc_dot_j])) # 将参考状态和导数存储到 X_ref 中
+        for j in range(params.N_HORIZON + 1):
+            t_future = t + j * params.DT
+            if trajectory_type == "spiral":
+                yc_j, yc_dot_j, _, _, _ = trajectory.get_spiral_trajectory(t_future)
+            elif trajectory_type == "figure8":
+                yc_j, yc_dot_j, _, _, _ = trajectory.get_figure8_trajectory(t_future)
+            elif trajectory_type == "lemniscate":
+                yc_j, yc_dot_j, _, _, _ = trajectory.get_lemniscate_trajectory(t_future)
+            else:  # default to linear
+                yc_j, yc_dot_j, _, _, _ = trajectory.get_linear_trajectory(t_future)
+            X_ref.append(np.concatenate([yc_j, yc_dot_j]))
 
-        # 生成参考控制输入（简单初始猜测）
+        # 生成参考控制输入
         for j in range(params.N_HORIZON):
-            U_ref.append(np.array([8.0, 0.0, 0.0]))  # 可替换为更智能的猜测
+            t_future = t + j * params.DT
+
+            # 获取当前和下一时刻的参考位置和速度
+            if trajectory_type == "spiral":
+                _, _, _, xc_current, _ = trajectory.get_spiral_trajectory(t_future)
+                _, _, _, xc_next, _ = trajectory.get_spiral_trajectory(t_future + params.DT)
+            elif trajectory_type == "figure8":
+                _, _, _, xc_current, _ = trajectory.get_figure8_trajectory(t_future)
+                _, _, _, xc_next, _ = trajectory.get_figure8_trajectory(t_future + params.DT)
+            elif trajectory_type == "lemniscate":
+                _, _, _, xc_current, _ = trajectory.get_lemniscate_trajectory(t_future)
+                _, _, _, xc_next, _ = trajectory.get_lemniscate_trajectory(t_future + params.DT)
+            else:  # linear
+                _, _, _, xc_current, _ = trajectory.get_linear_trajectory(t_future)
+                _, _, _, xc_next, _ = trajectory.get_linear_trajectory(t_future + params.DT)
+
+            # === 计算期望推力大小和方向 ===
+            velocity = xc_current[0:3] # 包含线速度
+            velocity_mag = np.linalg.norm(velocity) # 线速度的大小
+
+            # 基于速度估计推力大小
+            T_est = min(0.8 * velocity_mag, params.T_MAX)
+            T_est = max(T_est, 0.5)  # 至少有一些推力
+
+            # 基于航向估计推力方向
+            if velocity_mag > 0.5:
+                mu_est = 0.0  # 简化处理
+                nu_est = 0.0  # 简化处理
+            else:
+                mu_est = 0.0
+                nu_est = 0.0
+
+            U_ref.append(np.array([T_est, mu_est, nu_est]))
+
+        # 然后在 run_nmpc_simulation 中使用（若采用 U_ref 方案 2，直接把注释取消）
+        # if controller.last_optimal_sequence is not None:
+        #     # 使用前一时刻的最优控制序列后移一步
+        #     for j in range(params.N_HORIZON-1):
+        #         U_ref.append(controller.last_optimal_sequence[j+1])
+        #     # 对最后一步重复使用最后的控制
+        #     U_ref.append(controller.last_optimal_sequence[-1])
+        # else:
+        #     # 首次运行时使用简单猜测
+        #     for j in range(params.N_HORIZON):
+        #         U_ref.append(np.array([8.0, 0.0, 0.0]))
+
+
+
 
         # 计算当前状态与参考状态之间的误差（用于扰动观测器）
         R = R_block(gamma)  # 姿态旋转矩阵
@@ -337,10 +411,10 @@ def run_nmpc_simulation(use_disturbance_compensation=True):
         # 获取实际扰动
         actual_delta = params.disturbance_delta(t)
 
-        # NMPC 控制器计算最优控制输入
+        # NMPC 控制器计算当前时刻的最优控制输入（推力大小和方向角）
         u_cmd = controller.step(X, X_ref, U_ref, e1=e1, e2=e2) # 控制输入 [T, mu, nu]
 
-        # 获取当前扰动估计
+        # 获取当前扰动估计值
         delta_hat = controller.get_current_disturbance_estimate()
 
         # 将推力参数转换为力和力矩
@@ -349,7 +423,7 @@ def run_nmpc_simulation(use_disturbance_compensation=True):
         # 补偿扰动（扰动已经在控制器内部处理）
         tau_compensated = tau - delta_hat * controller.disturbance_compensation_factor
 
-        # 更新气艇状态（RK4）- 考虑实际扰动
+        # 使用 RK4 方法对气艇的动力学方程进行积分，更新气艇状态 - 考虑实际扰动
         def f(t_rk, x_rk, tau_comp=tau_compensated):
             return airship.rhs(t_rk, x_rk, tau_comp, lambda _: actual_delta)
 

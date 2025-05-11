@@ -13,6 +13,7 @@ from config import parameters as params
 from airship.model import AirshipCasADiSymbolic
 from airship.thrust import thrust_params_to_tau, calculate_thrust_direction
 from airship.observer import NMPCDisturbanceObserver
+from airship.thrust import thrust_params_to_tau
 
 
 
@@ -477,6 +478,13 @@ class NMPCThrustController:
             self.prev_tau = tau
             self.prev_gamma = gamma
 
+        # 保存整个最优控制序列
+        u_sequence = []
+        for i in range(N):
+            u_i = w_opt["x"].full().flatten()[(i+1)*12+i*3:(i+1)*12+(i+1)*3]
+            u_sequence.append(u_i)
+        self.last_optimal_sequence = u_sequence
+
         return u0
 
 
@@ -494,7 +502,7 @@ class NMPCThrustController:
         else:
             return np.zeros(6)
 
-    @njit
+
     def thrust_to_force_torque(self, u_thrust):
         """
         将推力控制 [T, μ, v] 转换为力和力矩 [Fx, Fy, Fz, Mx, My, Mz]
@@ -507,5 +515,15 @@ class NMPCThrustController:
         """
         # --- Control inputs ---
 
+        # 确保返回的是 6 维向量
+        tau = thrust_params_to_tau(u_thrust, self.rp_r, self.rp_l, use_casadi=True)
+        # 检查 tau 的维度
+        if isinstance(tau, np.ndarray) and tau.size != 6:
+            print(f"警告：tau 的维度为 {tau.size}，期望为 6")
+            # 如果不是 6 维，补充为 6 维
+            if tau.size < 6:
+                tau_corrected = np.zeros(6)
+                tau_corrected[:tau.size] = tau
+                return tau_corrected
 
-        return thrust_params_to_tau(u_thrust, self.rp_r, self.rp_l, use_casadi=True)
+        return tau

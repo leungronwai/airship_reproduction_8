@@ -56,7 +56,7 @@ class Airship:
         self.V_wind_erf_const = params.V_WIND_ERF  # 如果风速是常数
         # self.V_wind_func = params.V_WIND_FUNC # 如果风速是函数
 
-    @njit(float64[:](float64[:], float64[:], float64[:]), cache=True)
+
     def rhs(self, t, X, tau, disturbance_func):
         """计算状态向量 X 的导数 dX/dt - Right Hand Side"""
         zeta = X[0:3]
@@ -345,6 +345,7 @@ class AirshipCasADiSymbolic:
         #========================================================================
         #                     Thrust and torque
         #========================================================================
+        print(U.shape)
         T_total = U[0:3]  # Thrust vector
         tau_vec = U[3:6]
 
