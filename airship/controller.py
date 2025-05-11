@@ -174,10 +174,10 @@ class NMPCThrustController:
         self.params = params
         self.dt = dt
         self.N = N
-        # build cost matrices
-        self.Q = ca.diag(Q)
-        self.R = ca.diag(R)
-        self.Qf = ca.diag(Qf)
+        # build cost matrices  将 NumPy 矩阵转换为 CasADi 矩阵
+        self.Q = ca.DM(Q)  # 状态误差权重
+        self.R = ca.DM(R)  # 控制输入权重
+        self.Qf = ca.DM(Qf) # 终端状态权重
         # actuator limits
         self.T_min, self.T_max = T_bounds
         self.mu_min, self.mu_max = mu_bounds
