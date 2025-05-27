@@ -11,13 +11,13 @@ import os
 
 # === 第三方库 ===
 import numpy as np
-from numba import njit, float64
+
 import casadi as ca
 
 # === 本地模块 ===
 from config import parameters as params
 from airship.aero_force_torque import calculate_aero_forces_moments, calculate_relative_velocity, calculate_aoa_sideslip
-from airship.thrust import thrust_params_to_tau
+from airship.thrust import thrust_params_to_force_torque
 from .utils import skew, R_zeta, R_block
 
 
@@ -176,12 +176,13 @@ class Airship:
 
         # === 计算推力和推力矩 (Calculate Thrust and torque) ===
         print(type(tau)) # 确保 tau 是 NumPy 数组
-        if isinstance(tau, ca.DM) or isinstance(tau, ca.SX):
-            tau = np.array(tau.full()).flatten()  # 转换为 NumPy 数组并展平为 1D
+        print(tau)
+        # 使用 thrust_params_to_force_torque 将推力参数转换为推力和推力矩
+        thrust_torque = thrust_params_to_force_torque(tau, self.rp_r_vec, self.rp_l_vec)
+        print(thrust_torque)
 
-        print(type(tau))
-        T_total = tau[0:3].reshape(3, 1)  # 推力矢量 - Thrust vector
-        tau_vec = tau[3:6].reshape(3, 1)  # 推力矩矢量 - Torque vector
+        T_total = thrust_torque[0:3].reshape(3, 1)  # 推力矢量 - Thrust vector
+        tau_vec = thrust_torque[3:6].reshape(3, 1)  # 推力矩矢量 - Torque vector
 
         # === 组合力和力矩 (Combine Forces and Torques) ===
         F_forces = fg_BRF - fb_BRF + fa_BRF + T_total
@@ -197,7 +198,7 @@ class Airship:
 
         # --- 动力学方程 (Dynamics Equation): Mx_dot + N = F + tau + d ---
         # Rearranging for x_dot: x_dot = M_inv * (F - N + tau + d)
-        x_dot = self.M_inv @ (F_term - N_term + tau + d)
+        x_dot = self.M_inv @ (F_term - N_term + thrust_torque + d)
 
         # --- 组合状态导数 (Combine state derivatives) ---
         dXdt = np.concatenate((y_dot, x_dot))
@@ -266,7 +267,7 @@ class AirshipCasADiSymbolic:
         Returns:
             dX/dt as casadi SX 12x1
         """
-        ca = __import__("casadi")  # dynamic import
+        # ca = __import__("casadi")  # dynamic import
 
         # === 解构状态 ===
         zeta = X[0:3]  # Position in ERF
@@ -354,7 +355,7 @@ class AirshipCasADiSymbolic:
         # 检查 U 的维度
         print(U.shape)
         # 直接将推力参数转换为力和力矩
-        U_vec = thrust_params_to_tau(U, self.rp_r, self.rp_l, use_casadi=True)
+        U_vec = thrust_params_to_force_torque(U, self.rp_r, self.rp_l, use_casadi=True)
 
 
         print(U_vec.shape)
@@ -414,7 +415,7 @@ class AirshipCasADiSymbolic:
         Returns:
             F: CasADi Function that maps (x, u) to x_next
         """
-        ca = __import__("casadi")
+        # ca = __import__("casadi")
 
         # Define symbolic variables
         x = ca.SX.sym("x", 12)

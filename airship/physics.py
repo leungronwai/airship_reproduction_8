@@ -42,12 +42,11 @@ def calculate_added_mass_inertia(a1, a2, b, rho_air_):
     """
 
     if b <= 0:
-        raise ValueError("半短轴 b 必须大于 0 /Semi-minor axis b must be positive")
+        raise ValueError("半短轴 b 必须大于 0 (Semi-minor axis b must be greater than 0)")
 
     # 计算平均半长轴 (Calculate mean semi-major axis 'a')
     a = (a1 + a2) / 2.0
-    if a <= 0:
-        raise ValueError("平均半长轴 a 必须大于 0 / Mean semi-major axis a must be positive")
+
 
     # 检查是否为长椭球 (Check for prolate spheroid assumption a >= b)
     # 注意：如果 b > a (扁椭球)，偏心率 e 和相关公式定义不同
@@ -85,15 +84,15 @@ def calculate_added_mass_inertia(a1, a2, b, rho_air_):
     else:
         # 计算偏心率 (Calculate eccentricity e - Eq. 44)
         # 确保 ensure  a^2 > 0 且 and 1 - (b^2 / a^2) >= 0
-        a_sq = a**2
-        term_inside_sqrt = 1.0 - (b**2 / a_sq)
-        if (1.0 - (b**2 / (a**2))) < 0:
+
+        term_inside_sqrt = 1.0 - (b**2 / a)
+        if (1.0 - (b**2 / (a))) < 0:
             # 这理论上不应该在 a >= b 时发生，除非有数值误差
             print(f"警告：偏心率计算出现问题 / Eccentricity calculation warning " f"(term = {term_inside_sqrt:.2e})。将 e 设为 0 / set e as 0。")
             _e = 0.0
             k1_ = k2_ = k3_ = 0.5  # 退化为球体情况 / Fallback to sphere case
         else:
-            _e = np.sqrt(1.0 - (b**2 / (a**2)))  #!! eq. 44
+            _e = np.sqrt(1.0 - (b**2 / a))  #!! eq. 44
 
             # 避免 e 极其接近 1 (避免 f 中的除零) / Avoid e close to 1 (to avoid division by zero in f)
             if abs(1.0 - _e) < tolerance:
@@ -129,13 +128,13 @@ def calculate_added_mass_inertia(a1, a2, b, rho_air_):
             denominator_k1 = 2.0 - alpha_  # denominator 分母   numer 分子，，fraction 分数
             if abs(denominator_k1) < tolerance:
                 raise ValueError("计算 k1 时分母接近零。/ Small denominator in k1 calculation")
-            k1_ = -alpha_ / (2.0 - alpha_)  #!! eq. 49
+            k1_ = - alpha_ / (2.0 - alpha_)  #!! eq. 49
 
             # k2 (Eq. 50)
             denominator_k2 = 2.0 - beta_
             if abs(denominator_k2) < tolerance:
                 raise ValueError("计算 k2 时分母接近零。/ Small denominator in k2 calculation")
-            k2_ = -beta_ / (2.0 - beta_)  #!! eq. 50
+            k2_ = - beta_ / (2.0 - beta_)  #!! eq. 50
 
             # k3 (Eq. 51)
             a_sq = a**2
@@ -146,7 +145,7 @@ def calculate_added_mass_inertia(a1, a2, b, rho_air_):
             if abs(term2_den_k3) < tolerance:
                 # 检查球体情况是否已处理 (e=0 -> a=b -> b^2-a^2 = 0)
                 # / Check if sphere case has been handled (e=0 -> a=b -> b^2-a^2 = 0)
-                # 如果 a != b 但分母为零，表示可能有其他问题或特殊共振情况
+                # 如果 a != b 但分母为零，表示可能有其他问题或特殊 SSSS 共振情况
                 # / If a != b but denominator is zero, there may be another issue or resonance case.
                 if abs(a - b) > tolerance:
                     raise ValueError("计算 k3 时分母接近零 (非球体情况) Small denominator in k3 calculation。")

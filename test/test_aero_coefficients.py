@@ -2,8 +2,12 @@
 测试气动系数计算函数
 '''
 # tests/test_aero_coefficients.py
-import pytest  # 需要安装 pytest: pip install pytest
+# pylint: disable=invalid-name
+# cspell:ignore traj
+# cspell:ignore arctan coeffs dalpha
 
+import pytest  # 需要安装 pytest: pip install pytest
+import numpy as np
 # 假设你的模块文件名为 aero_coefficients.py，并且可以被导入
 from config import aero_coefficients  # 使用相对导入（如果 tests 和模块在同一父目录下）
 
