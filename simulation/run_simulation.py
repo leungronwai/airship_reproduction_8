@@ -439,7 +439,7 @@ def run_nmpc_simulation(use_disturbance_compensation=True, trajectory_type="line
         control_history[:, i] = u_cmd
         yc_history[:, i] = yc
         disturbance_history[:, i] = actual_delta
-        disturbance_estimate_history[:, i] = delta_hat
+        disturbance_estimate_history[:, i] = delta_hat.flatten()
         error_history[:, i] = e1
         error2_history[:, i] = e2
 

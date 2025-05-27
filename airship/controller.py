@@ -7,13 +7,13 @@ NMPCThrustController classes for airship control.
 # cspell:ignore nlpsol IPOPT traj uref xref mtimes
 import numpy as np
 import casadi as ca
-from numba import njit
+
 
 from config import parameters as params
 from airship.model import AirshipCasADiSymbolic
-from airship.thrust import thrust_params_to_tau, calculate_thrust_direction
+from airship.thrust import thrust_params_to_force_torque, calculate_thrust_direction
 from airship.observer import NMPCDisturbanceObserver
-from airship.thrust import thrust_params_to_tau
+
 
 
 
@@ -125,7 +125,7 @@ class AnyController:
         # Convert PID control output to thrust parameters and control torque
         if u_thrust is not None:
             # 使用提供的初始推力参数 / Use provided initial thrust parameters
-            tau = thrust_params_to_tau(u_thrust, self.rp_r, self.rp_l)
+            tau = thrust_params_to_force_torque(u_thrust, self.rp_r, self.rp_l)
             # 添加 PID 控制修正 / Add PID control correction
             tau[0:3] += F_pos
             tau[3:6] += T_att
@@ -136,7 +136,7 @@ class AnyController:
             mu, nu = calculate_thrust_direction(F_pos)
 
             thrust_params = [T_mag, mu, nu]
-            tau = thrust_params_to_tau(thrust_params, self.rp_r, self.rp_l)
+            tau = thrust_params_to_force_torque(thrust_params, self.rp_r, self.rp_l)
 
             # 添加姿态控制力矩 / Add attitude control torque
             tau[3:6] += T_att
@@ -392,6 +392,15 @@ class NMPCThrustController:
         """
         N = self.N
 
+        # 检查输入是否包含 NaN
+        if np.any(np.isnan(x0)):
+            raise ValueError("x0 contains NaN values.")
+        if np.any([np.any(np.isnan(x)) for x in X_ref_traj]):
+            raise ValueError("X_ref_traj contains NaN values.")
+        if np.any([np.any(np.isnan(u)) for u in U_ref_traj]):
+            raise ValueError("U_ref_traj contains NaN values.")
+
+
         # --- 拼接参考轨迹参数向量 /
         # 将参考状态 ( X_{\text{ref}} ) 和参考控制输入 ( U_{\text{ref}} ) 拼接成向量，作为 NLP 求解器的参数
         # 这些参数将传递给 NLP 求解器，用于计算目标函数和约束。
@@ -416,6 +425,14 @@ class NMPCThrustController:
                 w0 += [X_ref_traj[k + 1]]  # Xk+1
             w0 = np.concatenate(w0)
 
+        # 检查 w0 是否包含 NaN 或无穷大
+        if np.any(np.isnan(w0)):
+            raise ValueError("w0 contains NaN values.")
+        if np.any(np.isinf(w0)):
+            raise ValueError("w0 contains infinite values.")
+
+
+
         # --- 控制输入约束 / Control input constraints ---
         # 设置优化变量的约束
         # 状态约束：
@@ -438,6 +455,13 @@ class NMPCThrustController:
             # 对状态变量 Xk+1 给一个较宽范围（如 -1e5~1e5）
             lbx += [-1e5] * 12
             ubx += [1e5] * 12
+
+
+        # 检查 lbx 和 ubx 是否包含 NaN 或无穷大
+        if np.any(np.isnan(lbx)) or np.any(np.isnan(ubx)):
+            raise ValueError("lbx or ubx contains NaN values.")
+        if np.any(np.isinf(lbx)) or np.any(np.isinf(ubx)):
+            raise ValueError("lbx or ubx contains infinite values.")
 
         # --- 设置等式约束（动力学） / Equality constraints (dynamics) ---
         # 动力学约束：确保优化解满足离散时间动力学模型 ( x_{k+1} = f_d(x_k, u_k) )
@@ -498,7 +522,7 @@ class NMPCThrustController:
             disturbance_estimate: 当前的扰动估计
         """
         if self.use_disturbance_compensation:
-            return self.last_disturbance_estimate
+            return np.array(self.last_disturbance_estimate).flatten()
         else:
             return np.zeros(6)
 
@@ -516,14 +540,14 @@ class NMPCThrustController:
         # --- Control inputs ---
 
         # 确保返回的是 6 维向量
-        tau = thrust_params_to_tau(u_thrust, self.rp_r, self.rp_l, use_casadi=True)
+        thrust_force_torque = thrust_params_to_force_torque(u_thrust, self.rp_r, self.rp_l, use_casadi=True)
         # 检查 tau 的维度
-        if isinstance(tau, np.ndarray) and tau.size != 6:
-            print(f"警告：tau 的维度为 {tau.size}，期望为 6")
+        if isinstance(thrust_force_torque, np.ndarray) and thrust_force_torque.size != 6:
+            print(f"警告：tau 的维度为 {thrust_force_torque.size}，期望为 6")
             # 如果不是 6 维，补充为 6 维
-            if tau.size < 6:
+            if thrust_force_torque.size < 6:
                 tau_corrected = np.zeros(6)
-                tau_corrected[:tau.size] = tau
+                tau_corrected[:thrust_force_torque.size] = thrust_force_torque
                 return tau_corrected
 
-        return tau
+        return thrust_force_torque
