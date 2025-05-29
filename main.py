@@ -10,7 +10,7 @@ import os
 import logging
 
 from datetime import datetime
-from simulation.run_simulation import run_simulation, run_nmpc_simulation
+from simulation.run_simulation import run_simulation
 from simulation.run_dompc_simulation import run_dompc_simulation
 
 
@@ -68,11 +68,10 @@ def main():
         # 运行选择菜单
         print("\n=== 气艇仿真控制器选择 ===")
         print("1. 传统 PID 控制器")
-        print("2. 传统 NMPC 控制器 (CasADi)")
-        print("3. do-mpc NMPC 控制器 (推荐)")
-        print("4. 对比所有控制器")
+        print("2. do-mpc NMPC 控制器 (推荐)")
+        print("3. 对比所有控制器")
 
-        choice = input("请选择控制器类型 (1-4): ").strip()
+        choice = input("请选择控制器类型 (1-3): ").strip()
 
         # 轨迹选择
         print("\n=== 轨迹类型选择 ===")
@@ -100,20 +99,13 @@ def main():
             run_simulation(trajectory_type=trajectory_type)
 
         elif choice == "2":
-            logger.info("运行传统 NMPC 控制器仿真")
-            run_nmpc_simulation(
-                use_disturbance_compensation=True,
-                trajectory_type=trajectory_type
-            )
-
-        elif choice == "3":
             logger.info("运行 do-mpc NMPC 控制器仿真")
             run_dompc_simulation(
                 trajectory_type=trajectory_type,
                 use_disturbance_compensation=True
             )
 
-        elif choice == "4":
+        elif choice == "3":
             logger.info("运行控制器对比仿真")
             _run_comparison_simulation(trajectory_type)
 
@@ -139,11 +131,11 @@ def _run_comparison_simulation(trajectory_type):
 
     # 1. 运行传统 PID 控制器
     try:
-        print("1/3 运行传统 PID 控制器...")
+        print("1/2 运行传统 PID 控制器...")
         logger.info("开始 PID 控制器仿真")
         run_simulation(trajectory_type=trajectory_type)
         results['PID'] = "成功"
-        print("✅ PID 控制器仿真完成")
+        print("PID 控制器仿真完成")
     except KeyboardInterrupt:
         logger.info("用户中断程序 / User interrupted the program")
     except (ValueError, TypeError, RuntimeError) as e:
@@ -151,35 +143,20 @@ def _run_comparison_simulation(trajectory_type):
     except Exception as e:     # pylint: disable=broad-except
         logger.exception("未处理的异常：%s", e)
 
-    # 2. 运行传统 NMPC 控制器
+    # 2. 运行 do-mpc NMPC 控制器
     try:
-        print("2/3 运行传统 NMPC 控制器...")
-        logger.info("开始传统 NMPC 控制器仿真")
-        run_nmpc_simulation(
-            use_disturbance_compensation=True,
-            trajectory_type=trajectory_type
-        )
-        results['Traditional NMPC'] = "成功"
-        print("✅ 传统 NMPC 控制器仿真完成")
-    except Exception as e:      # pylint: disable=broad-except
-        logger.error("传统 NMPC 控制器仿真失败：%s", e)
-        results['Traditional NMPC'] = f"失败：{e}"
-        print("❌ 传统 NMPC 控制器仿真失败")
-
-    # 3. 运行 do-mpc NMPC 控制器
-    try:
-        print("3/3 运行 do-mpc NMPC 控制器...")
+        print("2/2 运行 do-mpc NMPC 控制器...")
         logger.info("开始 do-mpc NMPC 控制器仿真")
         run_dompc_simulation(
             trajectory_type=trajectory_type,
             use_disturbance_compensation=True
         )
         results['do-mpc NMPC'] = "成功"
-        print("✅ do-mpc NMPC 控制器仿真完成")
+        print("do-mpc NMPC 控制器仿真完成")
     except Exception as e:      # pylint: disable=broad-except
         logger.error("do-mpc NMPC 控制器仿真失败：%s", e)
         results['do-mpc NMPC'] = f"失败：{e}"
-        print("❌ do-mpc NMPC 控制器仿真失败")
+        print("do-mpc NMPC 控制器仿真失败")
 
     # 汇总结果
     print("\n=== 对比仿真结果汇总 ===")
