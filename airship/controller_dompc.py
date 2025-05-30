@@ -3,6 +3,9 @@
 使用 do-mpc 库简化 NMPC 控制器的开发，提供更稳定和高效的实现
 """
 
+# pylint: disable=invalid-name
+# cspell:ignore dompc vertcat radau mterm lterm rterm
+
 import numpy as np
 import casadi as ca
 import do_mpc
@@ -103,7 +106,7 @@ class DoMPCAirshipController:
         vel_dot = X_dot[6:9]
         omega_dot = X_dot[9:12]
 
-        # 设置微分方程
+        # 设置微分方程 the ODE for each state is set:
         model.set_rhs('pos', pos_dot)
         model.set_rhs('att', att_dot)
         model.set_rhs('vel', vel_dot)
@@ -156,18 +159,16 @@ class DoMPCAirshipController:
                  self.model.aux['vel_error'].T @ params.Qf[6:9, 6:9] @ self.model.aux['vel_error'] +
                  self.model.aux['ang_error'].T @ params.Qf[9:12, 9:12] @ self.model.aux['ang_error'])
 
-        # 阶段代价
+        # 阶段代价（包含状态误差和控制输入代价）
         lterm = (self.model.aux['pos_error'].T @ params.Q[0:3, 0:3] @ self.model.aux['pos_error'] +
                  self.model.aux['att_error'].T @ params.Q[3:6, 3:6] @ self.model.aux['att_error'] +
                  self.model.aux['vel_error'].T @ params.Q[6:9, 6:9] @ self.model.aux['vel_error'] +
-                 self.model.aux['ang_error'].T @ params.Q[9:12, 9:12] @ self.model.aux['ang_error'])
-
-        # 控制输入代价
-        rterm = (self.model.u['T']**2 * params.R[0, 0] +
+                 self.model.aux['ang_error'].T @ params.Q[9:12, 9:12] @ self.model.aux['ang_error'] +
+                 self.model.u['T']**2 * params.R[0, 0] +
                  self.model.u['mu']**2 * params.R[1, 1] +
                  self.model.u['nu']**2 * params.R[2, 2])
 
-        mpc.set_objective(mterm=mterm, lterm=lterm, rterm=rterm)
+        mpc.set_objective(mterm=mterm, lterm=lterm)
 
         # 设置约束
         # 控制输入约束
@@ -213,7 +214,6 @@ class DoMPCAirshipController:
             do_mpc.estimator.StateFeedback: 状态反馈估计器
         """
         estimator = do_mpc.estimator.StateFeedback(self.model)
-        estimator.setup()
         return estimator
 
     def _setup_initial_conditions(self):
@@ -314,7 +314,7 @@ class DoMPCAirshipController:
 
             return control_input
 
-        except Exception as e:
+        except Exception as e:     # pylint: disable=broad-except
             print(f"MPC 步骤失败：{e}")
             # 返回安全的默认控制输入
             return np.array([5.0, 0.0, 0.0])
