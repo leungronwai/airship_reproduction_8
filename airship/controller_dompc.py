@@ -254,6 +254,8 @@ class DoMPCAirshipController:
             control_input: 控制输入 [T, mu, nu]
         """
         try:
+            _ = t_current
+
             # 更新当前状态
             current_x = {
                 'pos': current_state[0:3].reshape(-1, 1),
@@ -328,12 +330,13 @@ class DoMPCAirshipController:
         """
         try:
             prediction = self.mpc.data.prediction
+            _ = prediction
             return {
-                'states': prediction[('_x')],
-                'controls': prediction[('_u')],
-                'time': prediction[('_time')]
+                'states': self.mpc.data.prediction(('_x')),
+                'controls': self.mpc.data.prediction(('_u')),
+                'time': self.mpc.data.prediction(('_time'))
             }
-        except:
+        except Exception:  # pylint: disable=broad-except
             return {'states': None, 'controls': None, 'time': None}
 
     def get_current_disturbance_estimate(self):
