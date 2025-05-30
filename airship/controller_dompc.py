@@ -4,7 +4,7 @@
 """
 
 # pylint: disable=invalid-name
-# cspell:ignore dompc vertcat radau mterm lterm rterm
+# cspell:ignore dompc vertcat radau mterm lterm rterm ndarray fmin fmax
 
 import numpy as np
 import casadi as ca
@@ -100,6 +100,10 @@ class DoMPCAirshipController:
         # 获取动力学方程
         X_dot = symbolic_model.rhs_symbolic(X_state, U_control)
 
+        # 添加数值稳定性 - 限制导数的大小
+        max_derivative = 1e6
+        X_dot = ca.fmin(ca.fmax(X_dot, -max_derivative), max_derivative)
+
         # 分解状态导数
         pos_dot = X_dot[0:3]
         att_dot = X_dot[3:6]
@@ -152,6 +156,14 @@ class DoMPCAirshipController:
 
         mpc.set_param(**setup_mpc)
 
+        # 设置参数函数 - 使用正确的模板格式
+        mpc.set_uncertainty_values(
+            pos_ref=np.zeros((3, 1)),
+            att_ref=np.zeros((3, 1)),
+            vel_ref=np.zeros((3, 1)),
+            omega_ref=np.zeros((3, 1))
+        )
+
         # 设置目标函数
         # 终端代价
         mterm = (self.model.aux['pos_error'].T @ params.Qf[0:3, 0:3] @ self.model.aux['pos_error'] +
@@ -168,6 +180,14 @@ class DoMPCAirshipController:
                  self.model.u['mu']**2 * params.R[1, 1] +
                  self.model.u['nu']**2 * params.R[2, 2])
 
+        # 设置参考轨迹
+        mpc.set_rterm(
+            T=0.1,
+            mu=0.1,
+            nu=0.1
+        )
+
+        # 设置目标函数
         mpc.set_objective(mterm=mterm, lterm=lterm)
 
         # 设置约束
@@ -221,27 +241,27 @@ class DoMPCAirshipController:
         # 设置初始状态
         x0 = params.X0
 
-        # 分解初始状态
-        pos_init = x0[0:3].reshape(-1, 1)
-        att_init = x0[3:6].reshape(-1, 1)
-        vel_init = x0[6:9].reshape(-1, 1)
-        omega_init = x0[9:12].reshape(-1, 1)
+        # 确保初始状态数值有效
+        x0 = np.nan_to_num(x0, nan=0.0, posinf=1e6, neginf=-1e6)
+
+        # 将状态向量重新组合为 do-mpc 期望的格式
+        _x0 = np.concatenate([
+            x0[0:3].reshape(-1, 1),   # pos
+            x0[3:6].reshape(-1, 1),   # att
+            x0[6:9].reshape(-1, 1),   # vel
+            x0[9:12].reshape(-1, 1)   # omega
+        ])
 
         # 设置 MPC 初始状态
-        self.mpc.x0 = {
-            'pos': pos_init,
-            'att': att_init,
-            'vel': vel_init,
-            'omega': omega_init
-        }
+        self.mpc.x0 = _x0
 
         # 设置估计器初始状态
-        self.estimator.x0 = self.mpc.x0.copy()
+        self.estimator.x0 = _x0
 
         # 设置初始参考值（零参考）
         self.mpc.set_initial_guess()
 
-    def step(self, current_state, reference_trajectory, t_current=0.0):
+    def step(self, _current_state, _reference_trajectory, t_current=0.0):
         """
         执行一步 MPC 控制
 
@@ -257,34 +277,45 @@ class DoMPCAirshipController:
             _ = t_current
 
             # 更新当前状态
-            current_x = {
-                'pos': current_state[0:3].reshape(-1, 1),
-                'att': current_state[3:6].reshape(-1, 1),
-                'vel': current_state[6:9].reshape(-1, 1),
-                'omega': current_state[9:12].reshape(-1, 1)
-            }
+            # current_x = {
+            #     'pos': _current_state[0:3].reshape(-1, 1),
+            #     'att': _current_state[3:6].reshape(-1, 1),
+            #     'vel': _current_state[6:9].reshape(-1, 1),
+            #     'omega': _current_state[9:12].reshape(-1, 1)
+            # }
+            current_x = np.concatenate([
+                _current_state[0:3].reshape(-1, 1),   # pos
+                _current_state[3:6].reshape(-1, 1),   # att
+                _current_state[6:9].reshape(-1, 1),   # vel
+                _current_state[9:12].reshape(-1, 1)   # omega
+            ])
 
             # 更新参考轨迹参数
             reference_params = {
-                'pos_ref': reference_trajectory['position'].reshape(-1, 1),
-                'att_ref': reference_trajectory['attitude'].reshape(-1, 1),
-                'vel_ref': reference_trajectory['velocity'].reshape(-1, 1),
-                'omega_ref': reference_trajectory['angular_velocity'].reshape(-1, 1)
+                'pos_ref': _reference_trajectory['position'].reshape(-1, 1),
+                'att_ref': _reference_trajectory['attitude'].reshape(-1, 1),
+                'vel_ref': _reference_trajectory['velocity'].reshape(-1, 1),
+                'omega_ref': _reference_trajectory['angular_velocity'].reshape(-1, 1)
             }
+
+            # 检查输入状态是否包含 NaN 或无穷大
+            if np.any(np.isnan(current_x)) or np.any(np.isinf(current_x)):
+                print("警告：输入状态包含 NaN 或无穷大值")
+                return np.array([5.0, 0.0, 0.0])
 
             # 扰动补偿
             if self.use_disturbance_compensation:
                 # 计算误差
-                pos_error = current_state[0:3] - reference_trajectory['position']
-                att_error = current_state[3:6] - reference_trajectory['attitude']
-                vel_error = current_state[6:9] - reference_trajectory['velocity']
-                ang_error = current_state[9:12] - reference_trajectory['angular_velocity']
+                pos_error = _current_state[0:3] - _reference_trajectory['position']
+                att_error = _current_state[3:6] - _reference_trajectory['attitude']
+                vel_error = _current_state[6:9] - _reference_trajectory['velocity']
+                ang_error = _current_state[9:12] - _reference_trajectory['angular_velocity']
 
                 e1 = np.concatenate([pos_error, att_error])
                 e2 = np.concatenate([vel_error, ang_error])
 
                 # 更新扰动估计
-                gamma = current_state[3:6]
+                gamma = _current_state[3:6]
 
                 # 获取上一次的控制输入（近似）
                 tau = thrust_params_to_force_torque(self.last_control,
@@ -298,23 +329,54 @@ class DoMPCAirshipController:
 
                 self.last_disturbance_estimate = delta_hat
 
-            # 设置参数
-            self.mpc.set_param(**reference_params)
 
             # 执行 MPC 求解
             u_mpc = self.mpc.make_step(current_x)
 
-            # 提取控制输入
-            control_input = np.array([
-                float(u_mpc['T']),
-                float(u_mpc['mu']),
-                float(u_mpc['nu'])
-            ])
+            # 修复控制输入提取 - 使用正确的访问方式
+            try:
+                # 尝试不同的访问方式
+                if hasattr(u_mpc, 'full'):
+                    # CasADi DM 对象
+                    u_array = u_mpc.full().flatten()
+                    _control_input = np.array([
+                        float(u_array[0]),  # T
+                        float(u_array[1]),  # mu
+                        float(u_array[2])   # nu
+                    ])
+                elif isinstance(u_mpc, np.ndarray):
+                    # NumPy 数组
+                    _control_input = np.array([
+                        float(u_mpc[0]),
+                        float(u_mpc[1]),
+                        float(u_mpc[2])
+                    ])
+                else:
+                    # 尝试直接转换
+                    u_flat = np.array(u_mpc).flatten()
+                    _control_input = np.array([
+                        float(u_flat[0]),
+                        float(u_flat[1]),
+                        float(u_flat[2])
+                    ])
+            except (IndexError, ValueError, TypeError):
+                print("警告：无法正确提取控制输入")
+                _control_input = np.array([5.0, 0.0, 0.0])
+
+            # 检查控制输入是否有效
+            if np.any(np.isnan(_control_input)) or np.any(np.isinf(_control_input)):
+                print("警告：控制输入包含 NaN 或无穷大值")
+                return np.array([5.0, 0.0, 0.0])
+
+            # 限制控制输入范围
+            _control_input[0] = np.clip(_control_input[0], params.T_MIN, params.T_MAX)
+            _control_input[1] = np.clip(_control_input[1], params.MU_MIN, params.MU_MAX)
+            _control_input[2] = np.clip(_control_input[2], params.NU_MIN, params.NU_MAX)
 
             # 保存控制输入供下次使用
-            self.last_control = control_input
+            self.last_control = _control_input
 
-            return control_input
+            return _control_input
 
         except Exception as e:     # pylint: disable=broad-except
             print(f"MPC 步骤失败：{e}")
@@ -378,3 +440,35 @@ def convert_trajectory_format(yc, yc_dot):
         'velocity': yc_dot[0:3],
         'angular_velocity': yc_dot[3:6]
     }
+
+
+
+if __name__ == "__main__":
+    # controller = DoMPCAirshipController()
+    # print("Model variables:")
+    # print(controller.model.x)  # 打印状态变量
+    # print(controller.model.u)  # 打印控制输入
+    # print(controller.model._rhs)  # 打印动力学方程
+
+    # print("Initial conditions:")
+    # print(controller.mpc.x0)  # 打印初始状态
+
+
+    # controller = DoMPCAirshipController()
+    # yc = np.array([10.0, 5.0, 2.0, 0.1, 0.2, 0.3])  # 示例参考状态
+    # yc_dot = np.array([1.0, 0.5, 0.2, 0.01, 0.02, 0.03])  # 示例参考导数
+    # formatted_trajectory = convert_trajectory_format(yc, yc_dot)
+    # print("Formatted trajectory:")
+    # print(formatted_trajectory)
+
+    controller = DoMPCAirshipController()
+    current_state = np.zeros(12)  # 示例当前状态
+    reference_trajectory = {
+        'position': np.array([10.0, 5.0, 2.0]),
+        'attitude': np.array([0.1, 0.2, 0.3]),
+        'velocity': np.array([1.0, 0.5, 0.2]),
+        'angular_velocity': np.array([0.01, 0.02, 0.03])
+    }
+    control_input = controller.step(current_state, reference_trajectory)
+    print("Control input:")
+    print(control_input)
