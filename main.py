@@ -115,8 +115,6 @@ def main():
 
     except KeyboardInterrupt:
         logger.info("用户中断程序 / User interrupted the program")
-    except Exception:     # pylint: disable=broad-except
-        logger.exception("程序执行出错 / Program execution error")
     finally:
         logger.info("=== 仿真程序结束 / Simulation Program Ended ===")
 
