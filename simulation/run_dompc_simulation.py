@@ -5,8 +5,8 @@
 
 
 # pylint: disable=invalid-name
-# cspell:ignore linalg
-# cspell: ignore dompc levelname figsize
+# cspell:ignore linalg suptitle sharex sharey whitegrid
+# cspell: ignore dompc levelname figsize set_xlabel set_ylabel set_zlabel
 
 
 # === 标准库 ===
@@ -271,37 +271,38 @@ def _plot_simulation_results(sim_time, state_history, control_history,
 def _evaluate_performance(error_history, error2_history, control_history, sim_time):
     """评估控制性能"""
     logger.info("=== 控制性能评估 ===")
+    _ = error2_history
 
     # 位置误差统计
     pos_errors = error_history[0:3, :]
     pos_rmse = np.sqrt(np.mean(pos_errors**2, axis=1))
     pos_max = np.max(np.abs(pos_errors), axis=1)
 
-    logger.info(f"位置 RMSE: X={pos_rmse[0]:.3f}m, Y={pos_rmse[1]:.3f}m, Z={pos_rmse[2]:.3f}m")
-    logger.info(f"位置最大误差：X={pos_max[0]:.3f}m, Y={pos_max[1]:.3f}m, Z={pos_max[2]:.3f}m")
+    logger.info("位置 RMSE: X=%.3fm, Y=%.3fm, Z=%.3fm", pos_rmse[0], pos_rmse[1], pos_rmse[2])
+    logger.info("位置最大误差：X=%.3fm, Y=%.3fm, Z=%.3fm", pos_max[0], pos_max[1], pos_max[2])
 
     # 姿态误差统计
     att_errors = error_history[3:6, :]
     att_rmse = np.sqrt(np.mean(att_errors**2, axis=1))
     att_max = np.max(np.abs(att_errors), axis=1)
 
-    logger.info(f"姿态 RMSE: φ={np.rad2deg(att_rmse[0]):.3f}°, θ={np.rad2deg(att_rmse[1]):.3f}°, ψ={np.rad2deg(att_rmse[2]):.3f}°")
-    logger.info(f"姿态最大误差：φ={np.rad2deg(att_max[0]):.3f}°, θ={np.rad2deg(att_max[1]):.3f}°, ψ={np.rad2deg(att_max[2]):.3f}°")
+    logger.info("姿态 RMSE: φ=%.3f°, θ=%.3f°, ψ=%.3f°", np.rad2deg(att_rmse[0]), np.rad2deg(att_rmse[1]), np.rad2deg(att_rmse[2]))
+    logger.info("姿态最大误差：φ=%.3f°, θ=%.3f°, ψ=%.3f°", np.rad2deg(att_max[0]), np.rad2deg(att_max[1]), np.rad2deg(att_max[2]))
 
     # 控制输入统计
     control_mean = np.mean(control_history, axis=1)
     control_std = np.std(control_history, axis=1)
 
-    logger.info(f"控制输入均值：T={control_mean[0]:.3f}N, μ={np.rad2deg(control_mean[1]):.3f}°, ν={np.rad2deg(control_mean[2]):.3f}°")
-    logger.info(f"控制输入标准差：T={control_std[0]:.3f}N, μ={np.rad2deg(control_std[1]):.3f}°, ν={np.rad2deg(control_std[2]):.3f}°")
+    logger.info("控制输入均值：T=%.3fN, μ=%.3f°, ν=%.3f°", control_mean[0], np.rad2deg(control_mean[1]), np.rad2deg(control_mean[2]))
+    logger.info("控制输入标准差：T=%.3fN, μ=%.3f°, ν=%.3f°", control_std[0], np.rad2deg(control_std[1]), np.rad2deg(control_std[2]))
 
     # 稳态误差分析（最后 10% 的数据）
     steady_start = int(0.9 * len(sim_time))
     pos_steady = np.mean(np.abs(pos_errors[:, steady_start:]), axis=1)
     att_steady = np.mean(np.abs(att_errors[:, steady_start:]), axis=1)
 
-    logger.info(f"稳态位置误差：X={pos_steady[0]:.3f}m, Y={pos_steady[1]:.3f}m, Z={pos_steady[2]:.3f}m")
-    logger.info(f"稳态姿态误差：φ={np.rad2deg(att_steady[0]):.3f}°, θ={np.rad2deg(att_steady[1]):.3f}°, ψ={np.rad2deg(att_steady[2]):.3f}°")
+    logger.info("稳态位置误差：X=%.3fm, Y=%.3fm, Z=%.3fm", pos_steady[0], pos_steady[1], pos_steady[2])
+    logger.info("稳态姿态误差：φ=%.3f°, θ=%.3f°, ψ=%.3f°", np.rad2deg(att_steady[0]), np.rad2deg(att_steady[1]), np.rad2deg(att_steady[2]))
 
 
 if __name__ == "__main__":

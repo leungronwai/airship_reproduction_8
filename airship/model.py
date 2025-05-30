@@ -268,6 +268,7 @@ class AirshipCasADiSymbolic:
             dX/dt as casadi SX 12x1
         """
         # ca = __import__("casadi")  # dynamic import
+        _ = t
 
         # === 解构状态 ===
         zeta = X[0:3]  # Position in ERF
@@ -390,7 +391,7 @@ class AirshipCasADiSymbolic:
         Returns:
             f: CasADi Function that maps (x, u) to xdot
         """
-        ca = __import__("casadi")
+        # ca = __import__("casadi")
 
         # Define symbolic variables
         x = ca.SX.sym("x", 12)  # State
