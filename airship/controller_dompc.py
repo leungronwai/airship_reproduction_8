@@ -97,10 +97,8 @@ class DoMPCAirshipController:
         omega_ref = model.set_variable(var_type='_p', var_name='omega_ref', shape=(3, 1))
 
         # 定义扰动变量（用于 Simulator）
-        if self.create_simulator:
-            disturbance = model.set_variable(var_type='_p', var_name='disturbance', shape=(6, 1))
-        else:
-            disturbance = model.set_variable(var_type='_w', var_name='disturbance', shape=(6, 1))
+        disturbance = model.set_variable(var_type='_p', var_name='disturbance', shape=(6, 1))
+
 
         # 使用现有的符号化动力学模型
         symbolic_model = AirshipCasADiSymbolic(self.params)
@@ -454,8 +452,19 @@ class DoMPCAirshipController:
 
     def get_current_disturbance_estimate(self):
         """获取当前扰动估计"""
-        if self.use_disturbance_compensation:
-            return self.last_disturbance_estimate.flatten()
+        if self.use_disturbance_compensation and self.last_disturbance_estimate is not None:
+            try:
+                # 处理 CasADi DM 对象
+                if hasattr(self.last_disturbance_estimate, 'full'):
+                    return self.last_disturbance_estimate.full().flatten()
+                # 处理 numpy 数组
+                elif hasattr(self.last_disturbance_estimate, 'flatten'):
+                    return self.last_disturbance_estimate.flatten()
+                # 处理其他类型
+                else:
+                    return np.array(self.last_disturbance_estimate).flatten()
+            except (AttributeError, ValueError):
+                return np.zeros(6)
         else:
             return np.zeros(6)
 

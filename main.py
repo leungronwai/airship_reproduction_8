@@ -62,22 +62,15 @@ def main():
     try:
         logger.info("=== 气艇轨迹跟踪仿真开始 ===")
 
-        # 运行选择菜单
-        print("\n=== 气艇仿真控制器选择 ===")
-        print("1. 传统 PID 控制器")
-        print("2. do-mpc Simulator 完整仿真 (推荐)")
+        # 直接在代码中设置选择（无需用户输入）
+        print("\n=== 气艇仿真配置 ===")
 
+        # ========== 在这里修改您的选择 ==========
+        choice = "2"        # "1" = PID 控制器，"2" = do-mpc NMPC 控制器
+        traj_choice = "1"   # "1" = 直线，"2" = 螺旋，"3" = 8 字，"4" = 莱洛曲线
+        # =====================================
 
-        choice = input("请选择控制器类型 (1-2): ").strip()
-
-        # 轨迹选择
-        print("\n=== 轨迹类型选择 ===")
-        print("1. 直线轨迹 (linear)")
-        print("2. 螺旋轨迹 (spiral)")
-        print("3. 8 字轨迹 (figure8)")
-        print("4. 莱洛曲线 (lemniscate)")
-
-        traj_choice = input("请选择轨迹类型 (1-4): ").strip()
+        print(f"选择的控制器：{'PID 控制器' if choice == '1' else 'do-mpc NMPC 控制器'}")
 
         # 轨迹映射
         trajectory_map = {
@@ -88,12 +81,12 @@ def main():
         }
 
         trajectory_type = trajectory_map.get(traj_choice, "linear")
+        print(f"选择的轨迹类型：{trajectory_type}")
         logger.info("选择的轨迹类型：%s", trajectory_type)
 
         # 根据选择运行相应的仿真
         if choice == "1":
             logger.info("运行传统 PID 控制器仿真")
-
             run_simulation(trajectory_type=trajectory_type)
 
         elif choice == "2":
@@ -105,11 +98,11 @@ def main():
             )
 
         else:
-            logger.warning("无效选择，运行默认的 do-mpc Simulator 仿真")
-
+            logger.warning("无效选择，运行默认的 do-mpc NMPC 控制器")
             run_dompc_simulation(
                 trajectory_type="linear",
-                use_disturbance_compensation=True
+                use_disturbance_compensation=True,
+                use_simulator=False
             )
 
     except KeyboardInterrupt:
