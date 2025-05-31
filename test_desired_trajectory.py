@@ -1,7 +1,17 @@
+"""
+测试期望轨迹
+"""
+
+# pylint: disable=invalid-name
+# pylint: disable=line-too-long
+# cspell:ignore figsize set_xlabel set_ylabel set_zlabel
+# cspell:ignore phidot phiddot psidot psiddot thetaddot ydot
+
+import argparse
 import numpy as np
 import matplotlib.pyplot as plt
 from airship.trajectory import Trajectory
-import argparse
+
 
 
 def plot_trajectory(trajectory_type="all", simulation_time=200, num_points=1000):

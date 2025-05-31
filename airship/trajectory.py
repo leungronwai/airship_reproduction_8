@@ -78,9 +78,17 @@ class Trajectory:
         dt_small = 1e-4
 
         # --- 轨迹参数 ---
-        omega = 0.05  # 角速度
-        r = 100  # 半径
-        h_max = 150  # 最大高度
+        omega = 0.07  # 角速度
+        r = 1500  # 半径
+        h_max = 2000  # 最大高度
+
+        # 在起始时刻打印起始点信息
+        if abs(t) < 1e-3:  # t 接近 0 时
+            start_x = r * np.cos(0)  # = r = 1500
+            start_y = r * np.sin(0)  # = 0
+            start_z = h_max * (1 - np.exp(0))  # = 0
+            print(f"【螺旋轨迹】起始点位置：[{start_x:.1f}, {start_y:.1f}, {start_z:.1f}] (米)")
+            print(f"【螺旋轨迹】轨迹参数：半径={r}m, 最大高度={h_max}m, 角速度={omega}rad/s")
 
         # --- 直接计算位置、速度和加速度 ---
         theta = omega * t
@@ -149,9 +157,9 @@ class Trajectory:
         避免递归调用 define_spiral_trajectory
         """
         # --- 轨迹参数 ---
-        omega = 0.05  # 角速度 (rad/s)
-        r = 100  # 基础半径 (m)
-        h_max = 150  # 最大高度 (m)
+        omega = 0.07  # 角速度 (rad/s)
+        r = 1500  # 基础半径 (m)
+        h_max = 2000  # 最大高度 (m)
 
         # --- 位置计算 ---
         theta = omega * t
@@ -195,6 +203,14 @@ class Trajectory:
         h_center = -19000  # 中心高度
         h_amp = 500  # 高度振荡幅度
         omega_h = 0.002  # 高度变化的角速度
+
+        # 在起始时刻打印起始点信息
+        if abs(t) < 1e-3:  # t 接近 0 时
+            start_x = a * np.sin(0)  # = 0
+            start_y = b * np.sin(0) * np.cos(0)  # = 0
+            start_z = h_center + h_amp * np.sin(0)  # = h_center = -19000
+            print(f"【8 字形轨迹】起始点位置：[{start_x:.1f}, {start_y:.1f}, {start_z:.1f}] (米)")
+            print(f"【8 字形轨迹】轨迹参数：宽度={a}m, 高度={b}m, 中心高度={h_center}m, 角速度={omega}rad/s")
 
         # --- 位置计算 ---
         # 8 字形的参数方程
@@ -330,6 +346,16 @@ class Trajectory:
         h_center = -19000  # 中心高度
         h_amp = 800  # 高度变化幅度
         h_freq = 0.001  # 高度变化频率
+
+        # 在起始时刻打印起始点信息
+        if abs(t) < 1e-3:  # t 接近 0 时
+            theta = 0
+            denom = 1 + np.sin(theta) ** 2  # = 1
+            start_x = a * np.cos(theta) / denom  # = a = 2500
+            start_y = a * np.sin(theta) * np.cos(theta) / denom  # = 0
+            start_z = h_center + h_amp * np.sin(0)  # = h_center = -19000
+            print(f"【莱洛曲线轨迹】起始点位置：[{start_x:.1f}, {start_y:.1f}, {start_z:.1f}] (米)")
+            print(f"【莱洛曲线轨迹】轨迹参数：尺度={a}m, 中心高度={h_center}m, 角速度={omega}rad/s")
 
         # --- 参数曲线参数 ---
         theta = omega * t

@@ -122,9 +122,9 @@ def run_dompc_simulation(trajectory_type="linear", use_disturbance_compensation=
 
         # 根据模式选择状态更新方法
         if use_simulator and controller.simulator is not None:
-            # 使用 do-mpc Simulator
+            # 使用 do-mpc Simulator - 直接调用而不通过包装函数
             try:
-                x_next = controller.simulate_step(u_cmd.reshape(-1, 1))
+                x_next = controller.simulator.make_step(u_cmd.reshape(-1, 1))
                 if hasattr(x_next, 'full'):
                     current_state = x_next.full().flatten()
                 else:
@@ -132,6 +132,10 @@ def run_dompc_simulation(trajectory_type="linear", use_disturbance_compensation=
             except Exception as e: # pylint: disable=broad-exception-caught
                 logger.error("Simulator 步骤失败：%s", e)
                 current_state = _fallback_integration(current_state, u_cmd, actual_delta, params.DT)
+        elif use_simulator:
+            # Simulator 未正确初始化的错误处理
+            logger.error("要求使用 Simulator 但未正确初始化，回退到数值积分")
+            current_state = _fallback_integration(current_state, u_cmd, actual_delta, params.DT)
         else:
             # 使用传统的数值积分
             current_state = _fallback_integration(current_state, u_cmd, actual_delta, params.DT)
