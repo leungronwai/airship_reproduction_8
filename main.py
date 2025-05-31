@@ -56,22 +56,19 @@ def setup_logger():
 
 
 def main():
-    """
-    主程序入口
-    Main program entry point
-    """
+    """主程序入口"""
     logger = setup_logger()
 
     try:
-        logger.info("=== 气艇轨迹跟踪仿真开始 / Airship Trajectory Tracking Simulation Started ===")
+        logger.info("=== 气艇轨迹跟踪仿真开始 ===")
 
         # 运行选择菜单
         print("\n=== 气艇仿真控制器选择 ===")
         print("1. 传统 PID 控制器")
-        print("2. do-mpc NMPC 控制器 (推荐)")
-        print("3. 对比所有控制器")
+        print("2. do-mpc Simulator 完整仿真 (推荐)")
 
-        choice = input("请选择控制器类型 (1-3): ").strip()
+
+        choice = input("请选择控制器类型 (1-2): ").strip()
 
         # 轨迹选择
         print("\n=== 轨迹类型选择 ===")
@@ -96,27 +93,29 @@ def main():
         # 根据选择运行相应的仿真
         if choice == "1":
             logger.info("运行传统 PID 控制器仿真")
+
             run_simulation(trajectory_type=trajectory_type)
 
         elif choice == "2":
             logger.info("运行 do-mpc NMPC 控制器仿真")
             run_dompc_simulation(
                 trajectory_type=trajectory_type,
+                use_disturbance_compensation=True,
+                use_simulator=False  # 仅使用 MPC 控制器
+            )
+
+        else:
+            logger.warning("无效选择，运行默认的 do-mpc Simulator 仿真")
+
+            run_dompc_simulation(
+                trajectory_type="linear",
                 use_disturbance_compensation=True
             )
 
-        elif choice == "3":
-            logger.info("运行控制器对比仿真")
-            _run_comparison_simulation(trajectory_type)
-
-        else:
-            logger.warning("无效选择，运行默认的 do-mpc NMPC 控制器")
-            run_dompc_simulation(trajectory_type="linear", use_disturbance_compensation=True)
-
     except KeyboardInterrupt:
-        logger.info("用户中断程序 / User interrupted the program")
+        logger.info("用户中断程序")
     finally:
-        logger.info("=== 仿真程序结束 / Simulation Program Ended ===")
+        logger.info("=== 仿真程序结束 ===")
 
 
 def _run_comparison_simulation(trajectory_type):

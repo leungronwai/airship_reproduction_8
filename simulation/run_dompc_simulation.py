@@ -1,15 +1,12 @@
 """
-使用 do-mpc 的气艇仿真脚本
-展示如何使用基于 do-mpc 的 NMPC 控制器进行气艇轨迹跟踪
+使用 do-mpc Simulator 的气艇仿真脚本
+展示如何使用 do-mpc 的完整生态系统进行气艇轨迹跟踪
 """
-
 
 # pylint: disable=invalid-name
 # cspell:ignore linalg suptitle sharex sharey whitegrid
 # cspell: ignore dompc levelname figsize set_xlabel set_ylabel set_zlabel
 
-
-# === 标准库 ===
 import os
 import sys
 import time as timer
@@ -18,15 +15,11 @@ import logging
 import numpy as np
 import matplotlib.pyplot as plt
 
-
-
 from config import parameters as params
-from airship.utils import rk4_step, R_block
-from airship.model import Airship
 from airship.trajectory import Trajectory
 from airship.controller_dompc import DoMPCAirshipController, convert_trajectory_format
-from airship.thrust import thrust_params_to_force_torque
-
+from airship.utils import rk4_step
+from airship.model import AirshipCasADiSymbolic
 
 # 添加项目根目录到路径
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -36,23 +29,29 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 
-def run_dompc_simulation(trajectory_type="linear", use_disturbance_compensation=True):
+def run_dompc_simulation(trajectory_type="linear", use_disturbance_compensation=True, use_simulator=True):
     """
     运行基于 do-mpc 的 NMPC 仿真
 
     Args:
-        trajectory_type: 轨迹类型 ("linear", "spiral", "figure8", "lemniscate")
+        trajectory_type: 轨迹类型
         use_disturbance_compensation: 是否使用扰动补偿
+        use_simulator: 是否使用 do-mpc Simulator（True）或仅使用 MPC 控制器（False）
+
+    Returns:
+        dict: 仿真结果数据
     """
-    logger.info("开始运行 do-mpc NMPC 仿真 - 轨迹类型：%s", trajectory_type)
+    logger.info("开始运行 do-mpc Simulator NMPC 仿真 - 轨迹类型：%s", trajectory_type)
     start_time = timer.time()
 
     # === 初始化组件 ===
-    airship = Airship(params.X0)
     trajectory = Trajectory()
 
-    # 创建基于 do-mpc 的控制器
-    controller = DoMPCAirshipController(use_disturbance_compensation=use_disturbance_compensation)
+    # 创建基于 do-mpc 的控制器（包含 Simulator）
+    controller = DoMPCAirshipController(
+        use_disturbance_compensation=use_disturbance_compensation,
+        create_simulator=use_simulator
+    )
 
     # === 仿真设置 ===
     sim_time = np.arange(0, params.T_SPAN, params.DT)
@@ -60,139 +59,173 @@ def run_dompc_simulation(trajectory_type="linear", use_disturbance_compensation=
 
     # 数据记录数组
     state_history = np.zeros((12, n_steps))
-    control_history = np.zeros((3, n_steps))  # [T, mu, nu]
-    yc_history = np.zeros((6, n_steps))  # 参考位置和姿态
-    yc_dot_history = np.zeros((6, n_steps))  # 参考速度和角速度
+    control_history = np.zeros((3, n_steps))
+    reference_history = np.zeros((12, n_steps))
     disturbance_history = np.zeros((6, n_steps))
     disturbance_estimate_history = np.zeros((6, n_steps))
-    error_history = np.zeros((6, n_steps))  # 位置和姿态误差
-    error2_history = np.zeros((6, n_steps))  # 速度和角速度误差
-    force_torque_history = np.zeros((6, n_steps))  # 实际力和力矩
+    error_history = np.zeros((12, n_steps))
+    prediction_history = []
+
+    # 设置初始状态
+    current_state = params.X0.copy()
+    controller.simulator.x0 = np.concatenate([
+        current_state[0:3].reshape(-1, 1),
+        current_state[3:6].reshape(-1, 1),
+        current_state[6:9].reshape(-1, 1),
+        current_state[9:12].reshape(-1, 1)
+    ])
 
     # === 主仿真循环 ===
     for i, t in enumerate(sim_time):
-        # 获取当前状态
-        X = airship.get_state()
-
         # 获取参考轨迹
-        if trajectory_type == "linear":
-            yc, yc_dot, _, _, _ = trajectory.get_linear_trajectory(t)
-        elif trajectory_type == "spiral":
-            yc, yc_dot, _, _, _ = trajectory.get_spiral_trajectory(t)
-        elif trajectory_type == "figure8":
-            yc, yc_dot, _, _, _ = trajectory.get_figure8_trajectory(t)
-        elif trajectory_type == "lemniscate":
-            yc, yc_dot, _, _, _ = trajectory.get_lemniscate_trajectory(t)
-        else:
-            raise ValueError(f"未知轨迹类型：{trajectory_type}")
-
-        # 转换参考轨迹格式
+        yc, yc_dot = _get_reference_trajectory(trajectory, trajectory_type, t)
         reference_trajectory = convert_trajectory_format(yc, yc_dot)
 
-        # 计算误差（用于记录）
-        zeta = X[0:3]  # 当前位置
-        gamma = X[3:6]  # 当前姿态
-        v = X[6:9]  # 当前速度
-        omega = X[9:12]  # 当前角速度
-        x_vec = X[6:12]
+        # 记录参考轨迹
+        reference_state = np.concatenate([yc, yc_dot])
+        reference_history[:, i] = reference_state
 
-        R = R_block(gamma)
-        y = np.concatenate((zeta, gamma))
-        y_dot = R @ x_vec
+        # 计算误差
+        error = current_state - reference_state
+        error_history[:, i] = error
 
-        e1 = y - yc  # 位置和姿态误差
-        e2 = y_dot - yc_dot  # 速度和角速度误差
+        # 使用 MPC 控制器计算控制输入
+        u_cmd = controller.step(current_state, reference_trajectory, t)
 
-        # 使用 do-mpc 控制器计算控制输入
-        u_cmd = controller.step(X, reference_trajectory, t)
+        # 记录控制输入
+        control_history[:, i] = u_cmd
 
         # 获取扰动估计
         delta_hat = controller.get_current_disturbance_estimate()
-
-        # 将推力参数转换为力和力矩
-        tau = thrust_params_to_force_torque(u_cmd, params.rp_r, params.rp_l)
-
-        # 应用扰动补偿
-        if use_disturbance_compensation:
-            tau_compensated = tau - delta_hat * controller.disturbance_compensation_factor
-        else:
-            tau_compensated = tau
+        disturbance_estimate_history[:, i] = delta_hat
 
         # 获取实际扰动
         actual_delta = params.disturbance_delta(t)
-
-        # 使用 RK4 积分更新气艇状态
-        def airship_dynamics(t_rk, X_rk):
-            return airship.rhs(t_rk, X_rk, tau_compensated, lambda _: actual_delta)
-
-        X_next = rk4_step(airship_dynamics, t, X, params.DT)
-
-        # 更新气艇状态
-        airship.X = X_next
-
-        # 角度标准化
-        airship.X[3:6] = (airship.X[3:6] + np.pi) % (2 * np.pi) - np.pi
-
-        # 记录数据
-        state_history[:, i] = X
-        control_history[:, i] = u_cmd
-        yc_history[:, i] = yc
-        yc_dot_history[:, i] = yc_dot
         disturbance_history[:, i] = actual_delta
-        disturbance_estimate_history[:, i] = delta_hat
-        error_history[:, i] = e1
-        error2_history[:, i] = e2
-        force_torque_history[:, i] = tau_compensated
+
+        # 记录当前状态
+        state_history[:, i] = current_state
+
+        # 根据模式选择状态更新方法
+        if use_simulator and controller.simulator is not None:
+            # 使用 do-mpc Simulator
+            try:
+                x_next = controller.simulate_step(u_cmd.reshape(-1, 1))
+                if hasattr(x_next, 'full'):
+                    current_state = x_next.full().flatten()
+                else:
+                    current_state = np.array(x_next).flatten()
+            except Exception as e: # pylint: disable=broad-exception-caught
+                logger.error("Simulator 步骤失败：%s", e)
+                current_state = _fallback_integration(current_state, u_cmd, actual_delta, params.DT)
+        else:
+            # 使用传统的数值积分
+            current_state = _fallback_integration(current_state, u_cmd, actual_delta, params.DT)
+
+        # 获取 MPC 预测（可选）
+        if i % 5 == 0:  # 每 5 步记录一次预测，减少存储
+            prediction = controller.get_prediction()
+            if prediction['states'] is not None:
+                prediction_history.append({
+                    'time': t,
+                    'prediction': prediction
+                })
 
         # 显示进度
         if i % (n_steps // 10) == 0:
-            logger.info("仿真进度：%d / n_steps ≈ %.1f%%", i, 100 * i / n_steps)
-            logger.debug("位置误差范数：%.4f", np.linalg.norm(e1))
-            logger.debug("姿态误差范数：%.4f", np.linalg.norm(e1[3:6]))
+            logger.info("仿真进度：%d / %d ≈ %.1f%%", i, n_steps, 100 * i / n_steps)
+            logger.debug("位置误差范数：%.4f", np.linalg.norm(error[0:3]))
+            logger.debug("姿态误差范数：%.4f", np.linalg.norm(error[3:6]))
 
     end_time = timer.time()
     logger.info("仿真完成，耗时：%.2f 秒", end_time - start_time)
 
     # === 结果分析和绘图 ===
-    _plot_simulation_results(
-        sim_time, state_history, control_history,
-        yc_history, yc_dot_history, error_history, error2_history,
-        disturbance_history, disturbance_estimate_history,
-        force_torque_history, trajectory_type
-    )
-
-    # === 性能评估 ===
-    _evaluate_performance(error_history, error2_history, control_history, sim_time)
-
-    return {
+    results = {
         'time': sim_time,
         'states': state_history,
         'controls': control_history,
-        'references': yc_history,
+        'references': reference_history,
         'errors': error_history,
         'disturbances': disturbance_history,
-        'estimates': disturbance_estimate_history
+        'estimates': disturbance_estimate_history,
+        'predictions': prediction_history
     }
 
+    _plot_simulation_results(results, trajectory_type)
+    _evaluate_performance(results)
 
-def _plot_simulation_results(sim_time, state_history, control_history,
-                           yc_history, yc_dot_history, error_history, error2_history,
-                           disturbance_history, disturbance_estimate_history,
-                           force_torque_history, trajectory_type):
+    return results
+
+
+def _get_reference_trajectory(trajectory, trajectory_type, t):
+    """获取参考轨迹"""
+    if trajectory_type == "linear":
+        yc, yc_dot, _, _, _ = trajectory.get_linear_trajectory(t)
+    elif trajectory_type == "spiral":
+        yc, yc_dot, _, _, _ = trajectory.get_spiral_trajectory(t)
+    elif trajectory_type == "figure8":
+        yc, yc_dot, _, _, _ = trajectory.get_figure8_trajectory(t)
+    elif trajectory_type == "lemniscate":
+        yc, yc_dot, _, _, _ = trajectory.get_lemniscate_trajectory(t)
+    else:
+        raise ValueError(f"未知轨迹类型：{trajectory_type}")
+
+    return yc, yc_dot
+
+
+def _fallback_integration(current_state, u_cmd, disturbance, dt):
+    """
+    改进的回退积分方法
+    使用简化但更稳定的动力学模型
+    """
+
+
+    # 使用简化的符号模型进行积分
+    try:
+        symbolic_model = AirshipCasADiSymbolic(params)
+
+        def dynamics_func(t, x):
+            return symbolic_model.rhs_symbolic(x, u_cmd, external_disturbance=disturbance)
+
+        # 使用 RK4 积分
+        next_state = rk4_step(dynamics_func, 0, current_state, dt)
+
+        # 角度归一化
+        next_state[3:6] = (next_state[3:6] + np.pi) % (2 * np.pi) - np.pi
+
+        return next_state
+
+    except Exception as e: # pylint: disable=broad-exception-caught
+        logger.warning("回退积分失败，使用最简积分：%s", e)
+
+        # 最简单的积分作为最后回退
+        next_state = current_state.copy()
+        next_state[0:3] += current_state[6:9] * dt  # 位置更新
+        return next_state
+
+
+def _plot_simulation_results(results, trajectory_type):
     """绘制仿真结果"""
+    sim_time = results['time']
+    state_history = results['states']
+    control_history = results['controls']
+    reference_history = results['references']
+    error_history = results['errors']
+    disturbance_history = results['disturbances']
+    disturbance_estimate_history = results['estimates']
+
     plt.style.use("seaborn-v0_8-whitegrid")
 
     # 图 1: 三维轨迹跟踪
-    fig1 = plt.figure(f"do-mpc NMPC 3D 轨迹跟踪 - {trajectory_type}", figsize=(12, 8))
+    fig1 = plt.figure(f"do-mpc Simulator 3D 轨迹跟踪 - {trajectory_type}", figsize=(12, 8))
     ax3d = fig1.add_subplot(111, projection="3d")
 
-    # 绘制轨迹
     ax3d.plot(state_history[0, :], state_history[1, :], state_history[2, :],
               'b-', linewidth=2, label="实际轨迹")
-    ax3d.plot(yc_history[0, :], yc_history[1, :], yc_history[2, :],
+    ax3d.plot(reference_history[0, :], reference_history[1, :], reference_history[2, :],
               'r--', linewidth=2, label="参考轨迹")
 
-    # 标记起点和终点
     ax3d.scatter(state_history[0, 0], state_history[1, 0], state_history[2, 0],
                 c='green', s=100, marker='o', label="起点")
     ax3d.scatter(state_history[0, -1], state_history[1, -1], state_history[2, -1],
@@ -201,37 +234,39 @@ def _plot_simulation_results(sim_time, state_history, control_history,
     ax3d.set_xlabel("X [m]")
     ax3d.set_ylabel("Y [m]")
     ax3d.set_zlabel("Z [m]")
-    ax3d.set_title(f"do-mpc NMPC 3D 轨迹跟踪 - {trajectory_type}")
+    ax3d.set_title(f"do-mpc Simulator 3D 轨迹跟踪 - {trajectory_type}")
     ax3d.legend()
 
-    # 图 2: 位置跟踪误差
-    fig2, axs2 = plt.subplots(3, 1, sharex=True, figsize=(12, 8))
-    fig2.suptitle("位置跟踪误差")
+    # 图 2: 状态跟踪误差
+    fig2, axs2 = plt.subplots(4, 3, sharex=True, figsize=(15, 12))
+    fig2.suptitle("状态跟踪误差")
 
-    pos_labels = ["X 误差", "Y 误差", "Z 误差"]
-    for i in range(3):
-        axs2[i].plot(sim_time, error_history[i, :], 'b-', linewidth=2, label=f"{pos_labels[i]}")
-        axs2[i].set_ylabel(f"{pos_labels[i]} [m]")
-        axs2[i].legend()
-        axs2[i].grid(True, alpha=0.3)
-    axs2[2].set_xlabel("时间 [s]")
+    state_labels = [
+        ["位置 X", "位置 Y", "位置 Z"],
+        ["姿态 φ", "姿态 θ", "姿态 ψ"],
+        ["速度 u", "速度 v", "速度 w"],
+        ["角速度 p", "角速度 q", "角速度 r"]
+    ]
 
-    # 图 3: 姿态跟踪误差
+    for i in range(4):
+        for j in range(3):
+            idx = i * 3 + j
+            if i == 1:  # 姿态角度转换为度
+                axs2[i, j].plot(sim_time, np.rad2deg(error_history[idx, :]), 'b-', linewidth=2)
+                axs2[i, j].set_ylabel(f"{state_labels[i][j]} [度]")
+            else:
+                axs2[i, j].plot(sim_time, error_history[idx, :], 'b-', linewidth=2)
+                unit = "[m]" if i == 0 else ("[m/s]" if i == 2 else "[rad/s]")
+                axs2[i, j].set_ylabel(f"{state_labels[i][j]} {unit}")
+            
+            axs2[i, j].set_title(state_labels[i][j])
+            axs2[i, j].grid(True, alpha=0.3)
+
+    axs2[3, 1].set_xlabel("时间 [s]")
+
+    # 图 3: 控制输入
     fig3, axs3 = plt.subplots(3, 1, sharex=True, figsize=(12, 8))
-    fig3.suptitle("姿态跟踪误差")
-
-    att_labels = ["横滚角误差", "俯仰角误差", "航向角误差"]
-    for i in range(3):
-        axs3[i].plot(sim_time, np.rad2deg(error_history[i + 3, :]), 'r-',
-                    linewidth=2, label=f"{att_labels[i]}")
-        axs3[i].set_ylabel(f"{att_labels[i]} [度]")
-        axs3[i].legend()
-        axs3[i].grid(True, alpha=0.3)
-    axs3[2].set_xlabel("时间 [s]")
-
-    # 图 4: 控制输入
-    fig4, axs4 = plt.subplots(3, 1, sharex=True, figsize=(12, 8))
-    fig4.suptitle("控制输入")
+    fig3.suptitle("控制输入")
 
     control_labels = ["推力大小 T [N]", "水平偏转角 μ [度]", "垂直偏转角 ν [度]"]
     control_data = [
@@ -241,37 +276,43 @@ def _plot_simulation_results(sim_time, state_history, control_history,
     ]
 
     for i in range(3):
-        axs4[i].plot(sim_time, control_data[i], 'g-', linewidth=2, label=control_labels[i])
-        axs4[i].set_ylabel(control_labels[i])
-        axs4[i].legend()
-        axs4[i].grid(True, alpha=0.3)
-    axs4[2].set_xlabel("时间 [s]")
+        axs3[i].plot(sim_time, control_data[i], 'g-', linewidth=2)
+        axs3[i].set_ylabel(control_labels[i])
+        axs3[i].set_title(control_labels[i])
+        axs3[i].grid(True, alpha=0.3)
 
-    # 图 5: 扰动估计
-    fig5, axs5 = plt.subplots(6, 1, sharex=True, figsize=(12, 12))
-    fig5.suptitle("扰动估计 vs 实际扰动")
+    axs3[2].set_xlabel("时间 [s]")
+
+    # 图 4: 扰动估计对比
+    fig4, axs4 = plt.subplots(6, 1, sharex=True, figsize=(12, 12))
+    fig4.suptitle("扰动估计 vs 实际扰动")
 
     dist_labels = ["力扰动 Fx", "力扰动 Fy", "力扰动 Fz",
                    "力矩扰动 Mx", "力矩扰动 My", "力矩扰动 Mz"]
 
     for i in range(6):
-        axs5[i].plot(sim_time, disturbance_history[i, :], 'k-',
+        axs4[i].plot(sim_time, disturbance_history[i, :], 'k-',
                     linewidth=2, label=f"实际 {dist_labels[i]}")
-        axs5[i].plot(sim_time, disturbance_estimate_history[i, :], 'r--',
+        axs4[i].plot(sim_time, disturbance_estimate_history[i, :], 'r--',
                     linewidth=2, label=f"估计 {dist_labels[i]}")
-        axs5[i].set_ylabel(f"{dist_labels[i]}")
-        axs5[i].legend()
-        axs5[i].grid(True, alpha=0.3)
-    axs5[5].set_xlabel("时间 [s]")
+        axs4[i].set_ylabel(f"{dist_labels[i]}")
+        axs4[i].set_title(dist_labels[i])
+        axs4[i].legend()
+        axs4[i].grid(True, alpha=0.3)
+
+    axs4[5].set_xlabel("时间 [s]")
 
     plt.tight_layout()
     plt.show()
 
 
-def _evaluate_performance(error_history, error2_history, control_history, sim_time):
+def _evaluate_performance(results):
     """评估控制性能"""
-    logger.info("=== 控制性能评估 ===")
-    _ = error2_history
+    logger.info("=== do-mpc Simulator 控制性能评估 ===")
+    
+    error_history = results['errors']
+    control_history = results['controls']
+    sim_time = results['time']
 
     # 位置误差统计
     pos_errors = error_history[0:3, :]
@@ -286,40 +327,45 @@ def _evaluate_performance(error_history, error2_history, control_history, sim_ti
     att_rmse = np.sqrt(np.mean(att_errors**2, axis=1))
     att_max = np.max(np.abs(att_errors), axis=1)
 
-    logger.info("姿态 RMSE: φ=%.3f°, θ=%.3f°, ψ=%.3f°", np.rad2deg(att_rmse[0]), np.rad2deg(att_rmse[1]), np.rad2deg(att_rmse[2]))
-    logger.info("姿态最大误差：φ=%.3f°, θ=%.3f°, ψ=%.3f°", np.rad2deg(att_max[0]), np.rad2deg(att_max[1]), np.rad2deg(att_max[2]))
+    logger.info("姿态 RMSE: φ=%.3f°, θ=%.3f°, ψ=%.3f°",
+                np.rad2deg(att_rmse[0]), np.rad2deg(att_rmse[1]), np.rad2deg(att_rmse[2]))
+    logger.info("姿态最大误差：φ=%.3f°, θ=%.3f°, ψ=%.3f°",
+                np.rad2deg(att_max[0]), np.rad2deg(att_max[1]), np.rad2deg(att_max[2]))
 
     # 控制输入统计
     control_mean = np.mean(control_history, axis=1)
     control_std = np.std(control_history, axis=1)
 
-    logger.info("控制输入均值：T=%.3fN, μ=%.3f°, ν=%.3f°", control_mean[0], np.rad2deg(control_mean[1]), np.rad2deg(control_mean[2]))
-    logger.info("控制输入标准差：T=%.3fN, μ=%.3f°, ν=%.3f°", control_std[0], np.rad2deg(control_std[1]), np.rad2deg(control_std[2]))
+    logger.info("控制输入均值：T=%.3fN, μ=%.3f°, ν=%.3f°",
+                control_mean[0], np.rad2deg(control_mean[1]), np.rad2deg(control_mean[2]))
+    logger.info("控制输入标准差：T=%.3fN, μ=%.3f°, ν=%.3f°",
+                control_std[0], np.rad2deg(control_std[1]), np.rad2deg(control_std[2]))
 
-    # 稳态误差分析（最后 10% 的数据）
-    steady_start = int(0.9 * len(sim_time))
+    # 稳态误差分析
+    steady_start = int(0.8 * len(sim_time))
     pos_steady = np.mean(np.abs(pos_errors[:, steady_start:]), axis=1)
     att_steady = np.mean(np.abs(att_errors[:, steady_start:]), axis=1)
 
-    logger.info("稳态位置误差：X=%.3fm, Y=%.3fm, Z=%.3fm", pos_steady[0], pos_steady[1], pos_steady[2])
-    logger.info("稳态姿态误差：φ=%.3f°, θ=%.3f°, ψ=%.3f°", np.rad2deg(att_steady[0]), np.rad2deg(att_steady[1]), np.rad2deg(att_steady[2]))
+    logger.info("稳态位置误差：X=%.3fm, Y=%.3fm, Z=%.3fm",
+                pos_steady[0], pos_steady[1], pos_steady[2])
+    logger.info("稳态姿态误差：φ=%.3f°, θ=%.3f°, ψ=%.3f°",
+                np.rad2deg(att_steady[0]), np.rad2deg(att_steady[1]), np.rad2deg(att_steady[2]))
 
 
 if __name__ == "__main__":
-    # 主程序入口
-
-    print("=== do-mpc NMPC 气艇仿真 ===")
+    print("=== do-mpc Simulator 气艇仿真 ===")
 
     # 可以选择不同的轨迹类型进行测试
     trajectory_types = ["linear", "spiral", "figure8", "lemniscate"]
 
     # 选择轨迹类型
-    selected_trajectory = "linear"  # 可以改为其他轨迹类型
+    selected_trajectory = "linear"
 
     # 运行仿真
-    results = run_dompc_simulation(
+    simulation_results = run_dompc_simulation(
         trajectory_type=selected_trajectory,
         use_disturbance_compensation=True
     )
 
     print(f"仿真完成！轨迹类型：{selected_trajectory}")
+    print("结果已保存并显示图表")
