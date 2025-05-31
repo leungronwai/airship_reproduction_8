@@ -159,25 +159,29 @@ class DoMPCAirshipController:
 
         # MPC 设置
         setup_mpc = {
-            'n_horizon': min(params.N_HORIZON, 10),  # 限制预测长度防止数值问题
+            'n_horizon': min(params.N_HORIZON, 8),
             'n_robust': 1,
             'open_loop': 0,
             't_step': params.DT,
-            'state_discretization': 'discrete',  # 改为离散化，更稳定
-            'store_full_solution': True,
-            # 添加求解器选项提高稳定性
+            'state_discretization': 'collocation',  # 回到 collocation
+            'collocation_type': 'radau',  # 改用 legendre，更稳定
+            'collocation_deg': 2,
+            'collocation_ni': 1,  # 减少内部点数量
+            'store_full_solution': False, #True,
+            # 优化的求解器选项
             'nlpsol_opts': {
                 'ipopt.print_level': 0,
-                'ipopt.max_iter': 100,
-                'ipopt.acceptable_tol': 1e-4,
-                'ipopt.acceptable_obj_change_tol': 1e-4,
-                'ipopt.tol': 1e-4,
+                'ipopt.max_iter': 50,  # 减少最大迭代次数
+                'ipopt.acceptable_tol': 1e-3,  # 放宽容差
+                'ipopt.acceptable_obj_change_tol': 1e-3,
+                'ipopt.tol': 1e-3,
                 'ipopt.mu_strategy': 'adaptive',
                 'ipopt.hessian_approximation': 'limited-memory',
-                'ipopt.limited_memory_max_history': 10,
+                'ipopt.limited_memory_max_history': 5,  # 减少历史记录
                 'ipopt.alpha_for_y': 'primal',
                 'ipopt.recalc_y': 'yes',
-                'ipopt.max_wall_time': 5.0,  # 限制求解时间
+                'ipopt.max_wall_time': 3.0,  # 进一步限制求解时间
+                'ipopt.warm_start_init_point': 'yes',  # 启用热启动
                 'print_time': 0
             }
         }
@@ -195,15 +199,19 @@ class DoMPCAirshipController:
 
         # 改进的目标函数 - 数值缩放
         # 缩放权重矩阵，避免数值问题
-        Q_scaled = params.Q * 0.1  # 缩小状态权重
-        Qf_scaled = params.Qf * 0.1
-        R_scaled = params.R * 10.0  # 增大控制权重，促进平滑
+        Q_scaled = params.Q * 0.01  # 缩小状态权重
+        Qf_scaled = params.Qf * 0.01
+        R_scaled = params.R * 100.0  # 增大控制权重，促进平滑
 
+
+
+        # 终端代价 - 只包含状态误差，不包含控制输入
         mterm = (self.model.aux['pos_error'].T @ Qf_scaled[0:3, 0:3] @ self.model.aux['pos_error'] +
                  self.model.aux['att_error'].T @ Qf_scaled[3:6, 3:6] @ self.model.aux['att_error'] +
                  self.model.aux['vel_error'].T @ Qf_scaled[6:9, 6:9] @ self.model.aux['vel_error'] +
                  self.model.aux['ang_error'].T @ Qf_scaled[9:12, 9:12] @ self.model.aux['ang_error'])
 
+        # 阶段代价 - 包含状态误差和控制输入
         lterm = (self.model.aux['pos_error'].T @ Q_scaled[0:3, 0:3] @ self.model.aux['pos_error'] +
                  self.model.aux['att_error'].T @ Q_scaled[3:6, 3:6] @ self.model.aux['att_error'] +
                  self.model.aux['vel_error'].T @ Q_scaled[6:9, 6:9] @ self.model.aux['vel_error'] +
