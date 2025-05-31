@@ -5,6 +5,8 @@
 
 # pylint: disable=invalid-name
 # cspell:ignore dompc vertcat radau mterm lterm rterm ndarray fmin fmax idas abstol reltol
+# cspell: ignore nlpsol ipopt print_level max_iter acceptable_tol acceptable_obj_change_tol tol mu_strategy hessian_approximation limited_memory_max_history alpha_for_y recalc_y max_wall_time print_time
+# cspell: ignore cvodes
 
 import numpy as np
 import casadi as ca
@@ -157,40 +159,58 @@ class DoMPCAirshipController:
 
         # MPC 设置
         setup_mpc = {
-            'n_horizon': params.N_HORIZON,
+            'n_horizon': min(params.N_HORIZON, 10),  # 限制预测长度防止数值问题
             'n_robust': 1,
             'open_loop': 0,
             't_step': params.DT,
-            'state_discretization': 'collocation',
-            'collocation_type': 'radau',
-            'collocation_deg': 2,
-            'collocation_ni': 2,
+            'state_discretization': 'discrete',  # 改为离散化，更稳定
             'store_full_solution': True,
+            # 添加求解器选项提高稳定性
+            'nlpsol_opts': {
+                'ipopt.print_level': 0,
+                'ipopt.max_iter': 100,
+                'ipopt.acceptable_tol': 1e-4,
+                'ipopt.acceptable_obj_change_tol': 1e-4,
+                'ipopt.tol': 1e-4,
+                'ipopt.mu_strategy': 'adaptive',
+                'ipopt.hessian_approximation': 'limited-memory',
+                'ipopt.limited_memory_max_history': 10,
+                'ipopt.alpha_for_y': 'primal',
+                'ipopt.recalc_y': 'yes',
+                'ipopt.max_wall_time': 5.0,  # 限制求解时间
+                'print_time': 0
+            }
         }
 
         mpc.set_param(**setup_mpc)
 
-        # 设置不确定性值
+        # 设置不确定性值（扰动补偿）
         mpc.set_uncertainty_values(
             pos_ref=np.zeros((3, 1)),
             att_ref=np.zeros((3, 1)),
             vel_ref=np.zeros((3, 1)),
-            omega_ref=np.zeros((3, 1))
+            omega_ref=np.zeros((3, 1)),
+            disturbance=np.zeros((6, 1))  # 添加扰动参数
         )
 
-        # 设置目标函数
-        mterm = (self.model.aux['pos_error'].T @ params.Qf[0:3, 0:3] @ self.model.aux['pos_error'] +
-                 self.model.aux['att_error'].T @ params.Qf[3:6, 3:6] @ self.model.aux['att_error'] +
-                 self.model.aux['vel_error'].T @ params.Qf[6:9, 6:9] @ self.model.aux['vel_error'] +
-                 self.model.aux['ang_error'].T @ params.Qf[9:12, 9:12] @ self.model.aux['ang_error'])
+        # 改进的目标函数 - 数值缩放
+        # 缩放权重矩阵，避免数值问题
+        Q_scaled = params.Q * 0.1  # 缩小状态权重
+        Qf_scaled = params.Qf * 0.1
+        R_scaled = params.R * 10.0  # 增大控制权重，促进平滑
 
-        lterm = (self.model.aux['pos_error'].T @ params.Q[0:3, 0:3] @ self.model.aux['pos_error'] +
-                 self.model.aux['att_error'].T @ params.Q[3:6, 3:6] @ self.model.aux['att_error'] +
-                 self.model.aux['vel_error'].T @ params.Q[6:9, 6:9] @ self.model.aux['vel_error'] +
-                 self.model.aux['ang_error'].T @ params.Q[9:12, 9:12] @ self.model.aux['ang_error'] +
-                 self.model.u['T']**2 * params.R[0, 0] +
-                 self.model.u['mu']**2 * params.R[1, 1] +
-                 self.model.u['nu']**2 * params.R[2, 2])
+        mterm = (self.model.aux['pos_error'].T @ Qf_scaled[0:3, 0:3] @ self.model.aux['pos_error'] +
+                 self.model.aux['att_error'].T @ Qf_scaled[3:6, 3:6] @ self.model.aux['att_error'] +
+                 self.model.aux['vel_error'].T @ Qf_scaled[6:9, 6:9] @ self.model.aux['vel_error'] +
+                 self.model.aux['ang_error'].T @ Qf_scaled[9:12, 9:12] @ self.model.aux['ang_error'])
+
+        lterm = (self.model.aux['pos_error'].T @ Q_scaled[0:3, 0:3] @ self.model.aux['pos_error'] +
+                 self.model.aux['att_error'].T @ Q_scaled[3:6, 3:6] @ self.model.aux['att_error'] +
+                 self.model.aux['vel_error'].T @ Q_scaled[6:9, 6:9] @ self.model.aux['vel_error'] +
+                 self.model.aux['ang_error'].T @ Q_scaled[9:12, 9:12] @ self.model.aux['ang_error'] +
+                 self.model.u['T']**2 * R_scaled[0, 0] +
+                 self.model.u['mu']**2 * R_scaled[1, 1] +
+                 self.model.u['nu']**2 * R_scaled[2, 2])
 
         mpc.set_objective(mterm=mterm, lterm=lterm)
 
@@ -208,7 +228,7 @@ class DoMPCAirshipController:
     def _set_mpc_constraints(self, mpc):
         """设置 MPC 约束"""
         # 控制输入约束
-        mpc.bounds['lower', '_u', 'T'] = params.T_MIN
+        mpc.bounds['lower', '_u', 'T'] = max(params.T_MIN, 0.1)  # 避免零推力
         mpc.bounds['upper', '_u', 'T'] = params.T_MAX
         mpc.bounds['lower', '_u', 'mu'] = params.MU_MIN
         mpc.bounds['upper', '_u', 'mu'] = params.MU_MAX
@@ -216,10 +236,10 @@ class DoMPCAirshipController:
         mpc.bounds['upper', '_u', 'nu'] = params.NU_MAX
 
         # 状态约束
-        max_position = 1e5
-        max_angle = np.pi
-        max_velocity = 40.0
-        max_angular_velocity = np.pi
+        max_position = 200.0  # 减小到合理范围
+        max_angle = np.pi/2   # 限制姿态角防止奇点
+        max_velocity = 30.0
+        max_angular_velocity = np.pi/2  # 合理的角速度限制
 
         # 位置约束
         mpc.bounds['lower', '_x', 'pos'] = -max_position
@@ -228,8 +248,8 @@ class DoMPCAirshipController:
         # 姿态约束
         mpc.bounds['lower', '_x', 'att'] = -max_angle
         mpc.bounds['upper', '_x', 'att'] = max_angle
-        mpc.bounds['lower', '_x', 'att', 1] = -max_angle/2  # theta 限制
-        mpc.bounds['upper', '_x', 'att', 1] = max_angle/2
+        mpc.bounds['lower', '_x', 'att', 1] = -max_angle/6  # 俯仰角 theta 限制
+        mpc.bounds['upper', '_x', 'att', 1] = max_angle/6
 
         # 速度约束
         mpc.bounds['lower', '_x', 'vel'] = -max_velocity
@@ -254,14 +274,17 @@ class DoMPCAirshipController:
         Returns:
             do_mpc.simulator.Simulator: 配置好的仿真器
         """
+        if not self.create_simulator:
+            return None
+
         simulator = do_mpc.simulator.Simulator(self.model)
 
         # Simulator 设置
         setup_simulator = {
             't_step': params.DT,
-            'integration_tool': 'idas',  # 使用 IDAS 积分器
-            'abstol': 1e-8,
-            'reltol': 1e-6,
+            'integration_tool': 'cvodes', #'idas',  # 使用 IDAS 积分器
+            'abstol': 1e-6,
+            'reltol': 1e-4,
         }
 
         simulator.set_param(**setup_simulator)
@@ -269,13 +292,26 @@ class DoMPCAirshipController:
         # 设置扰动函数
         def disturbance_func(t_now):
             """定义时变扰动"""
-            delta = params.disturbance_delta(t_now)
-            return delta.reshape(-1, 1)
+            try:
+                delta = params.disturbance_delta(t_now)
+                return delta.reshape(-1, 1)
+            except Exception: # pylint: disable=broad-exception-caught
+                return np.zeros((6, 1))
 
-        # 正确设置参数函数
+        # 设置参数函数
         p_template = simulator.get_p_template()
+        p_template['pos_ref'] = np.zeros((3, 1))
+        p_template['att_ref'] = np.zeros((3, 1))
+        p_template['vel_ref'] = np.zeros((3, 1))
+        p_template['omega_ref'] = np.zeros((3, 1))
         p_template['disturbance'] = disturbance_func
-        simulator.set_p_fun(p_template)
+
+        def p_fun(t_now):
+            """参数函数"""
+            _ = t_now
+            return p_template
+
+        simulator.set_p_fun(p_fun)
 
         # 完成 Simulator 设置
         simulator.setup()
@@ -285,10 +321,13 @@ class DoMPCAirshipController:
     def _setup_initial_conditions(self):
         """设置初始条件"""
         # 设置初始状态
-        x0 = params.X0
+        x0 = params.X0.copy()
 
-        # 确保初始状态数值有效
-        x0 = np.nan_to_num(x0, nan=0.0, posinf=1e6, neginf=-1e6)
+        # 更严格的数值清理
+        # x0 = np.nan_to_num(x0, nan=0.0, posinf=10.0, neginf=-10.0)
+
+        # 限制初始角度，避免奇点
+        # x0[3:6] = np.clip(x0[3:6], -np.pi/2, np.pi/2)
 
         # 将状态向量重新组合为 do-mpc 期望的格式
         _x0 = np.concatenate([
@@ -304,8 +343,20 @@ class DoMPCAirshipController:
         if self.simulator is not None:
             self.simulator.x0 = _x0
 
-        # 设置初始参考值
-        self.mpc.set_initial_guess()
+        # 改进的初始猜测
+        try:
+            # 设置保守的初始控制猜测
+            u0 = np.array([[5.0], [0.0], [0.0]])  # 稳定的推力，零力矩
+
+            # 为整个预测长度设置初始猜测
+            for k in range(self.mpc.settings.n_horizon):
+                self.mpc.u0[k] = u0
+                self.mpc.x0[k+1] = _x0  # 保持状态稳定
+
+            self.mpc.set_initial_guess()
+
+        except Exception as e: # pylint: disable=broad-exception-caught
+            print(f"设置初始猜测失败：{e}")
 
     def step(self, current_state, reference_trajectory, t_current=0.0):
         """
@@ -342,6 +393,9 @@ class DoMPCAirshipController:
                 'omega_ref': reference_trajectory['angular_velocity'].reshape(-1, 1)
             }
 
+            # 添加扰动参数
+            reference_params['disturbance'] = np.zeros((6, 1))
+
             # 设置参考轨迹
             self.mpc.set_uncertainty_values(**reference_params)
 
@@ -362,7 +416,10 @@ class DoMPCAirshipController:
 
         except Exception as e: # pylint: disable=broad-exception-caught
             print(f"MPC 步骤失败：{e}")
-            return np.array([5.0, 0.0, 0.0])
+            # 返回安全的默认控制
+            safe_control = np.array([5.0, 0.0, 0.0])
+            self.last_control = safe_control
+            return safe_control
 
     def _update_disturbance_compensation(self, current_state, reference_trajectory):
         """更新扰动补偿"""
