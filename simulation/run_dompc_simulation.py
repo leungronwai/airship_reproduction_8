@@ -68,12 +68,26 @@ def run_dompc_simulation(trajectory_type="linear", use_disturbance_compensation=
 
     # 设置初始状态
     current_state = params.X0.copy()
-    controller.simulator.x0 = np.concatenate([
-        current_state[0:3].reshape(-1, 1),
-        current_state[3:6].reshape(-1, 1),
-        current_state[6:9].reshape(-1, 1),
-        current_state[9:12].reshape(-1, 1)
-    ])
+
+    # 检查仿真器是否创建成功
+    if use_simulator and controller.simulator is not None:
+        try:
+            # 设置 do-mpc Simulator 的初始状态
+            x0_dict = controller.mpc.x0
+            x0_dict['pos'] = current_state[0:3].reshape(-1, 1)
+            x0_dict['att'] = current_state[3:6].reshape(-1, 1)
+            x0_dict['vel'] = current_state[6:9].reshape(-1, 1)
+            x0_dict['omega'] = current_state[9:12].reshape(-1, 1)
+
+            # 使用正确的方式设置仿真器初始状态
+            controller.simulator.x0 = controller.mpc.x0
+            logger.info("使用 do-mpc Simulator 进行仿真")
+        except Exception as e:  # pylint: disable=broad-except
+            logger.warning("设置 Simulator 初始状态失败：%s，使用数值积分", e)
+            use_simulator = False
+    else:
+        logger.info("使用数值积分进行仿真")
+        use_simulator = False
 
     # === 主仿真循环 ===
     for i, t in enumerate(sim_time):
@@ -186,6 +200,7 @@ def _fallback_integration(current_state, u_cmd, disturbance, dt):
         symbolic_model = AirshipCasADiSymbolic(params)
 
         def dynamics_func(t, x):
+            _ = t
             return symbolic_model.rhs_symbolic(x, u_cmd, external_disturbance=disturbance)
 
         # 使用 RK4 积分
@@ -258,7 +273,7 @@ def _plot_simulation_results(results, trajectory_type):
                 axs2[i, j].plot(sim_time, error_history[idx, :], 'b-', linewidth=2)
                 unit = "[m]" if i == 0 else ("[m/s]" if i == 2 else "[rad/s]")
                 axs2[i, j].set_ylabel(f"{state_labels[i][j]} {unit}")
-            
+
             axs2[i, j].set_title(state_labels[i][j])
             axs2[i, j].grid(True, alpha=0.3)
 
@@ -309,7 +324,7 @@ def _plot_simulation_results(results, trajectory_type):
 def _evaluate_performance(results):
     """评估控制性能"""
     logger.info("=== do-mpc Simulator 控制性能评估 ===")
-    
+
     error_history = results['errors']
     control_history = results['controls']
     sim_time = results['time']
