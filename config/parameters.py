@@ -103,11 +103,65 @@ except ValueError as e:
 
 
 # --- 初始条件 (Initial Conditions) ---
-zeta0 = np.array([2080, 2400, -18960])  # 初始位置 (Initial Position) [m]
-gamma0 = np.array([np.pi / 90, np.pi / 36, np.pi / 18])  # 初始姿态 (Initial Attitude) [rad] (phi, theta, psi)
-v0 = np.array([10, 0, 0])  # 初始线速度 (Initial Linear Velocity) [m/s] (u, v, w)
-omega0 = np.array([0, 0, 0])  # 初始角速度 (Initial Angular Velocity) [rad/s] (p, q, r)
-X0 = np.concatenate((zeta0, gamma0, v0, omega0))  # 完整初始状态向量 (Complete initial state vector)
+def setup_initial_conditions(_trajectory_type="spiral"):
+    """
+    根据轨迹类型设置初始条件
+
+    参数：
+        trajectory_type: "spiral", "figure8", "lemniscate", "linear"
+
+    返回：
+        X0: 完整的初始状态向量 [位置，姿态，线速度，角速度]
+    """
+
+    if _trajectory_type == "spiral":
+        # 螺旋轨迹
+        zeta0 = np.array([1500.0, 0.0, 0.0])  # 初始位置 (Initial Position) [m]
+        gamma0 = np.array([0.0, 0.0, np.pi/2]) # 初始姿态 (Initial Attitude) [rad] (phi, theta, psi)
+        v0 = np.array([0.0, 105.0, 14.0])  # r*omega, h_max/10*omega # 初始线速度 (Initial Linear Velocity) [m/s] (u, v, w)
+        omega0 = np.array([0.0, 0.0, 0.07]) # 初始角速度 (Initial Angular Velocity) [rad/s] (p, q, r)
+
+    elif _trajectory_type == "figure8":
+        # 8 字形轨迹
+        zeta0 = np.array([0.0, 0.0, -19000.0])
+        gamma0 = np.array([0.0, 0.0, 0.0])
+        v0 = np.array([9.0, 6.0, 1.0])  # a*omega, b*omega
+        omega0 = np.array([0.0, 0.0, 0.003])
+
+    elif _trajectory_type == "lemniscate":
+        # 莱洛曲线轨迹
+        zeta0 = np.array([2500.0, 0.0, -19000.0])
+        gamma0 = np.array([0.0, 0.0, 0.0])
+        v0 = np.array([0.0, 10.0, 0.8])
+        omega0 = np.array([0.0, 0.0, 0.004])
+
+    elif _trajectory_type == "linear":
+        # 直线轨迹（默认设置）
+        zeta0 = np.array([0.0, 0.0, -19000.0])
+        gamma0 = np.array([0.0, 0.0, np.pi/4])  # 45 度朝向终点
+        v0 = np.array([7.07, 7.07, 0.0])  # 10m/s分解到x,y方向
+        omega0 = np.array([0.0, 0.0, 0.0])
+
+    else:
+        raise ValueError(f"不支持的轨迹类型：{_trajectory_type}")
+
+    # 组合完整状态向量
+    _X0 = np.concatenate([zeta0, gamma0, v0, omega0])
+
+    print(f"【{_trajectory_type}轨迹】初始条件设置完成：")
+    print(f"  初始位置：{zeta0}")
+    print(f"  初始姿态：{gamma0} (rad)")
+    print(f"  初始线速度：{v0} (m/s)")
+    print(f"  初始角速度：{omega0} (rad/s)")
+
+    return _X0
+
+# 使用示例
+trajectory_type = "spiral"  # 选择你要跟踪的轨迹类型
+X0 = setup_initial_conditions(trajectory_type)
+
+
+
 
 
 

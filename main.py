@@ -44,7 +44,7 @@ def setup_logger():
         level=logging.INFO,
         format=log_format,
         handlers=[
-            logging.FileHandler(log_filename, encoding='utf-8'),  # 文件处理器 / File handler
+            # logging.FileHandler(log_filename, encoding='utf-8'),  # 文件处理器 保存到文件 / File handler
             logging.StreamHandler(sys.stdout)  # 控制台处理器 / Console handler
         ]
     )
@@ -67,7 +67,7 @@ def main():
 
         # ========== 在这里修改您的选择 ==========
         choice = "2"        # "1" = PID 控制器，"2" = do-mpc NMPC 控制器
-        traj_choice = "1"   # "1" = 直线，"2" = 螺旋，"3" = 8 字，"4" = 莱洛曲线
+        traj_choice = "2"   # "1" = 直线，"2" = 螺旋，"3" = 8 字，"4" = 莱洛曲线
         # =====================================
 
         print(f"选择的控制器：{'PID 控制器' if choice == '1' else 'do-mpc NMPC 控制器'}")

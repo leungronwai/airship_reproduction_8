@@ -5,8 +5,8 @@
 
 # pylint: disable=invalid-name
 # cspell:ignore dompc vertcat radau mterm lterm rterm ndarray fmin fmax idas abstol reltol
-# cspell: ignore nlpsol ipopt print_level max_iter acceptable_tol acceptable_obj_change_tol tol mu_strategy hessian_approximation limited_memory_max_history alpha_for_y recalc_y max_wall_time print_time
-# cspell: ignore cvodes
+# cspell: ignore nlpsol ipopt print_level max_iter acceptable_tol acceptable_obj_change_tol tol
+# cspell: ignore cvodes mu_strategy hessian_approximation limited_memory_max_history alpha_for_y recalc_y max_wall_time print_time
 
 import numpy as np
 import casadi as ca
@@ -486,34 +486,22 @@ class DoMPCAirshipController:
 
         return control_input
 
-    def simulate_step(self, u_input):
-        """
-        使用 do-mpc Simulator 执行一步仿真
-
-        Args:
-            u_input: 控制输入
-
-        Returns:
-            x_next: 下一步状态
-        """
-        if self.simulator is None:
-            raise ValueError("Simulator 未初始化。请在构造函数中设置 create_simulator=True")
-
-        # 执行仿真步骤
-        x_next = self.simulator.make_step(u_input)
-
-        return x_next
-
     def get_prediction(self):
         """获取 MPC 预测结果"""
         try:
-            return {
-                'states': self.mpc.data.prediction(('_x')),
-                'controls': self.mpc.data.prediction(('_u')),
-                'time': self.mpc.data.prediction(('_time'))
-            }
+            if hasattr(self.mpc, 'data') and self.mpc.data is not None:
+                # 使用公共接口获取预测数据
+                prediction_data = {
+                    'states': self.mpc.data.prediction(('_x', 'pos')),
+                    'controls': self.mpc.data.prediction(('_u', 'T'))
+                }
+                return prediction_data
+            else:
+                return {'states': None, 'controls': None}
         except Exception: # pylint: disable=broad-exception-caught
-            return {'states': None, 'controls': None, 'time': None}
+            return {'states': None, 'controls': None}
+
+
 
     def get_current_disturbance_estimate(self):
         """获取当前扰动估计"""
