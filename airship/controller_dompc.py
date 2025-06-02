@@ -44,7 +44,7 @@ class DoMPCAirshipController:
         self.create_simulator = create_simulator
 
         # 初始化扰动观测器
-        if use_disturbance_compensation:
+        if self.use_disturbance_compensation:
             self.disturbance_observer = NMPCDisturbanceObserver()
             self.disturbance_compensation_factor = getattr(params, 'do_compensation_gain', 0.9)
             self.last_disturbance_estimate = np.zeros(6)
@@ -59,7 +59,7 @@ class DoMPCAirshipController:
         self.estimator = self._create_estimator()
 
         # 创建 Simulator (如果需要)
-        if create_simulator:
+        if self.create_simulator:
             self.simulator = self._create_simulator()
         else:
             self.simulator = None
@@ -159,11 +159,11 @@ class DoMPCAirshipController:
 
         # MPC 设置
         setup_mpc = {
-            'n_horizon': min(params.N_HORIZON, 8),
-            'n_robust': 1,
-            'open_loop': 0,
-            't_step': params.DT,
-            'state_discretization': 'collocation',  # 回到 collocation
+            'n_horizon': min(params.N_HORIZON, 8), # 预测时域的长度（即控制器预测未来多少步）
+            'n_robust': 1, # 鲁棒性控制（用于处理模型不确定性）
+            'open_loop': 0, # 是否启用开环控制（即不考虑当前状态）
+            't_step': params.DT, # 时间步长（每一步的时间间隔）
+            'state_discretization': 'collocation',  # 状态离散化方法
             'collocation_type': 'radau',  # 改用 legendre，更稳定
             'collocation_deg': 2,
             'collocation_ni': 1,  # 减少内部点数量
@@ -188,7 +188,7 @@ class DoMPCAirshipController:
 
         mpc.set_param(**setup_mpc)
 
-        # 设置不确定性值（扰动补偿）
+        # 初始化参考轨迹和扰动参数的默认值，在仿真器中会根据实际的参考轨迹和扰动进行更新
         mpc.set_uncertainty_values(
             pos_ref=np.zeros((3, 1)),
             att_ref=np.zeros((3, 1)),
@@ -197,21 +197,19 @@ class DoMPCAirshipController:
             disturbance=np.zeros((6, 1))  # 添加扰动参数
         )
 
-        # 改进的目标函数 - 数值缩放
+        # 定义控制器的目标函数
         # 缩放权重矩阵，避免数值问题
         Q_scaled = params.Q * 0.01  # 缩小状态权重
         Qf_scaled = params.Qf * 0.01
         R_scaled = params.R * 100.0  # 增大控制权重，促进平滑
 
-
-
-        # 终端代价 - 只包含状态误差，不包含控制输入
+        # 终端代价 - 表示预测时域末端的状态误差，不包含控制输入
         mterm = (self.model.aux['pos_error'].T @ Qf_scaled[0:3, 0:3] @ self.model.aux['pos_error'] +
                  self.model.aux['att_error'].T @ Qf_scaled[3:6, 3:6] @ self.model.aux['att_error'] +
                  self.model.aux['vel_error'].T @ Qf_scaled[6:9, 6:9] @ self.model.aux['vel_error'] +
                  self.model.aux['ang_error'].T @ Qf_scaled[9:12, 9:12] @ self.model.aux['ang_error'])
 
-        # 阶段代价 - 包含状态误差和控制输入
+        # 阶段代价 - 表示每一步的状态误差和控制输入的代价
         lterm = (self.model.aux['pos_error'].T @ Q_scaled[0:3, 0:3] @ self.model.aux['pos_error'] +
                  self.model.aux['att_error'].T @ Q_scaled[3:6, 3:6] @ self.model.aux['att_error'] +
                  self.model.aux['vel_error'].T @ Q_scaled[6:9, 6:9] @ self.model.aux['vel_error'] +
@@ -225,7 +223,7 @@ class DoMPCAirshipController:
         # 控制输入正则化
         mpc.set_rterm(T=0.1, mu=0.1, nu=0.1)
 
-        # 设置约束
+        # 设置控制输入和状态的约束条件
         self._set_mpc_constraints(mpc)
 
         # 完成 MPC 设置
@@ -268,6 +266,13 @@ class DoMPCAirshipController:
     def _create_estimator(self):
         """
         创建状态估计器
+        想象你在驾驶一艘气艇，但你并不能直接看到气艇的所有状态（比如它的速度、姿态等）。
+        你只能通过传感器获取一些测量值，比如位置和速度。
+        这时候，你需要一个助手来根据这些测量值和系统的数学模型，推测出气艇的完整状态。
+        这个助手就是状态估计器。
+        在这个方法中，do-mpc 提供了一个简单的状态反馈估计器（StateFeedback），
+        它假设系统的状态是完全可测量的（即传感器可以直接测量所有状态变量）。
+        因此，这个估计器的工作非常简单：直接将测量值作为系统的当前状态。
 
         Returns:
             do_mpc.estimator.StateFeedback: 状态反馈估计器
@@ -285,6 +290,7 @@ class DoMPCAirshipController:
         if not self.create_simulator:
             return None
 
+        # 创建仿真器对象 仿真器会基于这个模型计算系统的状态随时间的变化
         simulator = do_mpc.simulator.Simulator(self.model)
 
         # Simulator 设置
@@ -297,16 +303,18 @@ class DoMPCAirshipController:
 
         simulator.set_param(**setup_simulator)
 
-        # 设置扰动函数
+        # 定义一个扰动函数，用于模拟外部扰动（如风力、气流等）
         def disturbance_func(t_now):
-            """定义时变扰动"""
+            """定义时变扰动
+            这个函数会根据当前时间 t_now 返回一个扰动向量
+            """
             try:
                 delta = params.disturbance_delta(t_now)
                 return delta.reshape(-1, 1)
             except Exception: # pylint: disable=broad-exception-caught
                 return np.zeros((6, 1))
 
-        # 设置参数函数
+        # 设置参数模板 定义仿真器的参数模板，包括参考轨迹和扰动，这些参数会在仿真过程中动态更新
         p_template = simulator.get_p_template()
         p_template['pos_ref'] = np.zeros((3, 1))
         p_template['att_ref'] = np.zeros((3, 1))
@@ -315,7 +323,9 @@ class DoMPCAirshipController:
         p_template['disturbance'] = disturbance_func
 
         def p_fun(t_now):
-            """参数函数"""
+            """
+            这个函数会在每一步仿真时被调用，返回当前时间的参数值
+            """
             _ = t_now
             return p_template
 
@@ -327,17 +337,24 @@ class DoMPCAirshipController:
         return simulator
 
     def _setup_initial_conditions(self):
-        """设置初始条件"""
-        # 设置初始状态
+        """
+        为控制器、估计器和仿真器设置初始状态和初始猜测值，以便系统能够从一个合理的初始状态开始运行
+        1. 设置飞机的初始状态：
+            比如飞机的初始位置、速度、姿态等。
+        2. 给出一个初始的控制猜测：
+            比如初始推力和偏转角，确保飞机不会一开始就失控。
+        这个方法就是在为飞行模拟器设置这些初始条件，让控制器、估计器和仿真器都知道从哪里开始。
+        """
+        # 设置飞艇的初始状态 包含系统的初始位置、姿态、速度和角速度
         x0 = params.X0.copy()
 
-        # 更严格的数值清理
+        # 更严格的数值清理 确保初始状态的数值有效性，避免出现 NaN 或无穷值
         # x0 = np.nan_to_num(x0, nan=0.0, posinf=10.0, neginf=-10.0)
 
         # 限制初始角度，避免奇点
         # x0[3:6] = np.clip(x0[3:6], -np.pi/2, np.pi/2)
 
-        # 将状态向量重新组合为 do-mpc 期望的格式
+        # 将初始状态向量重新组合为 do-mpc 期望的列向量格式
         _x0 = np.concatenate([
             x0[0:3].reshape(-1, 1),   # pos
             x0[3:6].reshape(-1, 1),   # att
@@ -345,18 +362,25 @@ class DoMPCAirshipController:
             x0[9:12].reshape(-1, 1)   # omega
         ])
 
-        # 设置各组件的初始状态
+        # 将初始状态 _x0 分别设置给控制器（mpc）、估计器（estimator）和仿真器（simulator）。
+        # 这样每个组件都知道系统的初始状态。
         self.mpc.x0 = _x0
         self.estimator.x0 = _x0
         if self.simulator is not None:
             self.simulator.x0 = _x0
 
-        # 改进的初始猜测
+        # 改进的初始猜测 每次预测的初始猜测值是否相同？
+        # 第一次预测：会用到下面的初始猜测值
+        # 第二次预测及后续预测：
+        #       在后续的预测中，控制器会根据上一次优化的结果更新初始猜测值。
+        # 具体来说：
+        #      1. 控制输入的初始猜测值会从上一次优化的结果中继承。
+        #      2. 状态的初始猜测值会根据仿真器或实际系统的反馈进行更新。
         try:
-            # 设置保守的初始控制猜测
+            # 设置保守的初始控制输入猜测
             u0 = np.array([[5.0], [0.0], [0.0]])  # 稳定的推力，零力矩
 
-            # 为整个预测长度设置初始猜测
+            # 为整个预测时域设置初始猜测值
             for k in range(self.mpc.settings.n_horizon):
                 self.mpc.u0[k] = u0
                 self.mpc.x0[k+1] = _x0  # 保持状态稳定
@@ -404,7 +428,7 @@ class DoMPCAirshipController:
             # 添加扰动参数
             reference_params['disturbance'] = np.zeros((6, 1))
 
-            # 设置参考轨迹
+            # 将参考轨迹和扰动信息传递给控制器
             self.mpc.set_uncertainty_values(**reference_params)
 
             # 扰动补偿
@@ -449,7 +473,13 @@ class DoMPCAirshipController:
         self.last_disturbance_estimate = delta_hat
 
     def _extract_control_input(self, u_mpc):
-        """提取控制输入"""
+        """
+        将 MPC 优化得到的控制输入转换为可用的控制量
+        1. 将 MPC 优化得到的控制输入转换为可用的控制量
+        2. 检查控制输入的有效性，确保其不包含 NaN 或无穷大值
+        3. 限制控制输入的范围，确保其符合物理约束
+        4. 返回最终的控制输入
+        """
         try:
             if hasattr(u_mpc, 'full'):
                 u_array = u_mpc.full().flatten()
@@ -475,11 +505,12 @@ class DoMPCAirshipController:
             print("警告：无法正确提取控制输入")
             control_input = np.array([5.0, 0.0, 0.0])
 
-        # 检查有效性并限制范围
+        # 检查控制输入是否包含无效值（NaN 或无穷大）
         if np.any(np.isnan(control_input)) or np.any(np.isinf(control_input)):
             print("警告：控制输入包含 NaN 或无穷大值")
             return np.array([5.0, 0.0, 0.0])
 
+        # 限制控制输入的范围，确保其符合物理约束
         control_input[0] = np.clip(control_input[0], params.T_MIN, params.T_MAX)
         control_input[1] = np.clip(control_input[1], params.MU_MIN, params.MU_MAX)
         control_input[2] = np.clip(control_input[2], params.NU_MIN, params.NU_MAX)
@@ -487,7 +518,11 @@ class DoMPCAirshipController:
         return control_input
 
     def get_prediction(self):
-        """获取 MPC 预测结果"""
+        """
+        1. 获取 MPC 预测结果
+        2. 返回预测结果
+        3. 如果预测结果为空，返回 None
+        """
         try:
             if hasattr(self.mpc, 'data') and self.mpc.data is not None:
                 # 使用公共接口获取预测数据
@@ -501,10 +536,10 @@ class DoMPCAirshipController:
         except Exception: # pylint: disable=broad-exception-caught
             return {'states': None, 'controls': None}
 
-
-
     def get_current_disturbance_estimate(self):
-        """获取当前扰动估计"""
+        """
+        1. 获取当前扰动估计
+        """
         if self.use_disturbance_compensation and self.last_disturbance_estimate is not None:
             try:
                 # 处理 CasADi DM 对象
@@ -522,7 +557,14 @@ class DoMPCAirshipController:
             return np.zeros(6)
 
     def reset(self):
-        """重置控制器"""
+        """重置控制器
+        1. 重置扰动观测器
+        2. 重置初始条件
+        3. 清除历史数据
+        4. 重置控制器
+        5. 重置估计器
+        6. 重置仿真器
+        """
         if self.use_disturbance_compensation:
             self.disturbance_observer.reset()
             self.last_disturbance_estimate = np.zeros(6)
