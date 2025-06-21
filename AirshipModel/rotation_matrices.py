@@ -46,17 +46,17 @@ def R_zeta(gamma):
     cth, sth = np.cos(theta), np.sin(theta)
     cpsi, spsi = np.cos(psi), np.sin(psi)
 
-    R_b2i = np.array(
+    r_zeta = np.array(
         [
             [cth * cpsi, sphi * sth * cpsi - cphi * spsi, cphi * sth * cpsi + sphi * spsi],
             [cth * spsi, sphi * sth * spsi + cphi * cpsi, cphi * sth * spsi - sphi * cpsi],
             [-sth, sphi * cth, cphi * cth],
         ]
     )
-    return R_b2i
+    return r_zeta
 
 
-def R_y(gamma):
+def R_gamma(gamma):
     """
     计算角速度变换矩阵 R_y - Eq. 7
 
@@ -66,16 +66,16 @@ def R_y(gamma):
     return:
         3x3 的旋转矩阵 R
     """
-    phi, theta, psi = gamma[0], gamma[1], gamma[2]
+    phi, theta, _psi = gamma[0], gamma[1], gamma[2]
     cphi, sphi = np.cos(phi), np.sin(phi)
     cth, sth = np.cos(theta), np.sin(theta)
 
-    cth_safe = ca.if_else(ca.fabs(cth) < 1e-6, 1e-6, cth)
+    _cth_safe = ca.if_else(ca.fabs(cth) < 1e-6, 1e-6, cth)
 
-    R_i2b = np.array([[1, sphi * sth / cth, cphi * sth / cth],
+    r_gamma = np.array([[1, sphi * sth / cth, cphi * sth / cth],
                       [0, cphi, -sphi],
                       [0, sphi / cth, cphi / cth]])
-    return R_i2b
+    return r_gamma
 
 
 
@@ -100,7 +100,7 @@ def R_y_inv(gamma):
     #            [0, cos(phi), sin(phi)cos(theta)],
     #            [0, -sin(phi), cos(phi)cos(theta)]]
     # It seems my manual calculation based on Eq 7 was wrong. Using Eq 16 directly:
-    R_inv_paper = np.array([[1, 0, -sth],
+    _R_inv_paper = np.array([[1, 0, -sth],
                             [0, cphi, sphi * cth],
                             [0, -sphi, cphi * cth]])
     try:
@@ -131,13 +131,16 @@ def S_omega(omega):
 def R_block(gamma):
     """
     构建块对角旋转/变换矩阵 R = diag(Rz, Ry)
+    build block diagonal rotation/transformation matrix R = diag(Rz, Ry)
     args:
         gamma 是姿态角 (phi, theta, psi)
+        gamma is attitude angles (phi, theta, psi)
     return:
         6x6 的旋转矩阵 R
+        6x6 rotation matrix R
     """
     Rz = R_zeta(gamma)
-    Ry = R_y(gamma)
+    Ry = R_gamma(gamma)
     R = np.zeros((6, 6))
     R[0:3, 0:3] = Rz
     R[3:6, 3:6] = Ry

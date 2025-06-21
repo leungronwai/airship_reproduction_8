@@ -271,7 +271,7 @@ class AirshipCasADiSymbolic:
         _ = t
 
         # === 解构状态 ===
-        zeta = X[0:3]  # Position in ERF
+        _zeta = X[0:3]  # Position in ERF
         gamma = X[3:6]  # Attitude (Euler angles)
         v = X[6:9]  # Linear velocity in BRF
         omega = X[9:12]  # Angular velocity in BRF
