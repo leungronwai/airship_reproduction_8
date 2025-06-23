@@ -12,11 +12,11 @@ from config import parameters as params
 
 
 
-# 假设附加质量计算函数也在此文件中或可以导入
+
 # from added_mass_calculator import calculate_added_mass_inertia # 假设可用
 
 # ==============================================================================
-#  定义基础几何、环境和气动参数 (Define Basic Geometric, Env, Aero Params)
+#   (Define Basic Geometric, Env, Aero Params)
 # ==============================================================================
 
 
