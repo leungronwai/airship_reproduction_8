@@ -150,7 +150,6 @@ class AirshipCasADiSymbolic:
         )
 
 
-
         #========================================================================
         #                     Thrust and torque
         #========================================================================
@@ -182,5 +181,6 @@ class AirshipCasADiSymbolic:
 
         # --- Combine state derivatives ---
         dXdt = ca.vertcat(y_dot, x_dot)
+        print(dXdt.shape)
 
         return dXdt
