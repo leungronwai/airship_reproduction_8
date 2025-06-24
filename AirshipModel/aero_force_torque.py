@@ -1,7 +1,7 @@
 # airship/aerodynamics.py
 """
-气动力和气动力矩计算模块。
-提供计算气艇气动力和力矩的函数。
+Aerodynamic force and torque calculation module.
+Provides functions to calculate aerodynamic forces and moments for airships.
 """
 # pylint: disable=invalid-name
 # cspell:ignore coeffs ddelta eta_f Sh Sg Sf Cdcf dalpha arcsin coeff ndarray linalg vertcat xdot nlpsol xlabel ylabel zlabel

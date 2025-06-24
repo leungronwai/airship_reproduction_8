@@ -10,17 +10,17 @@ Main simulation script for airship trajectory tracking and controller evaluation
 # cspell: ignore whitegrid figsize sharex suptitle
 
 
-# === 标准库 ===
+# === Standard libraries ===
 import os
 import sys
 import time as timer  # Use timer to avoid conflict with time variable t
 import logging
 
-# === 第三方库 ===
+# === Third-party libraries ===
 import numpy as np
 import matplotlib.pyplot as plt
 
-# === 本地模块 ===
+# === Local modules ===
 from config import parameters as params
 from airship.utils import R_block, rk4_step
 from airship.model import Airship
@@ -28,33 +28,40 @@ from airship.trajectory import Trajectory
 from airship.controller import AnyController, NMPCThrustController
 
 
-# === 添加项目根目录到路径（如需从根目录运行） ===
+# === Add project root directory to path (if running from root directory) ===
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 
 
 
-# 全局 logger（在这里做一次 basicConfig） / Global logger (basicConfig done here)
+# Global logger (basicConfig done here)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
 def run_simulation(trajectory_type="default"):
     """
-    1.初始化：创建气艇模型、轨迹生成器、控制器等对象
-
-
-
-
+    Run simulation with trajectory tracking.
+    
+    1. Initialize: Create airship model, trajectory generator, controller and other objects
+    2. Simulation loop: At each time step:
+        a. Get reference trajectory
+        b. Call NMPC controller to calculate control input
+        c. Update airship state
+    
+    Parameters:
+    ----------
+    trajectory_type : str, optional
+        Type of trajectory to follow ("default", "spiral", "figure8", "lemniscate", "linear")
     """
 
-    # --- 初始化 / Initialize ---
+    # --- Initialize ---
     airship = Airship(params.X0)
     trajectory = Trajectory()
     controller = AnyController()
 
-    # --- 数据记录 / Data logging ---
+    # --- Data logging ---
     sim_time = np.arange(0, params.T_SPAN, params.DT)
     n_steps = len(sim_time)
     state_history = np.zeros((12, n_steps))
@@ -67,37 +74,37 @@ def run_simulation(trajectory_type="default"):
     yc_history = np.zeros((6, n_steps))
     y_history = np.zeros((6, n_steps))
 
-    # --- 仿真循环 / Simulation loop ---
+    # --- Simulation loop ---
     for i, t in enumerate(sim_time):
-        # 2.仿真循环：在**每个时间步**:
-        #     a. 获取参考轨迹
-        #     b. 调用 NMPC 控制器计算控制输入
-        #     c. 更新气艇状态
+        # 2. Simulation loop: At each time step:
+        #     a. Get reference trajectory
+        #     b. Call NMPC controller to calculate control input
+        #     c. Update airship state
 
 
-        # 获取当前状态 (Get current state)
+        # Get current state
         X = airship.get_state()
 
-        # 基于轨迹类型获取期望状态 (Get desired state based on trajectory type)
+        # Get desired state based on trajectory type
         if trajectory_type == "default":
             yc, yc_dot, yc_ddot, xc, xc_dot = trajectory.get_linear_trajectory(t)
         elif trajectory_type == "spiral":
             yc, yc_dot, yc_ddot, xc, xc_dot = trajectory.get_spiral_trajectory(t)
-            # 转换螺旋轨迹为所需格式...
-            # 这里需要额外转换代码 - 需要实现
+            # Convert spiral trajectory to required format...
+            # Additional conversion code needed here - to be implemented
         elif trajectory_type == "figure8":
             yc, yc_dot, yc_ddot, xc, xc_dot = trajectory.get_figure8_trajectory(t)
         elif trajectory_type == "lemniscate":
             yc, yc_dot, yc_ddot, xc, xc_dot = trajectory.get_lemniscate_trajectory(t)
         elif trajectory_type == "linear":
-            # 直线轨迹，可以自定义起点和终点
+            # Linear trajectory, can customize start and end points
             start_point = np.array([0.0, 0.0, -19000.0])
             end_point = np.array([5000.0, 5000.0, -19000.0])
             yc, yc_dot, yc_ddot, xc, xc_dot = trajectory.get_linear_trajectory(
-                t, start_point=start_point, end_point=end_point, speed=15.0, hover_at_end=True  # 飞行速度 15 m/s  # 到达终点后悬停
+                t, start_point=start_point, end_point=end_point, speed=15.0, hover_at_end=True  # Flight speed 15 m/s  # Hover at end point
             )
         else:
-            raise ValueError(f"未知的轨迹类型：{trajectory_type}")
+            raise ValueError(f"Unknown trajectory type: {trajectory_type}")
 
         zeta_d, gamma_d = yc[0:3], yc[3:6]  # Desired position/attitude vector
         zeta_d_dot, gamma_d_dot = yc_dot[0:3], yc_dot[3:6]  # Desired velocity vector

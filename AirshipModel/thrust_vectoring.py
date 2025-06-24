@@ -45,14 +45,14 @@ def thrust_params_to_force_torque(thrust_params, rp_r, rp_l, use_casadi=False):
             T_mag * ca.cos(mu) * ca.cos(nu),
             T_mag * ca.sin(mu),
             T_mag * ca.cos(mu) * ca.sin(nu)
-        )  # CasADi 的 vertcat 默认生成列向量 (3x1)
+        )  # CasADi's vertcat default generates column vector (3x1)
 
         # total thrust
         T_total = thrust_vector_r + thrust_vector_l
 
         # calculate torque
-        tau_r = ca.cross(rp_r, thrust_vector_r)  # CasADi 的 cross 支持 (3x1) 矩阵
-        tau_l = ca.cross(rp_l, thrust_vector_l)  # CasADi 的 cross 支持 (3x1) 矩阵
+        tau_r = ca.cross(rp_r, thrust_vector_r)  # CasADi's cross supports (3x1) matrices
+        tau_l = ca.cross(rp_l, thrust_vector_l)  # CasADi's cross supports (3x1) matrices
         tau_vec = tau_r + tau_l
 
         # combine forces and torques for thrust vectoring

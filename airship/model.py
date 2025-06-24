@@ -5,16 +5,16 @@ Airship dynamic model module (model.py)
 # pylint: disable=invalid-name
 # cspell:ignore coeffs ddelta eta_f Sh Sg Sf Cdcf dalpha arcsin coeff ndarray linalg vertcat xdot
 # cspell:ignore arctan RUDT RUDB ELVL ELVR unmodeled
-# === 标准库 ===
+# === Standard Libraries ===
 import sys
 import os
 
-# === 第三方库 ===
+# === Third-party Libraries ===
 import numpy as np
 
 import casadi as ca
 
-# === 本地模块 ===
+# === Local Modules ===
 from config import parameters as params
 from airship.aero_force_torque import calculate_aero_forces_moments, calculate_relative_velocity, calculate_aoa_sideslip
 from airship.thrust import thrust_params_to_force_torque
@@ -22,7 +22,7 @@ from .utils import skew, R_zeta, R_block
 
 
 
-# === 设置路径（如有需要） ===
+# === Set Path (if needed) ===
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 
@@ -30,7 +30,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 class Airship:
     """
-    气艇模型类
+    Airship model class
     """
 
     def __init__(self, initial_state):
@@ -43,23 +43,23 @@ class Airship:
         self.M_upper_left = params.M_cfg[0:3, 0:3]  # m*I + M' from Eq. 9
         self.rc_vec = params.rc  # Vector CV->CG (shape (3,1))
         self.rb_vec = params.rb  # Vector CV->CB (shape (3,1))
-        self.rp_r_vec = params.rp_r  # 右侧推力作用点向量 (Vector CV->CP Right)
-        self.rp_l_vec = params.rp_l  # 左侧推力作用点向量 (Vector CV->CP Left)
+        self.rp_r_vec = params.rp_r  # Right thrust application point vector (Vector CV->CP Right)
+        self.rp_l_vec = params.rp_l  # Left thrust application point vector (Vector CV->CP Left)
         self.rc_skew = skew(self.rc_vec.flatten())  # Skew-symmetric matrix for rc
 
-        # --- 添加计算浮力和气动所需的参数 (Add parameters for buoyancy/aero) ---
-        self.Vol_airship = params.Vol_airship  # 体积 Volume
-        self.rho_air = params.rho_air  # 空气密度 Air density
-        self.S_ref = params.S_ref  # 参考面积 Reference Area
-        self.L_ref = params.L_ref  # 参考长度 Reference Length
+        # --- Add parameters for buoyancy/aero ---
+        self.Vol_airship = params.Vol_airship  # Volume
+        self.rho_air = params.rho_air  # Air density
+        self.S_ref = params.S_ref  # Reference Area
+        self.L_ref = params.L_ref  # Reference Length
 
-        # 添加对风速参数的引用
-        self.V_wind_erf_const = params.V_WIND_ERF  # 如果风速是常数
-        # self.V_wind_func = params.V_WIND_FUNC # 如果风速是函数
+        # Add reference to wind speed parameters
+        self.V_wind_erf_const = params.V_WIND_ERF  # if wind speed is constant
+        # self.V_wind_func = params.V_WIND_FUNC # if wind speed is a function
 
 
     def rhs(self, t, X, tau, disturbance_func):
-        """计算状态向量 X 的导数 dX/dt - Right Hand Side"""
+        """Calculate the derivative of the state vector X - Right Hand Side"""
         zeta = X[0:3]
         gamma = X[3:6]
         v = X[6:9]  # Linear velocity in BRF [u, v, w]
@@ -74,15 +74,15 @@ class Airship:
         u, v_body, w = v_1d[0], v_1d[1], v_1d[2]
         p, q, r = omega_1d[0], omega_1d[1], omega_1d[2]
 
-        # --- 运动学 (Kinematics - Eq. 5 / Eq. 12 first part) ---
-        # 注意：运动学方程描述的是气艇相对于地面的运动
+        # --- Kinematics - Eq. 5 / Eq. 12 first part ---
+        # Note: Kinematic equations describe the motion of the airship relative to the ground
         R = R_block(gamma)  # Combined rotation matrix diag(R_zeta, R_y)
-        y_dot = R @ x_vec  # [zeta_dot, gamma_dot]  (相对于地面)
+        y_dot = R @ x_vec  # [zeta_dot, gamma_dot]  (relative to ground)
 
 
-        # --- 动力学 (Dynamics - Eq. 8 / Eq. 12 second part) ---
+        # --- Dynamics - Eq. 8 / Eq. 12 second part ---
 
-        # --- 计算 N 项 (Calculate N term - Eq. 10) ---
+        # --- Calculate N term - Eq. 10 ---
         # N = [ N1 ; N2 ] where N1 is 3x1 (forces) and N2 is 3x1 (torques)
         v_col = v.reshape(3, 1)
         omega_col = omega.reshape(3, 1)
@@ -104,12 +104,12 @@ class Airship:
 
         N_term = np.vstack((N1, N2)).flatten()  # Combine N1 and N2 into 6x1 vector
 
-        # === 计算 F 项 (Calculate F term - Eq. 11) ===
+        # === Calculate F term - Eq. 11 ===
         # F = [ F_forces ; F_torques ]
         # F_forces = fg - fb + fa
         # F_torques = mg + mb + ma
 
-        # === 计算重力力和力矩 (Calculate Gravity Force and Torque) ===
+        # === Calculate Gravity Force and Torque ---
         # fg: Gravity force in BRF
         Rz = R_zeta(gamma)  # Rotation from BRF to ERF
         gravity_ERF = np.array([[0], [0], [self.m * self.g]])  # Gravity in Earth Frame
@@ -119,10 +119,10 @@ class Airship:
         # Torque = r_cg x F_g.  Since F_g acts at CG, r_cg = 0.
         mg_BRF = np.cross(rc_1d, fg_BRF.flatten()).reshape(3, 1)  # Torque due to gravity acting at CG (rc is CV->CG)
 
-        # === 计算浮力和浮力矩 (Calculate Buoyancy Force and Torque) ===
+        # === Calculate Buoyancy Force and Torque ---
         # fb: Buoyancy force in BRF
         # Requires displaced volume V and air density rho_air.
-        F_buoyancy_ERF = np.array([[0], [0], [-self.Vol_airship * self.rho_air * self.g]])  # 向上为负 Z
+        F_buoyancy_ERF = np.array([[0], [0], [-self.Vol_airship * self.rho_air * self.g]])  # upward is negative Z
         fb_BRF = Rz.T @ F_buoyancy_ERF  # Rotate buoyancy vector to Body Frame
 
         # mb: Buoyancy torque in BRF
@@ -134,57 +134,58 @@ class Airship:
         # r_cb = -self.rb_vec
         # mb_BRF = np.cross(r_cb.flatten(), fb_BRF.flatten(), axis=0).reshape(3,1)
 
-        # === 新增：计算相对速度 (New: Calculate Relative Velocity) ===
-        # 获取风速 (Get wind velocity)
-        # 如果使用常数风速：/ if using constant wind speed:
+        # === New: Calculate Relative Velocity ---
+        # Get wind velocity
+        # if using constant wind speed:
         V_wind_ERF = self.V_wind_erf_const
-        # 如果使用函数风速：/ if using function wind speed:
+        # if using function wind speed:
         # V_wind_ERF = self.V_wind_func(t, zeta)
 
-        # 将风速转换到体轴系 (Transform wind to Body Frame)
+        # Transform wind to Body Frame
         V_wind_BRF = Rz.T @ V_wind_ERF.reshape(3, 1)
         V_wind_BRF_1d = V_wind_BRF.flatten()
 
-        # 计算相对速度 (Calculate relative velocity - - relative Airspeed in BRF)
+        # Calculate relative velocity - relative Airspeed in BRF
         v_airship_brf_1d = v_1d  # Body Reference Frame - BRF
         v_rel_brf_1d, u_rel, v_rel_body, w_rel = calculate_relative_velocity(v_airship_brf_1d, V_wind_BRF_1d)
 
 
-        # === 计算气动力和力矩 (Calculate Aerodynamic Forces and Moments) ===
+        # === Calculate Aerodynamic Forces and Moments ---
         # fa: Aerodynamic force in BRF  placeholder
-        # 动压 (Dynamic Pressure  - based on relative speed)
+        # Dynamic Pressure  - based on relative speed
         V_rel_mag = np.linalg.norm(v_rel_brf_1d)
         q_dyn = 0.5 * self.rho_air * V_rel_mag**2 if V_rel_mag > 1e-3 else 0  # Avoid division by zero
 
-        # 攻角和侧滑角 (Angle of Attack & Sideslip Angle - based on relative speed) - 确保 u > 0
+        # Angle of Attack & Sideslip Angle - based on relative speed
+        # Ensure u > 0
         alpha, beta = calculate_aoa_sideslip(u_rel, v_rel_body, w_rel, V_rel_mag)
 
-        # --- 获取控制舵面偏转角 (Get Control Surface Deflections) ---
-        # !!! 关键占位符：这些值需要由控制分配模块根据 tau[3:6] 确定 !!!
+        # --- Get Control Surface Deflections ---
+        # !!! Critical Placeholder: These values need to be determined by a Control Allocation module based on tau[3:6] !!!
         # !!! Critical Placeholder: These values need to be determined by a Control Allocation module based on tau[3:6] !!!
         delta_RUDT = np.deg2rad(0.0)  # [rad] - Placeholder
         delta_RUDB = np.deg2rad(0.0)  # [rad] - Placeholder
         delta_ELVL = np.deg2rad(0.0)  # [rad] - Placeholder
         delta_ELVR = np.deg2rad(0.0)  # [rad] - Placeholder
 
-        # --- 计算气动力和力矩 (Calculate Aerodynamic Forces and Moments) ---
+        # --- Calculate Aerodynamic Forces and Moments ---
         fa_BRF, ma_BRF = calculate_aero_forces_moments(
             q_dyn, alpha, beta,
             params.AERO_COEFFS,
             delta_RUDT, delta_RUDB, delta_ELVL, delta_ELVR
         )
 
-        # === 计算推力和推力矩 (Calculate Thrust and torque) ===
-        print(type(tau)) # 确保 tau 是 NumPy 数组
+        # === Calculate Thrust and torque ---
+        print(type(tau)) # Ensure tau is a NumPy array
         print(tau)
-        # 使用 thrust_params_to_force_torque 将推力参数转换为推力和推力矩
+        # Use thrust_params_to_force_torque to convert thrust parameters to thrust and torque
         thrust_torque = thrust_params_to_force_torque(tau, self.rp_r_vec, self.rp_l_vec)
         print(thrust_torque)
 
-        T_total = thrust_torque[0:3].reshape(3, 1)  # 推力矢量 - Thrust vector
-        tau_vec = thrust_torque[3:6].reshape(3, 1)  # 推力矩矢量 - Torque vector
+        T_total = thrust_torque[0:3].reshape(3, 1)  # Thrust vector - Thrust vector
+        tau_vec = thrust_torque[3:6].reshape(3, 1)  # Torque vector - Torque vector
 
-        # === 组合力和力矩 (Combine Forces and Torques) ===
+        # === Combine Forces and Torques ---
         F_forces = fg_BRF - fb_BRF + fa_BRF + T_total
         print(F_forces.shape)
         F_torques = mg_BRF + mb_BRF + ma_BRF + tau_vec
@@ -192,15 +193,15 @@ class Airship:
 
         F_term = np.vstack((F_forces, F_torques)).flatten()  # Combine forces and torques into 6x1 vector
 
-        # === 获取扰动 (Get Disturbance) ===
+        # === Get Disturbance ---
         # This is the external/unmodeled disturbance delta from the paper
         d = disturbance_func(t)
 
-        # --- 动力学方程 (Dynamics Equation): Mx_dot + N = F + tau + d ---
+        # --- Dynamics Equation: Mx_dot + N = F + tau + d ---
         # Rearranging for x_dot: x_dot = M_inv * (F - N + tau + d)
         x_dot = self.M_inv @ (F_term - N_term + thrust_torque + d)
 
-        # --- 组合状态导数 (Combine state derivatives) ---
+        # --- Combine state derivatives ---
         dXdt = np.concatenate((y_dot, x_dot))
 
         print(dXdt.shape)
@@ -208,7 +209,7 @@ class Airship:
         return dXdt
 
     def update_state(self, X_dot, dt):
-        """使用欧拉积分更新状态 (Update state using Euler integration)"""
+        """Update state using Euler integration"""
         # NOTE: Using RK4 in simulation.py is preferred for accuracy.
         # This Euler update is kept for potential direct use but not used by main loop.
         self.X = self.X + X_dot * dt
@@ -217,21 +218,21 @@ class Airship:
         self.X[4] = np.clip(self.X[4], -np.pi / 2 + 0.01, np.pi / 2 - 0.01)  # Keep Theta away from singularity
 
     def get_state(self):
-        """获取当前状态 (Get current state)"""
+        """Get current state"""
         return self.X
 
     def get_pose(self):
-        """获取当前姿态 (Get current pose)"""
+        """Get current pose"""
         return self.X[0:6]  # zeta, gamma
 
     def get_velocity(self):
-        """获取当前速度 (Get current velocity)"""
+        """Get current velocity"""
         return self.X[6:12]  # v, omega
 
 
 class AirshipCasADiSymbolic:
     """
-    气艇符号模型类
+    Airship symbolic model class
     """
     def __init__(self, input_params):
         self.params = input_params
@@ -270,19 +271,19 @@ class AirshipCasADiSymbolic:
         # ca = __import__("casadi")  # dynamic import
         _ = t
 
-        # === 解构状态 ===
+        # === Deconstruct state ===
         _zeta = X[0:3]  # Position in ERF
         gamma = X[3:6]  # Attitude (Euler angles)
         v = X[6:9]  # Linear velocity in BRF
         omega = X[9:12]  # Angular velocity in BRF
 
-        # === 运动学 (Kinematics) ===
+        # === Kinematics ===
         R = R_block(gamma)  # Combined rotation matrix
         y_dot = R @ ca.vertcat(v, omega)  # [zeta_dot, gamma_dot]
 
 
 
-        # === 动力学 (Dynamics) ===
+        # === Dynamics ===
 
         #=================================================================
         #                     Coriolis and Centrifugal Effects
@@ -332,15 +333,15 @@ class AirshipCasADiSymbolic:
         # Angle of attack and sideslip angle
         alpha, beta = calculate_aoa_sideslip(u_rel, v_rel_body, w_rel, V_rel_mag, use_casadi=True)
 
-        # === 获取控制舵面偏转角 (Get Control Surface Deflections) ===
-        # !!! 关键占位符：这些值需要由控制分配模块根据 tau[3:6] 确定 !!!
+        # === Get Control Surface Deflections ===
+        # !!! Critical Placeholder: These values need to be determined by a Control Allocation module based on tau[3:6] !!!
         # !!! Critical Placeholder: These values need to be determined by a Control Allocation module based on tau[3:6] !!!
         delta_RUDT = np.deg2rad(0.0)  # [rad] - Placeholder
         delta_RUDB = np.deg2rad(0.0)  # [rad] - Placeholder
         delta_ELVL = np.deg2rad(0.0)  # [rad] - Placeholder
         delta_ELVR = np.deg2rad(0.0)  # [rad] - Placeholder
 
-        # 使用提取的函数计算气动力和力矩
+        # Use extracted function to calculate aerodynamic forces and moments
         fa_BRF, ma_BRF = calculate_aero_forces_moments(
             q_dyn, alpha, beta,
             self.AERO_COEFFS,
@@ -353,9 +354,9 @@ class AirshipCasADiSymbolic:
         #========================================================================
         #                     Thrust and torque
         #========================================================================
-        # 检查 U 的维度
+        # Check dimensions of U
         print(U.shape)
-        # 直接将推力参数转换为力和力矩
+        # Directly convert thrust parameters to force and torque
         U_vec = thrust_params_to_force_torque(U, self.rp_r, self.rp_l, use_casadi=True)
 
 
