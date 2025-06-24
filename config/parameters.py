@@ -6,11 +6,19 @@
 # pylint: disable=invalid-name
 # cspell:ignore coeffs ddelta eta_f Sh Sg Sf Cdcf dalpha arcsin coeff ndarray linalg
 
+# === Standard Libraries ===
+import sys
+import os
+
+# === Third-party Libraries ===
 import numpy as np
 
 # import physical calculation functions
 from airship.physics import calculate_added_mass_inertia
 
+
+# 把项目根目录加入 sys.path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 
 # === simulation parameters (Simulation Parameters) ===

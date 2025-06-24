@@ -84,7 +84,7 @@ def calculate_added_mass_inertia(a1, a2, b, rho_air_):
             _e = 0.0
             k1_ = k2_ = k3_ = 0.5  # Fallback to sphere case
         else:
-            _e = np.sqrt(1.0 - (b**2 / a))  #!! eq. 44
+            _e = np.sqrt(1.0 - (b**2 / a))  # eq. 44
 
             # Avoid e extremely close to 1 (to avoid division by zero in f)
             if abs(1.0 - _e) < tolerance:
@@ -93,7 +93,7 @@ def calculate_added_mass_inertia(a1, a2, b, rho_air_):
             # Calculate intermediate parameters f, g, alpha_prime, beta_prime
 
             # f (Eq. 45)
-            f = np.log((1.0 + _e) / (1.0 - _e))  #!! eq. 45
+            f = np.log((1.0 + _e) / (1.0 - _e))  # eq. 45
 
             # g (Eq. 46)
             # Avoid division by zero for e=0 (handled in sphere case)
@@ -102,30 +102,30 @@ def calculate_added_mass_inertia(a1, a2, b, rho_air_):
             if abs(e_cubed) < tolerance:
                 # Theoretically e is non-zero, but numerically small
                 raise ValueError("Eccentricity e cubed is close to zero, cannot calculate g.")
-            _g = (1.0 - e_sq) / e_cubed  #!! eq. 46
+            _g = (1.0 - e_sq) / e_cubed  # eq. 46
 
             # alpha_ (Eq. 47)
-            alpha_ = 2.0 * _g * (f / 2.0 - _e)  #!! eq. 47
+            alpha_ = 2.0 * _g * (f / 2.0 - _e)  # eq. 47
 
             # beta_ (Eq. 48)
             if abs(e_sq) < tolerance:
                 raise ValueError(
                     "The square of eccentricity e is close to zero, beta_prime cannot be calculated."
                 )
-            beta_ = (1.0 / e_sq) - (_g * f / 2.0)  #!! eq. 48
+            beta_ = (1.0 / e_sq) - (_g * f / 2.0)  # eq. 48
 
             # Calculate inertia factors k1, k2, k3
             # k1 (Eq. 49)
             denominator_k1 = 2.0 - alpha_  # denominator, numerator, fraction
             if abs(denominator_k1) < tolerance:
                 raise ValueError("Small denominator in k1 calculation")
-            k1_ = - alpha_ / (2.0 - alpha_)  #!! eq. 49
+            k1_ = - alpha_ / (2.0 - alpha_)  # eq. 49
 
             # k2 (Eq. 50)
             denominator_k2 = 2.0 - beta_
             if abs(denominator_k2) < tolerance:
                 raise ValueError("Small denominator in k2 calculation")
-            k2_ = - beta_ / (2.0 - beta_)  #!! eq. 50
+            k2_ = - beta_ / (2.0 - beta_)  # eq. 50
 
             # k3 (Eq. 51)
             a_sq = a**2
@@ -141,12 +141,12 @@ def calculate_added_mass_inertia(a1, a2, b, rho_air_):
                 else:  # If it's a sphere, numerator is also zero, limit should be 0.5
                     k3_ = 0.5
             else:
-                k3_ = -(1.0 / 5.0) * term1_num_k3 / term2_den_k3  #!! eq. 51
+                k3_ = -(1.0 / 5.0) * term1_num_k3 / term2_den_k3  # eq. 51
 
     # Construct Added Mass Matrix M_prime - Eq. 42
-    _M_prime = m_air * np.diag([k1_, k2_, k2_])  #!! eq. 42
+    _M_prime = m_air * np.diag([k1_, k2_, k2_])  # eq. 42
 
     # Construct Added Inertia Matrix I0' - Eq. 42
-    _I0_prime = m_air * np.diag([0.0, k3_, k3_])  #!! eq. 42
+    _I0_prime = m_air * np.diag([0.0, k3_, k3_])  # eq. 42
 
     return _M_prime, _I0_prime, k1_, k2_, k3_
