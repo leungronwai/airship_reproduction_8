@@ -18,7 +18,7 @@ import casadi as ca
 from config import parameters as params
 from airship.aero_force_torque import calculate_aero_forces_moments, calculate_relative_velocity, calculate_aoa_sideslip
 from airship.thrust import thrust_params_to_force_torque
-from .utils import skew, R_zeta, R_block
+from airship.utils import skew, R_zeta, R_block
 
 
 
