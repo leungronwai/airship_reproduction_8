@@ -16,8 +16,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from config import parameters as params
-from airship.trajectory import Trajectory
-from airship.controller_dompc import DoMPCAirshipController, convert_trajectory_format
+from AirshipModel.trajectory_ref import Trajectory
+from airship_model.controller_dompc import DoMPCAirshipController, convert_trajectory_format
 from airship.utils import rk4_step
 from airship.model import AirshipCasADiSymbolic
 
