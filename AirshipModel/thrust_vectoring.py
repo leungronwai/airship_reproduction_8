@@ -1,4 +1,4 @@
-# airship/thrust.py
+# thrust_vectoring.py
 """
 Thrust parameter conversion module.
 Provide functions to convert thrust parameters to force and torque vectors for thrust vectoring.

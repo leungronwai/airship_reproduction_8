@@ -1,4 +1,4 @@
-# New file: airship/physics.py
+# added_mass_inertia.py
 """
 Physical model calculation module - includes calculations for mass, inertia and aerodynamic characteristics
 Reference: Development of an Aerodynamic Model and Control Law Design for a High Altitude Airship
