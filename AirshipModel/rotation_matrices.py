@@ -14,7 +14,7 @@ import casadi as ca
 
 
 def skew(v):
-    """将 3D 向量转换为反对称矩阵"""
+    """Convert a 3D vector to a skew-symmetric matrix"""
     if v.shape != (3,) and v.shape != (3, 1):
         raise ValueError(f"Input must be a 3D vector, got shape {v.shape}")
     v = v.flatten()  # Ensure it's 1D
@@ -25,7 +25,7 @@ def skew(v):
 
 def sig(x, alpha):
     """
-    计算 x 的分数阶幂次 : sign(x) * |x|^alpha
+    Calculate the fractional power of x: sign(x) * |x|^alpha
     # Element-wise operation
     """
     return np.sign(x) * np.power(np.abs(x), alpha)
@@ -34,12 +34,12 @@ def sig(x, alpha):
 
 def R_zeta(gamma):
     """
-    计算旋转矩阵 R_zeta (BRF to ERF) - Eq. 6
-    计算从体坐标系 (Body Reference Frame) 到惯性坐标系 (Inertial Reference Frame) 的旋转矩阵
+    Calculate rotation matrix R_zeta (BRF to ERF) - Eq. 6
+    Calculate the rotation matrix from Body Reference Frame to Inertial Reference Frame
     args:
-        gamma 是姿态角 (phi, theta, psi)
+        gamma: attitude angles (phi, theta, psi)
     return:
-        3x3 的旋转矩阵 R
+        3x3 rotation matrix R
     """
     phi, theta, psi = gamma[0], gamma[1], gamma[2]
     cphi, sphi = np.cos(phi), np.sin(phi)
@@ -58,13 +58,13 @@ def R_zeta(gamma):
 
 def R_gamma(gamma):
     """
-    计算角速度变换矩阵 R_y - Eq. 7
+    Calculate angular velocity transformation matrix R_y - Eq. 7
 
-    计算从惯性坐标系 (Inertial Reference Frame) 到体坐标系 (Body Reference Frame) 的旋转矩阵
+    Calculate the rotation matrix from Inertial Reference Frame to Body Reference Frame
     args:
-        gamma 是姿态角 (phi, theta, psi)
+        gamma: attitude angles (phi, theta, psi)
     return:
-        3x3 的旋转矩阵 R
+        3x3 rotation matrix R
     """
     phi, theta, _psi = gamma[0], gamma[1], gamma[2]
     cphi, sphi = np.cos(phi), np.sin(phi)
@@ -81,12 +81,12 @@ def R_gamma(gamma):
 
 def R_y_inv(gamma):
     """
-    计算角速度变换矩阵 R_y 的逆 - Eq. 16
-    计算从体坐标系 (Body Reference Frame) 到惯性坐标系 (Inertial Reference Frame) 的旋转矩阵
+    Calculate the inverse of angular velocity transformation matrix R_y - Eq. 16
+    Calculate the rotation matrix from Body Reference Frame to Inertial Reference Frame
     args:
-        gamma 是姿态角 (phi, theta, psi)
+        gamma: attitude angles (phi, theta, psi)
     return:
-        3x3 的旋转矩阵 R
+        3x3 rotation matrix R
     """
     phi, theta, _psi = gamma[0], gamma[1], gamma[2]
     cphi, sphi = np.cos(phi), np.sin(phi)
@@ -104,21 +104,21 @@ def R_y_inv(gamma):
                             [0, cphi, sphi * cth],
                             [0, -sphi, cphi * cth]])
     try:
-        R_inv = np.linalg.inv(R_y(gamma))
+        R_inv = np.linalg.inv(R_gamma(gamma))
     except np.linalg.LinAlgError:
-        print("Warning: R_y is singular, cannot compute inverse.")
+        print("Warning: R_gamma is singular, cannot compute inverse.")
         R_inv = np.identity(3)  # Fallback or error
     return R_inv
 
 
 def S_omega(omega):
     """
-    这个是多余的
-    计算用于科里奥利项的反对称矩阵 S(omega) - Eq. 14
+    This function is redundant
+    Calculate the skew-symmetric matrix S(omega) for Coriolis terms - Eq. 14
     args:
-        omega 是角速度 (p, q, r)
+        omega: angular velocity (p, q, r)
     return:
-        3x3 的旋转矩阵
+        3x3 rotation matrix
     """
     p, q, r = omega[0], omega[1], omega[2]
     S = np.array([[0, -r, q],
@@ -130,13 +130,10 @@ def S_omega(omega):
 
 def R_block(gamma):
     """
-    构建块对角旋转/变换矩阵 R = diag(Rz, Ry)
-    build block diagonal rotation/transformation matrix R = diag(Rz, Ry)
+    Construct block diagonal rotation/transformation matrix R = diag(Rz, Ry)
     args:
-        gamma 是姿态角 (phi, theta, psi)
-        gamma is attitude angles (phi, theta, psi)
+        gamma: attitude angles (phi, theta, psi)
     return:
-        6x6 的旋转矩阵 R
         6x6 rotation matrix R
     """
     Rz = R_zeta(gamma)
@@ -150,17 +147,17 @@ def R_block(gamma):
 
 def rk4_step(f, t, X, dt, *args):
     """
-    使用 RK4 方法计算单步积分。
+    Compute a single integration step using RK4 method.
 
-    参数：
-        f: 动力学函数，形式为 f(t, X, *args)，返回 dX/dt。
-        t: 当前时间。
-        X: 当前状态向量。
-        dt: 时间步长。
-        *args: 传递给动力学函数的额外参数。
+    Parameters:
+        f: Dynamics function in the form f(t, X, *args), returns dX/dt.
+        t: Current time.
+        X: Current state vector.
+        dt: Time step.
+        *args: Additional arguments to pass to the dynamics function.
 
-    返回：
-        X_next: 下一时刻的状态向量。
+    Returns:
+        X_next: State vector at the next time step.
     """
     k1 = f(t, X, *args)
     k2 = f(t + 0.5 * dt, X + 0.5 * dt * k1, *args)

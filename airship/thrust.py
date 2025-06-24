@@ -1,7 +1,7 @@
 # airship/thrust.py
 """
-推力参数转换模块。
-提供将推力参数转换为力和力矩的函数。
+Thrust parameter conversion module.
+Provides functions to convert thrust parameters to force and torque.
 """
 # cspell:ignore vertcat arctan allclose
 # pylint: disable=invalid-name
@@ -11,80 +11,80 @@ import numpy as np
 
 def thrust_params_to_force_torque(thrust_params, rp_r, rp_l, use_casadi=False):
     """
-    将推力参数转换为力和力矩向量。
+    Convert thrust parameters to force and torque vectors.
 
-    参数：
-        thrust_params: [T, μ, v] - 推力大小和方向参数
-            T_mag: 推力大小
-            mu: 水平面内的推力偏转角
-            nu: 垂直面内的推力偏转角
-        rp_r: 右侧推力作用点向量 (相对于 CV)
-        rp_l: 左侧推力作用点向量 (相对于 CV)
-        use_casadi: 是否使用 CasADi (而不是 NumPy)
+    Args:
+        thrust_params: [T, μ, v] - thrust magnitude and direction parameters
+            T_mag: thrust magnitude
+            mu: thrust deflection angle in horizontal plane
+            nu: thrust deflection angle in vertical plane
+        rp_r: right thrust application point vector (relative to CV)
+        rp_l: left thrust application point vector (relative to CV)
+        use_casadi: whether to use CasADi (instead of NumPy)
 
-    返回：
-        tau: [Fx, Fy, Fz, Tx, Ty, Tz] - 6 维力和力矩向量
+    Returns:
+        tau: [Fx, Fy, Fz, Tx, Ty, Tz] - 6-dimensional force and torque vector
     """
-    # 选择合适的数学库
+    # Select appropriate math library
     if use_casadi:
         ca = __import__("casadi")
-        # 使用 CasADi 的矩阵操作提取元素
+        # Use CasADi matrix operations to extract elements
         T_mag = thrust_params[0]
         mu = thrust_params[1]
         nu = thrust_params[2]
 
-        # 计算右侧推力向量
+        # Calculate right thrust vector
         thrust_vector_r = ca.vertcat(
             T_mag * ca.cos(mu) * ca.cos(nu),
             T_mag * ca.sin(mu),
             T_mag * ca.cos(mu) * ca.sin(nu)
-        )  # CasADi 的 vertcat 默认生成列向量 (3x1)
+        )  # CasADi's vertcat generates column vector (3x1) by default
 
-        # 计算左侧推力向量
+        # Calculate left thrust vector
         thrust_vector_l = ca.vertcat(
             T_mag * ca.cos(mu) * ca.cos(nu),
             T_mag * ca.sin(mu),
             T_mag * ca.cos(mu) * ca.sin(nu)
-        )  # CasADi 的 vertcat 默认生成列向量 (3x1)
+        )  # CasADi's vertcat generates column vector (3x1) by default
 
-        # 总推力
+        # Total thrust
         T_total = thrust_vector_r + thrust_vector_l
 
-        # 计算力矩
-        tau_r = ca.cross(rp_r, thrust_vector_r)  # CasADi 的 cross 支持 (3x1) 矩阵
-        tau_l = ca.cross(rp_l, thrust_vector_l)  # CasADi 的 cross 支持 (3x1) 矩阵
+        # Calculate torque
+        tau_r = ca.cross(rp_r, thrust_vector_r)  # CasADi's cross supports (3x1) matrices
+        tau_l = ca.cross(rp_l, thrust_vector_l)  # CasADi's cross supports (3x1) matrices
         tau_vec = tau_r + tau_l
 
-        # 组合力和力矩
+        # Combine force and torque
         thrust_force_torque = ca.vertcat(T_total, tau_vec)
 
     else:
-        # 使用 NumPy
+        # Use NumPy
         T_mag, mu, nu = thrust_params
 
-        # 计算右侧推力向量
+        # Calculate right thrust vector
         thrust_vector_r = np.array([
             T_mag * np.cos(mu) * np.cos(nu),
             T_mag * np.sin(mu),
             T_mag * np.cos(mu) * np.sin(nu)
-        ]).reshape(3, 1)  # 确保是列向量 (3,1)
+        ]).reshape(3, 1)  # Ensure it's a column vector (3,1)
 
-        # 计算左侧推力向量
+        # Calculate left thrust vector
         thrust_vector_l = np.array([
             T_mag * np.cos(mu) * np.cos(nu),
             T_mag * np.sin(mu),
             T_mag * np.cos(mu) * np.sin(nu)
-        ]).reshape(3, 1)  # 确保是列向量 (3,1)
+        ]).reshape(3, 1)  # Ensure it's a column vector (3,1)
 
-        # 总推力
-        T_total = (thrust_vector_r + thrust_vector_l)  # 已经是 (3,1)
+        # Total thrust
+        T_total = thrust_vector_r + thrust_vector_l  # Already (3,1)
 
-        # 计算力矩
+        # Calculate torque
         tau_r = np.cross(rp_r.flatten(), thrust_vector_r.flatten()).reshape(3, 1)
         tau_l = np.cross(rp_l.flatten(), thrust_vector_l.flatten()).reshape(3, 1)
         tau_vec = tau_r + tau_l
 
-        # 组合力和力矩
+        # Combine force and torque
         thrust_force_torque = np.vstack([T_total, tau_vec]).flatten()
 
     return thrust_force_torque
@@ -92,22 +92,22 @@ def thrust_params_to_force_torque(thrust_params, rp_r, rp_l, use_casadi=False):
 
 def calculate_thrust_direction(F_desired):
     """
-    根据期望的力矢量计算合适的推力方向参数。
+    Calculate appropriate thrust direction parameters based on desired force vector.
 
-    参数：
-        F_desired: 期望的力矢量 [Fx, Fy, Fz]
+    Args:
+        F_desired: desired force vector [Fx, Fy, Fz]
 
-    返回：
-        tuple: (mu, nu) - 水平和垂直偏转角 (弧度)
+    Returns:
+        tuple: (mu, nu) - horizontal and vertical deflection angles (radians)
     """
-    # 对于零力矢量，返回默认值 (前向)
+    # For zero force vector, return default values (forward)
     if np.allclose(F_desired, 0):
         return 0.0, 0.0
 
-    # 计算水平偏转角
+    # Calculate horizontal deflection angle
     mu = np.arctan2(F_desired[1], np.sqrt(F_desired[0]**2 + F_desired[2]**2))
 
-    # 计算垂直偏转角
+    # Calculate vertical deflection angle
     nu = np.arctan2(F_desired[2], F_desired[0]) if abs(F_desired[0]) > 1e-6 else np.sign(F_desired[2]) * np.pi/2
 
     return mu, nu

@@ -15,7 +15,7 @@ from simulation.run_dompc_simulation import run_dompc_simulation
 
 
 
-# 添加项目根目录到 sys.path / Add project root directory to sys.path
+# Add project root directory to sys.path
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if PROJECT_ROOT not in sys.path:
     sys.path.append(PROJECT_ROOT)
@@ -25,54 +25,53 @@ if PROJECT_ROOT not in sys.path:
 
 def setup_logger():
     """
-    全局日志配置：只需在这里配置一次，项目中其他模块获取同一 logger 即可。
     Global logging configuration: Configure once here, and other modules in the project
     can retrieve the same logger.
     """
     log_dir = "logs"
-    os.makedirs(log_dir, exist_ok=True)  # 创建 logs 目录 / Create logs directory if it doesn't exist
+    os.makedirs(log_dir, exist_ok=True)  # Create logs directory if it doesn't exist
 
-    # 生成带时间戳的日志文件名
+    # Generate log filename with timestamp
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     log_filename = os.path.join(log_dir, f"simulation_{timestamp}.log")
 
-    # 配置日志格式 / Configure log format
+    # Configure log format
     log_format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
-    # 配置日志 / Configure logging
+    # Configure logging
     logging.basicConfig(
         level=logging.INFO,
         format=log_format,
         handlers=[
-            # logging.FileHandler(log_filename, encoding='utf-8'),  # 文件处理器 保存到文件 / File handler
-            logging.StreamHandler(sys.stdout)  # 控制台处理器 / Console handler
+            # logging.FileHandler(log_filename, encoding='utf-8'),  # File handler - save to file
+            logging.StreamHandler(sys.stdout)  # Console handler
         ]
     )
 
     logger = logging.getLogger(__name__)
-    logger.info("日志系统初始化完成 / Logging system initialized")
-    logger.info("日志文件：%s", log_filename)
+    logger.info("Logging system initialized")
+    logger.info("Log file: %s", log_filename)
     return logger
 
 
 def main():
-    """主程序入口"""
+    """Main program entry point"""
     logger = setup_logger()
 
     try:
-        logger.info("=== 气艇轨迹跟踪仿真开始 ===")
+        logger.info("=== Airship Trajectory Tracking Simulation Started ===")
 
 
-        print("\n=== 气艇仿真配置 ===")
+        print("\n=== Airship Simulation Configuration ===")
 
-        # ========== 在这里修改您的选择 ==========
-        choice = "2"        # "1" = PID 控制器，"2" = do-mpc NMPC 控制器
-        traj_choice = "2"   # "1" = 直线，"2" = 螺旋，"3" = 8 字，"4" = 莱洛曲线
+        # ========== Modify your choices here ==========
+        choice = "2"        # "1" = PID Controller, "2" = do-mpc NMPC Controller
+        traj_choice = "2"   # "1" = Linear, "2" = Spiral, "3" = Figure-8, "4" = Lemniscate
         # =====================================
 
-        print(f"选择的控制器：{'PID 控制器' if choice == '1' else 'do-mpc NMPC 控制器'}")
+        print(f"Selected controller: {'PID Controller' if choice == '1' else 'do-mpc NMPC Controller'}")
 
-        # 轨迹映射
+        # Trajectory mapping
         trajectory_map = {
             "1": "linear",
             "2": "spiral",
@@ -81,24 +80,24 @@ def main():
         }
 
         trajectory_type = trajectory_map.get(traj_choice, "linear")
-        print(f"选择的轨迹类型：{trajectory_type}")
-        logger.info("选择的轨迹类型：%s", trajectory_type)
+        print(f"Selected trajectory type: {trajectory_type}")
+        logger.info("Selected trajectory type: %s", trajectory_type)
 
-        # 根据选择运行相应的仿真
+        # Run corresponding simulation based on selection
         if choice == "1":
-            logger.info("运行传统 PID 控制器仿真")
+            logger.info("Running traditional PID controller simulation")
             run_simulation(trajectory_type=trajectory_type)
 
         elif choice == "2":
-            logger.info("运行 do-mpc NMPC 控制器仿真")
+            logger.info("Running do-mpc NMPC controller simulation")
             run_dompc_simulation(
                 trajectory_type=trajectory_type,
                 use_disturbance_compensation=True,
-                use_simulator=False  # 仅使用 MPC 控制器
+                use_simulator=False  # Only use MPC controller
             )
 
         else:
-            logger.warning("无效选择，运行默认的 do-mpc NMPC 控制器")
+            logger.warning("Invalid selection, running default do-mpc NMPC controller")
             run_dompc_simulation(
                 trajectory_type="linear",
                 use_disturbance_compensation=True,
@@ -106,54 +105,54 @@ def main():
             )
 
     except KeyboardInterrupt:
-        logger.info("用户中断程序")
+        logger.info("User interrupted the program")
     finally:
-        logger.info("=== 仿真程序结束 ===")
+        logger.info("=== Simulation program ended ===")
 
 
 def _run_comparison_simulation(trajectory_type):
-    """运行控制器对比仿真"""
+    """Run controller comparison simulation"""
     logger = logging.getLogger(__name__)
 
-    print(f"\n=== 开始对比仿真 (轨迹：{trajectory_type}) ===")
+    print(f"\n=== Starting comparison simulation (trajectory: {trajectory_type}) ===")
 
     results = {}
 
-    # 1. 运行传统 PID 控制器
+    # 1. Run traditional PID controller
     try:
-        print("1/2 运行传统 PID 控制器...")
-        logger.info("开始 PID 控制器仿真")
+        print("1/2 Running traditional PID controller...")
+        logger.info("Starting PID controller simulation")
         run_simulation(trajectory_type=trajectory_type)
-        results['PID'] = "成功"
-        print("PID 控制器仿真完成")
+        results['PID'] = "Success"
+        print("PID controller simulation completed")
     except KeyboardInterrupt:
-        logger.info("用户中断程序 / User interrupted the program")
+        logger.info("User interrupted the program")
     except (ValueError, TypeError, RuntimeError) as e:
-        logger.error("程序执行出错：%s", e)
+        logger.error("Program execution error: %s", e)
     except Exception as e:     # pylint: disable=broad-except
-        logger.exception("未处理的异常：%s", e)
+        logger.exception("Unhandled exception: %s", e)
 
-    # 2. 运行 do-mpc NMPC 控制器
+    # 2. Run do-mpc NMPC controller
     try:
-        print("2/2 运行 do-mpc NMPC 控制器...")
-        logger.info("开始 do-mpc NMPC 控制器仿真")
+        print("2/2 Running do-mpc NMPC controller...")
+        logger.info("Starting do-mpc NMPC controller simulation")
         run_dompc_simulation(
             trajectory_type=trajectory_type,
             use_disturbance_compensation=True
         )
-        results['do-mpc NMPC'] = "成功"
-        print("do-mpc NMPC 控制器仿真完成")
+        results['do-mpc NMPC'] = "Success"
+        print("do-mpc NMPC controller simulation completed")
     except Exception as e:      # pylint: disable=broad-except
-        logger.error("do-mpc NMPC 控制器仿真失败：%s", e)
-        results['do-mpc NMPC'] = f"失败：{e}"
-        print("do-mpc NMPC 控制器仿真失败")
+        logger.error("do-mpc NMPC controller simulation failed: %s", e)
+        results['do-mpc NMPC'] = f"Failed: {e}"
+        print("do-mpc NMPC controller simulation failed")
 
-    # 汇总结果
-    print("\n=== 对比仿真结果汇总 ===")
+    # Summary of results
+    print("\n=== Comparison simulation results summary ===")
     for controller, result in results.items():
         print(f"{controller}: {result}")
 
-    logger.info("对比仿真完成，结果：%s", results)
+    logger.info("Comparison simulation completed, results: %s", results)
 
 
 if __name__ == "__main__":

@@ -13,43 +13,43 @@ from config import parameters as params
 
 
 
-# from added_mass_calculator import calculate_added_mass_inertia # 假设可用
+# from added_mass_calculator import calculate_added_mass_inertia # Assumed available
 
 # ==============================================================================
 #   (Define Basic Geometric, Env, Aero Params)
 # ==============================================================================
 
 
-# === 几何参数 (Geometric Parameters) ===
-airship_a1 = params.airship_a1  # [m] 前椭球半长轴 (Front ellipsoid semi-major axis)
-airship_a2 = params.airship_a2  # [m] 后椭球半长轴 (Rear ellipsoid semi-major axis)
-airship_b = params.airship_b  # [m] 半短轴 (Semi-minor axis)
+# === Geometric Parameters ===
+airship_a1 = params.airship_a1  # [m] Front ellipsoid semi-major axis
+airship_a2 = params.airship_a2  # [m] Rear ellipsoid semi-major axis
+airship_b = params.airship_b  # [m] Semi-minor axis
 
-Lh = airship_a1 + airship_a2  # [m] 机身总长 (Total hull length) - 假设
-L_ref = Lh  # [m] 参考长度 (Reference length) - 假设
-# 体积中心 x 坐标 (Volume Center x-coordinate) - Placeholder,
-# 精确值依赖于双椭球的具体组合方式，这里用平均 a 近似或假设原点在特定位置 /
+Lh = airship_a1 + airship_a2  # [m] Total hull length - Assumption
+L_ref = Lh  # [m] Reference length - Assumption
+# Volume Center x-coordinate - Placeholder,
+# Exact value depends on specific combination of double ellipsoids, using average a approximation or assuming origin at specific position
 xcv = airship_a1 + (3 / 8) * (airship_a2 - airship_a1)  # [m] - Placeholder, assume origin or calc if needed Eq.22
 
-# 计算体积 (Calculate Volume)
+# Calculate Volume
 mean_a = (airship_a1 + airship_a2) / 2.0
 V_airship = (4.0 / 3.0) * np.pi * mean_a * airship_b**2  # [m^3]
 
-Sh = V_airship ** (2.0 / 3.0)  # [m^2] 机身参考面积 (Hull reference area)
-Sf = 3656.0  # [m^2] 翼/舵面参考面积 (Fin reference area)
-Sg = 202.0  # [m^2] 吊舱参考面积 (Gondola reference area)
+Sh = V_airship ** (2.0 / 3.0)  # [m^2] Hull reference area
+Sf = 3656.0  # [m^2] Fin reference area
+Sg = 202.0  # [m^2] Gondola reference area
 
-# 力臂 (Lever Arms)
+# Lever Arms
 lf1 = 117.5  # [m] x-dist origin to aero center fins
 lf2 = 129.7  # [m] x-dist origin to geom center fins
 lf3 = 18.3  # [m] y,z-dist origin to aero center fins (Used for Cl1)
 lgx = 29.2  # [m] x-dist origin to aero center gondola
 lgz = 40.0  # [m] z-dist origin to aero center gondola (Used for Cl2)
 
-# === 环境参数 (Environmental Parameters) ===
-rho_air_at_altitude = params.rho_air_at_altitude  # [kg/m^3] 空气密度 @ ~20km - Placeholder
+# === Environmental Parameters ===
+rho_air_at_altitude = params.rho_air_at_altitude  # [kg/m^3] Air density @ ~20km - Placeholder
 
-# === 基础气动系数和导数 (Basic Aero Coeffs & Derivatives from Table 2) ===
+# === Basic Aero Coeffs & Derivatives from Table 2 ===
 CDh0 = 0.025
 CDf0 = 0.006
 CDg0 = 0.01
@@ -59,19 +59,18 @@ CDcg = 1.0
 dCL_dalpha_f = 5.73  # (∂CL/∂α)f
 dCL_ddelta_f = 1.24  # (∂CL/∂δ)f
 
-# === 效率和积分因子 (Efficiency & Integral Factors from Table 2) ===
+# === Efficiency & Integral Factors from Table 2 ===
 eta_f = 0.29
 eta_k = 1.19
-# 使用表格中的积分因子值 (Using integral factor values from Table 2)
+# Using integral factor values from Table 2
 I1_table = 0.33
 I3_table = -0.69
 J1_table = 1.31
 J2_table = 0.53
-# 注意：如果需要根据几何形状用 Eq. 82-85 计算，取消注释下面的计算部分
 # Note: If calculation based on geometry (Eq. 82-85) is preferred, uncomment below
 
 
-# 默认使用表格值 (Defaulting to table values)
+# Defaulting to table values
 I1 = I1_table
 I3 = I3_table
 J1 = J1_table
@@ -82,36 +81,34 @@ J2 = J2_table
 
 
 # ==============================================================================
-#  计算高阶气动系数的函数 (Function to Calculate Higher-Order Aero Coeffs)
+#  Function to Calculate Higher-Order Aero Coeffs
 # ==============================================================================
 
 
 def get_aero_coefficients(k1=0, k2=0):
     """
-    计算气动系数 Cx1...Cn4。
-    Calculates aerodynamic coefficients Cx1...Cn4.
-    使用此文件顶部定义的全局基础参数。
+    Calculate aerodynamic coefficients Cx1...Cn4.
     Uses the global basic parameters defined at the top of this file.
 
     Args:
-        k1 (float): 附加质量因子 k1.
-        k2 (float): 附加质量因子 k2.
+        k1 (float): Added mass factor k1.
+        k2 (float): Added mass factor k2.
 
     Returns:
-        dict: 包含所有计算出的气动系数的字典。
+        dict: Dictionary containing all calculated aerodynamic coefficients.
     """
     coeffs = {}
 
 
 
-    # 使用模块级定义的参数 (Use module-level defined parameters)
+    # Use module-level defined parameters
     # Eq. 66-81
     coeffs["Cx1"] = -(CDh0 * Sh + CDf0 * Sf + CDg0 * Sg)
     coeffs["Cx2"] = (k2 - k1) * eta_k * I1 * Sh
-    # 假设 Eq 73 (Cz1=Cz4) 和 Eq 70 (Cz2=Cz4) 是笔误，或者 Cz4 依赖于不同导数 / Assume Cz4 is a typo or Cz4 depends on different derivatives
-    # 按照最直接的解释 Cy4, Cz4 公式计算 / Calculate Cy4, Cz4 based on the most direct interpretation
+    # Assume Cz4 is a typo or Cz4 depends on different derivatives
+    # Calculate Cy4, Cz4 based on the most direct interpretation
 
-    # coeffs['Cz4'] = 0.5 * dCL_ddelta_f * Sf * eta_f # 假设舵面效率相同 / Assume control surface efficiency is the same
+    # coeffs['Cz4'] = 0.5 * dCL_ddelta_f * Sf * eta_f # Assume control surface efficiency is the same
     coeffs["Cz1"] = coeffs["Cx2"]
     coeffs["Cy1"] = coeffs["Cx2"]
 
@@ -133,7 +130,7 @@ def get_aero_coefficients(k1=0, k2=0):
     coeffs["Cn1"] = -coeffs["Cm1"]
     coeffs["Cn2"] = -coeffs["Cm2"]
     coeffs["Cn3"] = -coeffs["Cm3"]
-    coeffs["Cn4"] = -coeffs["Cm4"]  # <-- 使用了 Cm4 / Using Cm4
+    coeffs["Cn4"] = -coeffs["Cm4"]  # <-- Using Cm4
 
     return coeffs
 
@@ -142,21 +139,20 @@ def get_aero_coefficients(k1=0, k2=0):
 
 
 # ==============================================================================
-#  主执行部分 (示例) (Main execution part - Example)
+#  Main execution part (Example)
 # ==============================================================================
 if __name__ == "__main__":
-    # 这个部分只在直接运行 aero_coefficients.py 时执行，用于测试
-    # / This part only runs when aero_coefficients.py is directly executed, for testing
-    print("--- 测试计算气动系数 ---")
+    # This part only runs when aero_coefficients.py is directly executed, for testing
+    print("--- Testing Aerodynamic Coefficient Calculation ---")
     try:
-        # 使用计算得到的 k1, k2 计算气动系数
+        # Use calculated k1, k2 to compute aerodynamic coefficients
         inertia_k1 = params.k1
         inertia_k2 = params.k2
         aero_coeffs_calculated = get_aero_coefficients(k1=inertia_k1, k2=inertia_k2)
 
-        print("\n计算得到的气动系数 / Aerodynamic Coefficients:")
+        print("\nCalculated Aerodynamic Coefficients:")
         for coeff, value in aero_coeffs_calculated.items():
             print(f"  {coeff}: {value:.4f}")
 
     except ValueError as e:
-        print(f"\n计算过程中发生错误 / Error during calculation: {e}")
+        print(f"\nError during calculation: {e}")
