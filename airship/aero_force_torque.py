@@ -129,12 +129,12 @@ def calculate_relative_velocity(v_airship_brf, V_wind_BRF):
     """
     Calculate relative wind speed.
 
-    Parameters:
-        v_airship_brf: 体轴系中的地速
-        V_wind_BRF: 体轴系中的风速
+        Parameters:
+        v_airship_brf: Ground velocity in body reference frame
+        V_wind_BRF: Wind velocity in body reference frame
 
     Returns:
-        tuple: (v_rel, u_rel, v_rel_body, w_rel) - 相对风速向量及其分量
+        tuple: (v_rel, u_rel, v_rel_body, w_rel) - Relative wind velocity vector and its components
     """
     v_rel = v_airship_brf - V_wind_BRF
 

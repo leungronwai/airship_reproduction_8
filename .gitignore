@@ -1,26 +1,26 @@
-# 忽略.idea 文件夹
+# Ignore .idea folder
 .idea
 
-# 忽略.DS_Store 文件
+# Ignore .DS_Store files
 .DS_Store
 
-# 忽略.env 文件
+# Ignore .env files
 .env
 
-# 忽略.env.example 文件
+# Ignore .env.example files
 .env.example
 
-# 忽略.env.staging 文件
+# Ignore .env.staging files
 .env.staging
 
-# 忽略.env.production 文件
+# Ignore .env.production files
 .env.production
 
-# 忽略.env.development 文件
+# Ignore .env.development files
 .env.development
 
-# 忽略.env.test 文件
+# Ignore .env.test files
 .env.test
 
-# 忽略.env.local 文件
+# Ignore .env.local files
 .env.local

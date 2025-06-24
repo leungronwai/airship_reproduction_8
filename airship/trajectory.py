@@ -12,125 +12,126 @@ from airship.utils import R_zeta, R_y_inv
 
 class Trajectory:
     """
-    轨迹生成模块
+    Trajectory generation module
 
 
-        参数：
-            t: 当前时间
-            start_point: 起点坐标 [x, y, z]，默认为原点
-            end_point: 终点坐标 [x, y, z]，默认为 [5000, 5000, -19000]
-            speed: 飞行速度，单位 m/s
-            hover_at_end: 到达终点后是否悬停，否则继续沿直线飞行
+        Parameters:
+            t: Current time
+            start_point: Starting point coordinates [x, y, z], default is origin
+            end_point: End point coordinates [x, y, z], default is [5000, 5000, -19000]
+            speed: Flight speed in m/s
+            hover_at_end: Whether to hover after reaching the end point, otherwise continue flying straight
 
-        返回：
-            yc, yc_dot, yc_ddot, xc, xc_dot: 期望状态及导数
+        Returns:
+            yc, yc_dot, yc_ddot, xc, xc_dot: Desired states and derivatives
 
 
-        说明：
+        Description:
             - yc:
 
-                表示期望状态向量，包含飞艇的期望位置和姿态。
-                具体包括：
-                    位置：[x, y, z]，即飞艇在空间中的期望位置。
-                    姿态：[φ, θ, ψ]，即飞艇的期望姿态角（横滚角、俯仰角、航向角）。
+                Represents the desired state vector, containing the desired position and attitude of the airship.
+                Specifically includes:
+                    Position: [x, y, z], the desired position of the airship in space.
+                    Attitude: [φ, θ, ψ], the desired attitude angles of the airship (roll, pitch, yaw).
             - yc_dot:
 
-                表示期望状态的一阶导数，即期望速度向量。
-                具体包括：
-                    线速度：[vx, vy, vz]，即飞艇在空间中的期望线速度。
-                    角速度：[ωφ, ωθ, ωψ]，即飞艇的期望角速度。
+                Represents the first derivative of the desired state, i.e., the desired velocity vector.
+                Specifically includes:
+                    Linear velocity: [vx, vy, vz], the desired linear velocity of the airship in space.
+                    Angular velocity: [ωφ, ωθ, ωψ], the desired angular velocity of the airship.
             - yc_ddot:
 
-                表示期望状态的二阶导数，即期望加速度向量。
-                具体包括：
-                    线加速度：[ax, ay, az]，即飞艇在空间中的期望线加速度。
-                    角加速度：[αφ, αθ, αψ]，即飞艇的期望角加速度。
+                Represents the second derivative of the desired state, i.e., the desired acceleration vector.
+                Specifically includes:
+                    Linear acceleration: [ax, ay, az], the desired linear acceleration of the airship in space.
+                    Angular acceleration: [αφ, αθ, αψ], the desired angular acceleration of the airship.
             - xc:
 
-                表示控制指令向量，包含期望的线速度和角速度。
-                具体包括：
-                    线速度指令：[vx, vy, vz]，即飞艇的期望线速度。
-                    角速度指令：[ωφ, ωθ, ωψ]，即飞艇的期望角速度。
+                Represents the control command vector, containing desired linear and angular velocities.
+                Specifically includes:
+                    Linear velocity command: [vx, vy, vz], the desired linear velocity of the airship.
+                    Angular velocity command: [ωφ, ωθ, ωψ], the desired angular velocity of the airship.
             - xc_dot:
 
-                表示控制指令的一阶导数，即控制指令的变化率。
-                具体包括：
-                    线速度变化率：[dvx/dt, dvy/dt, dvz/dt]，即线速度的时间变化率。
-                    角速度变化率：[dωφ/dt, dωθ/dt, dωψ/dt]，即角速度的时间变化率。
+                Represents the first derivative of the control command, i.e., the rate of change of control commands.
+                Specifically includes:
+                    Linear velocity rate: [dvx/dt, dvy/dt, dvz/dt], the time rate of change of linear velocity.
+                    Angular velocity rate: [dωφ/dt, dωθ/dt, dωψ/dt], the time rate of change of angular velocity.
     """
     def __init__(self):
         pass  # No specific initialization needed for this trajectory
 
     # ┌─────────────────────────────────────────────────────┐
-    # │          螺旋轨迹函数 spiral                          │
+    # │          Spiral trajectory function                  │
     # └─────────────────────────────────────────────────────┘
 
     def get_spiral_trajectory(self, t):
 
         """
-        生成一个螺旋轨迹，带有高度变化
-        args:
-            t: 当前时间
-        returns:
+        Generate a spiral trajectory with altitude variation
+        
+        Args:
+            t: Current time
+        Returns:
             yc, yc_dot, yc_ddot, xc, xc_dot
         """
 
         dt_small = 1e-4
 
-        # --- 轨迹参数 ---
-        omega = 0.07  # 角速度
-        r = 1500  # 半径
-        h_max = 2000  # 最大高度
+        # --- Trajectory parameters ---
+        omega = 0.07  # Angular velocity
+        r = 1500  # Radius
+        h_max = 2000  # Maximum height
 
-        # 在起始时刻打印起始点信息
-        if abs(t) < 1e-3:  # t 接近 0 时
+        # Print starting point information at initial time
+        if abs(t) < 1e-3:  # When t approaches 0
             start_x = r * np.cos(0)  # = r = 1500
             start_y = r * np.sin(0)  # = 0
             start_z = h_max * (1 - np.exp(0))  # = 0
-            print(f"【螺旋轨迹】起始点位置：[{start_x:.1f}, {start_y:.1f}, {start_z:.1f}] (米)")
-            print(f"【螺旋轨迹】轨迹参数：半径={r}m, 最大高度={h_max}m, 角速度={omega}rad/s")
+            print(f"[Spiral Trajectory] Starting point position: [{start_x:.1f}, {start_y:.1f}, {start_z:.1f}] (meters)")
+            print(f"[Spiral Trajectory] Trajectory parameters: radius={r}m, max height={h_max}m, angular velocity={omega}rad/s")
 
-        # --- 直接计算位置、速度和加速度 ---
+        # --- Directly calculate position, velocity and acceleration ---
         theta = omega * t
-        # 位置
+        # Position
         xd = r * np.cos(theta)
         yd = r * np.sin(theta)
         zd = h_max * (1 - np.exp(-theta / 10))
         pos = np.array([xd, yd, zd])
 
-        # 速度
+        # Velocity
         xd_dot = -r * omega * np.sin(theta)
         yd_dot = r * omega * np.cos(theta)
         zd_dot = h_max * (1 / 10) * np.exp(-theta / 10) * omega
         vel = np.array([xd_dot, yd_dot, zd_dot])
 
-        # 加速度
+        # Acceleration
         xd_ddot = -r * omega**2 * np.cos(theta)
         yd_ddot = -r * omega**2 * np.sin(theta)
         zd_ddot = -h_max * (1 / 10) * omega**2 * np.exp(-theta / 10)
         acc = np.array([xd_ddot, yd_ddot, zd_ddot])
 
-        # 构造位置和速度向量
+        # Construct position and velocity vectors
         zeta_d = pos
         zeta_d_dot = vel
         zeta_d_ddot = acc
 
-        # 计算姿态
-        phi_d = 0.0  # 保持零横滚
-        theta_d = np.arctan2(-vel[2], np.sqrt(vel[0] ** 2 + vel[1] ** 2))  # 俯仰角
-        psi_d = np.arctan2(vel[1], vel[0])  # 航向角
+        # Calculate attitude
+        phi_d = 0.0  # Maintain zero roll
+        theta_d = np.arctan2(-vel[2], np.sqrt(vel[0] ** 2 + vel[1] ** 2))  # Pitch angle
+        psi_d = np.arctan2(vel[1], vel[0])  # Yaw angle
         gamma_d = np.array([phi_d, theta_d, psi_d])
 
-        # 使用数值差分获取姿态导数
+        # Use numerical differentiation to get attitude derivatives
         _, gamma_d_plus = self.get_spiral_pos_att(t + dt_small)
         _, gamma_d_minus = self.get_spiral_pos_att(t - dt_small)
         gamma_d_dot = (gamma_d_plus - gamma_d_minus) / (2 * dt_small)
 
-        # 组合 yc、yc_dot
+        # Combine yc, yc_dot
         yc = np.concatenate((zeta_d, gamma_d))
         yc_dot = np.concatenate((zeta_d_dot, gamma_d_dot))
 
-        # 速度指令 vc, wc
+        # Velocity commands vc, wc
         Rc_z = R_zeta(gamma_d)
         Rc_y_inv = R_y_inv(gamma_d)
         vc = Rc_z.T @ zeta_d_dot.reshape(-1, 1)
@@ -139,13 +140,13 @@ class Trajectory:
         wc = wc.flatten()
         xc = np.concatenate((vc, wc))
 
-        # xc_dot 通过符号化导数简化近似
+        # xc_dot simplified approximation through symbolic derivatives
         vc_dot = Rc_z.T @ zeta_d_ddot.reshape(-1, 1)
         vc_dot = vc_dot.flatten()
-        wc_dot = np.zeros(3)  # 简化处理，假设角速度变化率较小
+        wc_dot = np.zeros(3)  # Simplified processing, assuming small angular velocity change rate
         xc_dot = np.concatenate((vc_dot, wc_dot))
 
-        # yc_ddot 同样简化处理
+        # yc_ddot simplified processing
         gamma_d_ddot = np.zeros(3)
         yc_ddot = np.concatenate((zeta_d_ddot, gamma_d_ddot))
 
@@ -153,73 +154,72 @@ class Trajectory:
 
     def get_spiral_pos_att(self, t):
         """
-        计算螺旋轨迹在时间 t 的位置和姿态，用于计算导数
-        避免递归调用 define_spiral_trajectory
+        Calculate the position and attitude of the spiral trajectory at time t, used for derivative calculation
+        Avoid recursive calls to define_spiral_trajectory
         """
-        # --- 轨迹参数 ---
-        omega = 0.07  # 角速度 (rad/s)
-        r = 1500  # 基础半径 (m)
-        h_max = 2000  # 最大高度 (m)
+        # --- Trajectory parameters ---
+        omega = 0.07  # Angular velocity (rad/s)
+        r = 1500  # Basic radius (m)
+        h_max = 2000  # Maximum height (m)
 
-        # --- 位置计算 ---
+        # --- Position calculation ---
         theta = omega * t
         xd = r * np.cos(theta)
         yd = r * np.sin(theta)
         zd = h_max * (1 - np.exp(-theta / 10))
         zeta_d = np.array([xd, yd, zd])
 
-        # --- 速度计算（用于姿态确定） ---
+        # --- Velocity calculation (for attitude determination) ---
         xd_dot = -r * omega * np.sin(theta)
         yd_dot = r * omega * np.cos(theta)
         zd_dot = h_max * (1 / 10) * np.exp(-theta / 10) * omega
 
-        # --- 姿态计算 ---
-        phi_d = 0.0  # 保持零横滚
-        theta_d = np.arctan2(-zd_dot, np.sqrt(xd_dot**2 + yd_dot**2))  # 俯仰角
-        psi_d = np.arctan2(yd_dot, xd_dot)  # 航向角
+        # --- Attitude calculation ---
+        phi_d = 0.0  # Maintain zero roll
+        theta_d = np.arctan2(-zd_dot, np.sqrt(xd_dot**2 + yd_dot**2))  # Pitch angle
+        psi_d = np.arctan2(yd_dot, xd_dot)  # Yaw angle
         gamma_d = np.array([phi_d, theta_d, psi_d])
 
         return zeta_d, gamma_d
 
-    # ********************* 8 字形轨迹函数 *********************
+    # ********************* Figure-8 trajectory function *********************
 
     def get_figure8_trajectory(self, t):
         """
-        生成一个水平 8 字形轨迹，带有平滑的高度变化
-        返回 8 字形轨迹的期望状态及其导数
+        Generate a horizontal figure-8 trajectory with smooth altitude variation
+        Return the desired state and derivatives of the figure-8 trajectory        
+        Parameters:
+            t: Current time
 
-        参数：
-            t: 当前时间
-
-        返回：
-            yc, yc_dot, yc_ddot, xc, xc_dot: 与 get_desired_state 相同的输出格式
+        Returns:
+            yc, yc_dot, yc_ddot, xc, xc_dot: Same output format as get_desired_state
         """
         dt_small = 1e-4
 
-        # --- 轨迹参数 ---
-        a = 3000  # 8 字形的宽度
-        b = 2000  # 8 字形的高度
-        omega = 0.003  # 角速度，控制飞艇在轨迹上的移动速度
-        h_center = -19000  # 中心高度
-        h_amp = 500  # 高度振荡幅度
-        omega_h = 0.002  # 高度变化的角速度
+        # --- Trajectory parameters ---
+        a = 3000  # Width of figure-8
+        b = 2000  # Height of figure-8
+        omega = 0.003  # Angular velocity, controls the speed of movement along the trajectory
+        h_center = -19000  # Center altitude
+        h_amp = 500  # Altitude oscillation amplitude
+        omega_h = 0.002  # Angular velocity of altitude variation
 
-        # 在起始时刻打印起始点信息
-        if abs(t) < 1e-3:  # t 接近 0 时
+        # Print starting point information at initial time
+        if abs(t) < 1e-3:  # When t approaches 0
             start_x = a * np.sin(0)  # = 0
             start_y = b * np.sin(0) * np.cos(0)  # = 0
             start_z = h_center + h_amp * np.sin(0)  # = h_center = -19000
-            print(f"【8 字形轨迹】起始点位置：[{start_x:.1f}, {start_y:.1f}, {start_z:.1f}] (米)")
-            print(f"【8 字形轨迹】轨迹参数：宽度={a}m, 高度={b}m, 中心高度={h_center}m, 角速度={omega}rad/s")
+            print(f"[Figure-8 Trajectory] Starting point position: [{start_x:.1f}, {start_y:.1f}, {start_z:.1f}] (meters)")
+            print(f"[Figure-8 Trajectory] Trajectory parameters: width={a}m, height={b}m, center altitude={h_center}m, angular velocity={omega}rad/s")
 
-        # --- 位置计算 ---
-        # 8 字形的参数方程
+        # --- Position calculation ---
+        # Parametric equations for figure-8
         xd = a * np.sin(omega * t)
         yd = b * np.sin(omega * t) * np.cos(omega * t)
         zd = h_center + h_amp * np.sin(omega_h * t)
         zeta_d = np.array([xd, yd, zd])
 
-        # --- 速度计算 ---
+        # --- Velocity calculation ---
         xd_dot = a * omega * np.cos(omega * t)
         yd_dot = b * omega * (np.cos(omega * t) * np.cos(omega * t)
                               - np.sin(omega * t) * np.sin(omega * t)
@@ -227,8 +227,8 @@ class Trajectory:
         zd_dot = h_amp * omega_h * np.cos(omega_h * t)
         zeta_d_dot = np.array([xd_dot, yd_dot, zd_dot])
 
-        # --- 加速度计算（使用数值差分） ---
-        # 计算 t+dt 时刻的速度
+        # --- Acceleration calculation (using numerical differentiation) ---
+        # Calculate velocity at t+dt time
         xd_dot_plus = a * omega * np.cos(omega * (t + dt_small))
         yd_dot_plus = (
             b * omega * (np.cos(omega * (t + dt_small)) * np.cos(omega * (t + dt_small))
@@ -237,7 +237,7 @@ class Trajectory:
         )
         zd_dot_plus = h_amp * omega_h * np.cos(omega_h * (t + dt_small))
 
-        # 计算 t-dt 时刻的速度
+        # Calculate velocity at t-dt time
         xd_dot_minus = a * omega * np.cos(omega * (t - dt_small))
         yd_dot_minus = (
             b * omega * (np.cos(omega * (t - dt_small)) * np.cos(omega * (t - dt_small))
@@ -245,7 +245,7 @@ class Trajectory:
         )
         zd_dot_minus = h_amp * omega_h * np.cos(omega_h * (t - dt_small))
 
-        # 使用中心差分计算加速度
+        # Calculate acceleration using central difference
         zeta_d_ddot = np.array(
             [
                 (xd_dot_plus - xd_dot_minus) / (2 * dt_small),
@@ -254,24 +254,24 @@ class Trajectory:
             ]
         )
 
-        # --- 姿态计算 ---
-        # 计算期望航向角（切线方向）
-        phi_d = 0.0  # 保持零横滚
-        theta_d = np.arctan2(-zd_dot, np.sqrt(xd_dot**2 + yd_dot**2))  # 俯仰角
-        psi_d = np.arctan2(yd_dot, xd_dot)  # 航向角
+        # --- Attitude calculation ---
+        # Calculate desired heading angle (tangent direction)
+        phi_d = 0.0  # Maintain zero roll
+        theta_d = np.arctan2(-zd_dot, np.sqrt(xd_dot**2 + yd_dot**2))  # Pitch angle
+        psi_d = np.arctan2(yd_dot, xd_dot)  # Yaw angle
         gamma_d = np.array([phi_d, theta_d, psi_d])
 
-        # --- 姿态导数计算 ---
-        # 使用数值差分获取姿态导数
+        # --- Attitude derivative calculation ---
+        # Use numerical differentiation to obtain attitude derivatives
         _, gamma_d_plus = self.get_figure8_pos_att(t + dt_small)
         _, gamma_d_minus = self.get_figure8_pos_att(t - dt_small)
         gamma_d_dot = (gamma_d_plus - gamma_d_minus) / (2 * dt_small)
 
-        # --- 组合 yc、yc_dot ---
+        # --- Combine yc, yc_dot ---
         yc = np.concatenate((zeta_d, gamma_d))
         yc_dot = np.concatenate((zeta_d_dot, gamma_d_dot))
 
-        # --- 速度指令 vc, wc ---
+        # --- Velocity commands vc, wc ---
         Rc_z = R_zeta(gamma_d)
         Rc_y_inv = R_y_inv(gamma_d)
         vc = Rc_z.T @ zeta_d_dot.reshape(-1, 1)
@@ -280,13 +280,13 @@ class Trajectory:
         wc = wc.flatten()
         xc = np.concatenate((vc, wc))
 
-        # --- xc_dot 通过符号化导数简化近似 ---
+        # --- xc_dot simplified approximation using symbolic derivatives ---
         vc_dot = Rc_z.T @ zeta_d_ddot.reshape(-1, 1)
         vc_dot = vc_dot.flatten()
-        wc_dot = np.zeros(3)  # 简化处理，假设角速度变化率较小
+        wc_dot = np.zeros(3)  # Simplified processing, assuming small angular velocity rate changes
         xc_dot = np.concatenate((vc_dot, wc_dot))
 
-        # --- yc_ddot 同样简化处理 ---
+        # --- yc_ddot also simplified processing ---
         gamma_d_ddot = np.zeros(3)
         yc_ddot = np.concatenate((zeta_d_ddot, gamma_d_ddot))
 
@@ -294,31 +294,31 @@ class Trajectory:
 
     def get_figure8_pos_att(self, t):
         """
-        仅计算 8 字形轨迹在时间 t 的位置和姿态，用于计算导数
-        避免递归调用 get_figure8_trajectory
+        Only calculate the position and attitude of the figure-8 trajectory at time t for derivative calculation
+        Avoid recursive calls to get_figure8_trajectory
         """
-        # --- 轨迹参数 ---
-        a = 3000  # 8 字形的宽度
-        b = 2000  # 8 字形的高度
-        omega = 0.003  # 角速度，控制飞艇在轨迹上的移动速度
-        h_center = -19000  # 中心高度
-        h_amp = 500  # 高度振荡幅度
-        omega_h = 0.002  # 高度变化的角速度
+        # --- Trajectory parameters ---
+        a = 3000  # Width of the figure-8
+        b = 2000  # Height of the figure-8
+        omega = 0.003  # Angular velocity, controls airship movement speed on trajectory
+        h_center = -19000  # Center altitude
+        h_amp = 500  # Altitude oscillation amplitude
+        omega_h = 0.002  # Angular velocity for altitude variation
 
-        # --- 位置 ---
+        # --- Position ---
         xd = a * np.sin(omega * t)
         yd = b * np.sin(omega * t) * np.cos(omega * t)
         zd = h_center + h_amp * np.sin(omega_h * t)
         zeta_d = np.array([xd, yd, zd])
 
-        # --- 速度（用于计算姿态） ---
+        # --- Velocity (for attitude calculation) ---
         xd_dot = a * omega * np.cos(omega * t)
         yd_dot = b * omega * (np.cos(omega * t) * np.cos(omega * t)
                               - np.sin(omega * t) * np.sin(omega * t)
                               )
         zd_dot = h_amp * omega_h * np.cos(omega_h * t)
 
-        # --- 姿态 ---
+        # --- Attitude ---
         phi_d = 0.0
         theta_d = np.arctan2(-zd_dot, np.sqrt(xd_dot**2 + yd_dot**2))
         psi_d = np.arctan2(yd_dot, xd_dot)
@@ -326,47 +326,47 @@ class Trajectory:
 
         return zeta_d, gamma_d
 
-    # ********************* 莱洛曲线轨迹函数 *********************
+    # ********************* Lemniscate trajectory function *********************
 
     def get_lemniscate_trajectory(self, t):
         """
-        生成莱洛曲线 (Lemniscate) 轨迹，形似无限符号，带有高度变化
+        Generate Lemniscate trajectory, resembling infinity symbol, with altitude variation
 
-        参数：
-            t: 当前时间
+        Parameters:
+            t: Current time
 
-        返回：
-            yc, yc_dot, yc_ddot, xc, xc_dot: 期望状态及其导数
+        Returns:
+            yc, yc_dot, yc_ddot, xc, xc_dot: Desired states and their derivatives
         """
         dt_small = 1e-4
 
-        # --- 轨迹参数 ---
-        a = 2500  # 曲线尺度参数
-        omega = 0.004  # 角速度
-        h_center = -19000  # 中心高度
-        h_amp = 800  # 高度变化幅度
-        h_freq = 0.001  # 高度变化频率
+        # --- Trajectory parameters ---
+        a = 2500  # Curve scale parameter
+        omega = 0.004  # Angular velocity
+        h_center = -19000  # Center altitude
+        h_amp = 800  # Altitude variation amplitude
+        h_freq = 0.001  # Altitude variation frequency
 
-        # 在起始时刻打印起始点信息
-        if abs(t) < 1e-3:  # t 接近 0 时
+        # Print starting point information at initial time
+        if abs(t) < 1e-3:  # When t is close to 0
             theta = 0
             denom = 1 + np.sin(theta) ** 2  # = 1
             start_x = a * np.cos(theta) / denom  # = a = 2500
             start_y = a * np.sin(theta) * np.cos(theta) / denom  # = 0
             start_z = h_center + h_amp * np.sin(0)  # = h_center = -19000
-            print(f"【莱洛曲线轨迹】起始点位置：[{start_x:.1f}, {start_y:.1f}, {start_z:.1f}] (米)")
-            print(f"【莱洛曲线轨迹】轨迹参数：尺度={a}m, 中心高度={h_center}m, 角速度={omega}rad/s")
+            print(f"[Lemniscate Trajectory] Starting point position: [{start_x:.1f}, {start_y:.1f}, {start_z:.1f}] (meters)")
+            print(f"[Lemniscate Trajectory] Trajectory parameters: scale={a}m, center altitude={h_center}m, angular velocity={omega}rad/s")
 
-        # --- 参数曲线参数 ---
+        # --- Parametric curve parameters ---
         theta = omega * t
-        # 莱洛曲线参数方程
+        # Lemniscate parametric equations
         denom = 1 + np.sin(theta) ** 2
         xd = a * np.cos(theta) / denom
         yd = a * np.sin(theta) * np.cos(theta) / denom
         zd = h_center + h_amp * np.sin(h_freq * t)
         zeta_d = np.array([xd, yd, zd])
 
-        # --- 速度计算（解析导数）---
+        # --- Velocity calculation (analytical derivatives) ---
         xd_dot_num = (
             -a * np.sin(theta) * denom
             - a * np.cos(theta) * 2 * np.sin(theta) * np.cos(theta)
@@ -380,8 +380,8 @@ class Trajectory:
         zd_dot = h_amp * h_freq * np.cos(h_freq * t)
         zeta_d_dot = np.array([xd_dot, yd_dot, zd_dot])
 
-        # --- 使用数值差分计算加速度 ---
-        # 计算 t+dt 时刻的位置和速度
+        # --- Calculate acceleration using numerical differentiation ---
+        # Calculate position and velocity at t+dt time
         theta_plus = omega * (t + dt_small)
         denom_plus = 1 + np.sin(theta_plus) ** 2
 
@@ -402,7 +402,7 @@ class Trajectory:
         yd_dot_plus = (yd_dot_num_plus / denom_plus**2) * omega
         zd_dot_plus = h_amp * h_freq * np.cos(h_freq * (t + dt_small))
 
-        # 计算 t-dt 时刻的位置和速度
+        # Calculate position and velocity at t-dt time
         theta_minus = omega * (t - dt_small)
         denom_minus = 1 + np.sin(theta_minus) ** 2
 
@@ -420,7 +420,7 @@ class Trajectory:
         yd_dot_minus = (yd_dot_num_minus / denom_minus**2) * omega
         zd_dot_minus = h_amp * h_freq * np.cos(h_freq * (t - dt_small))
 
-        # 使用中心差分计算加速度
+        # Calculate acceleration using central difference
         zeta_d_ddot = np.array(
             [
                 (xd_dot_plus - xd_dot_minus) / (2 * dt_small),
@@ -429,22 +429,22 @@ class Trajectory:
             ]
         )
 
-        # --- 姿态计算 ---
-        phi_d = 0.0  # 保持零横滚
-        theta_d = np.arctan2(-zd_dot, np.sqrt(xd_dot**2 + yd_dot**2))  # 俯仰角
-        psi_d = np.arctan2(yd_dot, xd_dot)  # 航向角
+        # --- Attitude calculation ---
+        phi_d = 0.0  # Maintain zero roll
+        theta_d = np.arctan2(-zd_dot, np.sqrt(xd_dot**2 + yd_dot**2))  # Pitch angle
+        psi_d = np.arctan2(yd_dot, xd_dot)  # Yaw angle
         gamma_d = np.array([phi_d, theta_d, psi_d])
 
-        # --- 姿态导数计算（使用辅助函数） ---
+        # --- Attitude derivative calculation (using auxiliary function) ---
         _, gamma_d_plus = self.get_lemniscate_pos_att(t + dt_small)
         _, gamma_d_minus = self.get_lemniscate_pos_att(t - dt_small)
         gamma_d_dot = (gamma_d_plus - gamma_d_minus) / (2 * dt_small)
 
-        # --- 组合 yc、yc_dot ---
+        # --- Combine yc, yc_dot ---
         yc = np.concatenate((zeta_d, gamma_d))
         yc_dot = np.concatenate((zeta_d_dot, gamma_d_dot))
 
-        # --- 速度指令 vc, wc ---
+        # --- Velocity commands vc, wc ---
         Rc_z = R_zeta(gamma_d)
         Rc_y_inv = R_y_inv(gamma_d)
         vc = Rc_z.T @ zeta_d_dot.reshape(-1, 1)
@@ -453,10 +453,10 @@ class Trajectory:
         wc = wc.flatten()
         xc = np.concatenate((vc, wc))
 
-        # --- xc_dot 和 yc_ddot ---
+        # --- xc_dot and yc_ddot ---
         vc_dot = Rc_z.T @ zeta_d_ddot.reshape(-1, 1)
         vc_dot = vc_dot.flatten()
-        wc_dot = np.zeros(3)  # 简化处理
+        wc_dot = np.zeros(3)  # Simplified processing
         xc_dot = np.concatenate((vc_dot, wc_dot))
 
         gamma_d_ddot = np.zeros(3)
@@ -465,24 +465,24 @@ class Trajectory:
         return yc, yc_dot, yc_ddot, xc, xc_dot
 
     def get_lemniscate_pos_att(self, t):
-        """计算莱洛曲线在时间 t 的位置和姿态，用于计算导数"""
-        # --- 轨迹参数 ---
+        """Calculate lemniscate position and attitude at time t for derivative computation"""
+        # --- Trajectory parameters ---
         a = 2500
         omega = 0.004
         h_center = -19000
         h_amp = 800
         h_freq = 0.001
 
-        # --- 参数曲线参数 ---
+        # --- Parametric curve parameters ---
         theta = omega * t
-        # 莱洛曲线参数方程
+        # Lemniscate parametric equations
         denom = 1 + np.sin(theta) ** 2
         xd = a * np.cos(theta) / denom
         yd = a * np.sin(theta) * np.cos(theta) / denom
         zd = h_center + h_amp * np.sin(h_freq * t)
         zeta_d = np.array([xd, yd, zd])
 
-        # --- 速度计算 ---
+        # --- Velocity calculation ---
         xd_dot_num = (
             -a * np.sin(theta) * denom
             - a * np.cos(theta) * 2 * np.sin(theta) * np.cos(theta)
@@ -495,182 +495,175 @@ class Trajectory:
         yd_dot = (yd_dot_num / denom**2) * omega
         zd_dot = h_amp * h_freq * np.cos(h_freq * t)
 
-        # --- 姿态 ---
-        phi_d = 0.0  # 保持零横滚
+        # --- Attitude ---
+        phi_d = 0.0  # Maintain zero roll
         theta_d = np.arctan2(-zd_dot, np.sqrt(xd_dot**2 + yd_dot**2))
         psi_d = np.arctan2(yd_dot, xd_dot)
         gamma_d = np.array([phi_d, theta_d, psi_d])
 
         return zeta_d, gamma_d
 
-    # ********************* 直线轨迹函数 *********************
+    # ********************* Straight line trajectory function *********************
     def get_linear_trajectory(self, t, start_point=None, end_point=None, speed=10.0, hover_at_end=True):
         """
-        生成一条直线轨迹，从起点飞向终点
+        Generate a straight line trajectory from start point to end point
 
-        参数：
-            t: 当前时间
-            start_point: 起点坐标 [x, y, z]，默认为原点
-            end_point: 终点坐标 [x, y, z]，默认为 [5000, 5000, -19000]
-            speed: 飞行速度，单位 m/s
-            hover_at_end: 到达终点后是否悬停，否则继续沿直线飞行
+        Parameters:
+            t: Current time
+            start_point: Starting coordinates [x, y, z], defaults to origin
+            end_point: Ending coordinates [x, y, z], defaults to [5000, 5000, -19000]
+            speed: Flight speed in m/s
+            hover_at_end: Whether to hover at end point, otherwise continue flying straight
 
-        返回：
-            yc, yc_dot, yc_ddot, xc, xc_dot: 期望状态及导数
-
-
-        说明：
+        Returns:
+            yc, yc_dot, yc_ddot, xc, xc_dot: Desired states and derivatives        
+        Notes:
             - yc:
-
-                表示期望状态向量，包含飞艇的期望位置和姿态。
-                具体包括：
-                    位置：[x, y, z]，即飞艇在空间中的期望位置。
-                    姿态：[φ, θ, ψ]，即飞艇的期望姿态角（横滚角、俯仰角、航向角）。
+                Represents the desired state vector, containing airship's desired position and attitude.
+                Specifically includes:
+                    Position: [x, y, z], airship's desired position in space.
+                    Attitude: [φ, θ, ψ], airship's desired attitude angles (roll, pitch, yaw).
             - yc_dot:
-
-                表示期望状态的一阶导数，即期望速度向量。
-                具体包括：
-                    线速度：[vx, vy, vz]，即飞艇在空间中的期望线速度。
-                    角速度：[ωφ, ωθ, ωψ]，即飞艇的期望角速度。
+                Represents the first derivative of desired state, i.e., desired velocity vector.
+                Specifically includes:
+                    Linear velocity: [vx, vy, vz], airship's desired linear velocity in space.
+                    Angular velocity: [ωφ, ωθ, ωψ], airship's desired angular velocity.
             - yc_ddot:
-
-                表示期望状态的二阶导数，即期望加速度向量。
-                具体包括：
-                    线加速度：[ax, ay, az]，即飞艇在空间中的期望线加速度。
-                    角加速度：[αφ, αθ, αψ]，即飞艇的期望角加速度。
+                Represents the second derivative of desired state, i.e., desired acceleration vector.
+                Specifically includes:
+                    Linear acceleration: [ax, ay, az], airship's desired linear acceleration in space.
+                    Angular acceleration: [αφ, αθ, αψ], airship's desired angular acceleration.
             - xc:
-
-                表示控制指令向量，包含期望的线速度和角速度。
-                具体包括：
-                    线速度指令：[vx, vy, vz]，即飞艇的期望线速度。
-                    角速度指令：[ωφ, ωθ, ωψ]，即飞艇的期望角速度。
+                Represents the control command vector, containing desired linear and angular velocities.
+                Specifically includes:
+                    Linear velocity command: [vx, vy, vz], airship's desired linear velocity.
+                    Angular velocity command: [ωφ, ωθ, ωψ], airship's desired angular velocity.
             - xc_dot:
-
-                表示控制指令的一阶导数，即控制指令的变化率。
-                具体包括：
-                    线速度变化率：[dvx/dt, dvy/dt, dvz/dt]，即线速度的时间变化率。
-                    角速度变化率：[dωφ/dt, dωθ/dt, dωψ/dt]，即角速度的时间变化率。
+                Represents the first derivative of control commands, i.e., rate of change of control commands.
+                Specifically includes:
+                    Linear velocity rate: [dvx/dt, dvy/dt, dvz/dt], time rate of change of linear velocity.
+                    Angular velocity rate: [dωφ/dt, dωθ/dt, dωψ/dt], time rate of change of angular velocity.
         """
         dt_small = 1e-4
 
-        # --- 轨迹参数 ---
+        # --- Trajectory parameters ---
         if start_point is None:
-            start_point = np.array([0.0, 0.0, -19000.0])  # 默认起点
+            start_point = np.array([0.0, 0.0, -19000.0])  # Default start point
         if end_point is None:
-            end_point = np.array([5000.0, 5000.0, -19000.0])  # 默认终点
+            end_point = np.array([5000.0, 5000.0, -19000.0])  # Default end point
 
-        # 计算方向向量和距离
+        # Calculate direction vector and distance
         direction = end_point - start_point
         distance = np.linalg.norm(direction)
-        unit_direction = direction / max(distance, 1e-10)  # 避免除零
+        unit_direction = direction / max(distance, 1e-10)  # Avoid division by zero
 
-        # 计算总飞行时间
+        # Calculate total flight time
         total_time = distance / speed
 
-        # --- 位置计算 ---
+        # --- Position calculation ---
         if t < total_time or not hover_at_end:
-            # 还在飞行中，或不需要悬停
+            # Still flying, or no need to hover
             effective_t = t if hover_at_end else t % total_time
             progress = min(effective_t / total_time, 1.0) if hover_at_end else effective_t / total_time
 
-            # 线性插值计算当前位置
+            # Linear interpolation to calculate current position
             zeta_d = start_point + progress * direction
         else:
-            # 已到达终点且需要悬停
+            # Reached end point and need to hover
             zeta_d = end_point
 
-        # --- 速度计算 ---
+        # --- Velocity calculation ---
         if t < total_time or not hover_at_end:
-            # 飞行中的速度恒定
+            # Constant velocity during flight
             if not hover_at_end or t < total_time:
                 zeta_d_dot = unit_direction * speed
             else:
-                # 到达终点后速度为零
+                # Zero velocity after reaching end point
                 zeta_d_dot = np.zeros(3)
         else:
-            # 悬停状态，速度为零
+            # Hovering state, zero velocity
             zeta_d_dot = np.zeros(3)
 
-        # --- 加速度计算（理论上为零，但为兼容性保留） ---
+        # --- Acceleration calculation (theoretically zero, but kept for compatibility) ---
         zeta_d_ddot = np.zeros(3)
 
-        # --- 姿态计算 ---
-        # 计算期望航向角（朝向前进方向）
-        if np.linalg.norm(zeta_d_dot) > 1e-6:  # 如果有速度
-            phi_d = 0.0  # 保持零横滚
-            theta_d = np.arctan2(-zeta_d_dot[2], np.sqrt(zeta_d_dot[0] ** 2 + zeta_d_dot[1] ** 2))  # 俯仰角
-            psi_d = np.arctan2(zeta_d_dot[1], zeta_d_dot[0])  # 航向角
+        # --- Attitude calculation ---
+        # Calculate desired heading angle (towards forward direction)
+        if np.linalg.norm(zeta_d_dot) > 1e-6:  # If there is velocity
+            phi_d = 0.0  # Maintain zero roll
+            theta_d = np.arctan2(-zeta_d_dot[2], np.sqrt(zeta_d_dot[0] ** 2 + zeta_d_dot[1] ** 2))  # Pitch angle
+            psi_d = np.arctan2(zeta_d_dot[1], zeta_d_dot[0])  # Yaw angle
         else:
-            # 悬停状态保持最后的姿态
+            # Hovering state maintains last attitude
             phi_d, theta_d, psi_d = self.get_linear_pos_att(max(0, t - dt_small), start_point, end_point, speed, hover_at_end)[1]
 
         gamma_d = np.array([phi_d, theta_d, psi_d])
 
-        # --- 姿态导数计算 ---
-        # 使用数值差分获取姿态导数
+        # --- Attitude derivative calculation ---
+        # Use numerical differentiation to obtain attitude derivatives
         _, gamma_d_plus = self.get_linear_pos_att(t + dt_small, start_point, end_point, speed, hover_at_end)
         _, gamma_d_minus = self.get_linear_pos_att(t - dt_small, start_point, end_point, speed, hover_at_end)
         gamma_d_dot = (gamma_d_plus - gamma_d_minus) / (2 * dt_small)
 
-        # --- 组合 yc、yc_dot ---
-        yc = np.concatenate((zeta_d, gamma_d)) # 位置和姿态
-        yc_dot = np.concatenate((zeta_d_dot, gamma_d_dot)) # 线速度和姿态角速度
+        # --- Combine yc, yc_dot ---
+        yc = np.concatenate((zeta_d, gamma_d)) # Position and attitude
+        yc_dot = np.concatenate((zeta_d_dot, gamma_d_dot)) # Linear velocity and attitude angular velocity
 
-        # --- 速度指令 vc, wc ---
+        # --- Velocity commands vc, wc ---
         Rc_z = R_zeta(gamma_d)
         Rc_y_inv = R_y_inv(gamma_d)
         vc = Rc_z.T @ zeta_d_dot.reshape(-1, 1)
         vc = vc.flatten()
         wc = Rc_y_inv @ gamma_d_dot.reshape(-1, 1)
         wc = wc.flatten()
-        xc = np.concatenate((vc, wc)) # 包含期望的线速度和角速度 (控制指令向量)
+        xc = np.concatenate((vc, wc)) # Contains desired linear and angular velocities (control command vector)
 
-        # --- xc_dot 通过符号化导数简化近似 ---
+        # --- xc_dot simplified approximation using symbolic derivatives ---
         vc_dot = Rc_z.T @ zeta_d_ddot.reshape(-1, 1)
         vc_dot = vc_dot.flatten()
         wc_dot = np.zeros(3)  #
-        xc_dot = np.concatenate((vc_dot, wc_dot)) # 控制指令的一阶导数，即控制指令的变化率 线速度变化率和角速度变化率
+        xc_dot = np.concatenate((vc_dot, wc_dot)) # First derivative of control commands, i.e., rate of change of control commands, linear velocity rate and angular velocity rate
 
-        # --- yc_ddot 同样简化处理 ---
+        # --- yc_ddot also simplified processing ---
         gamma_d_ddot = np.zeros(3)
-        yc_ddot = np.concatenate((zeta_d_ddot, gamma_d_ddot)) # 期望状态的二阶导数，即期望线加速度和角加速度向量。
+        yc_ddot = np.concatenate((zeta_d_ddot, gamma_d_ddot)) # Second derivative of desired state, i.e., desired linear acceleration and angular acceleration vector.
 
         return yc, yc_dot, yc_ddot, xc, xc_dot
 
     def get_linear_pos_att(self, t, start_point, end_point, speed, hover_at_end):
         """
-        计算直线轨迹在时间 t 的位置和姿态，用于计算导数
-        避免递归调用 get_linear_trajectory
+        Calculate linear trajectory position and attitude at time t for derivative computation
+        Avoid recursive calls to get_linear_trajectory
         args:
-            t: 当前时间
-            start_point: 起点坐标 [x, y, z]
-            end_point: 终点坐标 [x, y, z]
-            speed: 飞行速度，单位 m/s
-            hover_at_end: 到达终点后是否悬停，否则继续沿直线飞行
+            t: Current time
+            start_point: Starting coordinates [x, y, z]
+            end_point: Ending coordinates [x, y, z]
+            speed: Flight speed in m/s
+            hover_at_end: Whether to hover at end point, otherwise continue flying straight
         return:
-            zeta_d: 期望位置
-            gamma_d: 期望姿态
+            zeta_d: Desired position
+            gamma_d: Desired attitude
         """
-        # 计算方向向量和距离
+        # Calculate direction vector and distance
         direction = end_point - start_point
         distance = np.linalg.norm(direction)
-        unit_direction = direction / max(distance, 1e-10)  # 避免除零
+        unit_direction = direction / max(distance, 1e-10)  # Avoid division by zero
 
-        # 计算总飞行时间
+        # Calculate total flight time
         total_time = distance / speed
 
-        # --- 位置计算 ---
+        # --- Position calculation ---
         if t < total_time or not hover_at_end:
             effective_t = t if hover_at_end else t % total_time
             progress = min(effective_t / total_time, 1.0) if hover_at_end else effective_t / total_time
 
-            # 线性插值计算当前位置
+            # Linear interpolation to calculate current position
             zeta_d = start_point + progress * direction
         else:
-            # 已到达终点且需要悬停
+            # Reached end point and need to hover
             zeta_d = end_point
 
-        # --- 速度计算（用于计算姿态） ---
+        # --- Velocity calculation (for attitude calculation) ---
         if t < total_time or not hover_at_end:
             if not hover_at_end or t < total_time:
                 zeta_d_dot = unit_direction * speed
@@ -679,21 +672,21 @@ class Trajectory:
         else:
             zeta_d_dot = np.zeros(3)
 
-        # --- 姿态计算 ---
-        if np.linalg.norm(zeta_d_dot) > 1e-6:  # 如果有速度
-            phi_d = 0.0  # 保持零横滚
+        # --- Attitude calculation ---
+        if np.linalg.norm(zeta_d_dot) > 1e-6:  # If there is velocity
+            phi_d = 0.0  # Maintain zero roll
             theta_d = np.arctan2(-zeta_d_dot[2],
-                                 np.sqrt(zeta_d_dot[0] ** 2 + zeta_d_dot[1] ** 2))  # 俯仰角
-            psi_d = np.arctan2(zeta_d_dot[1], zeta_d_dot[0])  # 航向角
+                                 np.sqrt(zeta_d_dot[0] ** 2 + zeta_d_dot[1] ** 2))  # Pitch angle
+            psi_d = np.arctan2(zeta_d_dot[1], zeta_d_dot[0])  # Yaw angle
         else:
-            # 悬停状态下保持最后的姿态，这里简化为默认姿态
+            # Hovering state maintains last attitude, simplified here as default attitude
             phi_d = 0.0
             theta_d = 0.0
-            # 使用方向向量计算默认航向角
+            # Use direction vector to calculate default heading angle
             if np.linalg.norm(direction[:2]) > 1e-6:
                 psi_d = np.arctan2(direction[1], direction[0])
             else:
-                psi_d = 0.0  # 默认航向角
+                psi_d = 0.0  # Default heading angle
 
         gamma_d = np.array([phi_d, theta_d, psi_d])
 
