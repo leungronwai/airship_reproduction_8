@@ -69,7 +69,7 @@ class Trajectory:
 
         """
         Generate a spiral trajectory with altitude variation
-        
+
         Args:
             t: Current time
         Returns:
@@ -187,7 +187,7 @@ class Trajectory:
     def get_figure8_trajectory(self, t):
         """
         Generate a horizontal figure-8 trajectory with smooth altitude variation
-        Return the desired state and derivatives of the figure-8 trajectory        
+        Return the desired state and derivatives of the figure-8 trajectory
         Parameters:
             t: Current time
 
@@ -516,7 +516,7 @@ class Trajectory:
             hover_at_end: Whether to hover at end point, otherwise continue flying straight
 
         Returns:
-            yc, yc_dot, yc_ddot, xc, xc_dot: Desired states and derivatives        
+            yc, yc_dot, yc_ddot, xc, xc_dot: Desired states and derivatives
         Notes:
             - yc:
                 Represents the desired state vector, containing airship's desired position and attitude.
