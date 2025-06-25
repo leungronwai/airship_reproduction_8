@@ -129,26 +129,3 @@ def R_block(gamma):
     R[0:3, 0:3] = Rz
     R[3:6, 3:6] = Ry
     return R
-
-
-
-def rk4_step(f, t, X, dt, *args):
-    """
-    Compute a single integration step using RK4 method.
-
-    Parameters:
-        f: Dynamics function in the form f(t, X, *args), returns dX/dt.
-        t: Current time.
-        X: Current state vector.
-        dt: Time step.
-        *args: Additional arguments to pass to the dynamics function.
-
-    Returns:
-        X_next: State vector at the next time step.
-    """
-    k1 = f(t, X, *args)
-    k2 = f(t + 0.5 * dt, X + 0.5 * dt * k1, *args)
-    k3 = f(t + 0.5 * dt, X + 0.5 * dt * k2, *args)
-    k4 = f(t + dt, X + dt * k3, *args)
-    X_next = X + (dt / 6.0) * (k1 + 2 * k2 + 2 * k3 + k4)
-    return X_next

@@ -17,9 +17,9 @@ import matplotlib.pyplot as plt
 
 from config import parameters as params
 from AirshipModeling.trajectory_ref import Trajectory
-from AirshipModeling.controller_dompc import DoMPCAirshipController, convert_trajectory_format
-from AirshipModeling.rotation_matrices import rk4_step
-from AirshipModeling.airship_dynamic import AirshipCasADiSymbolic
+from AirshipModeling.controller_dompc import do_mpc_controller
+
+
 
 # Add project root directory to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -29,29 +29,34 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 
-def run_dompc_simulation(trajectory_type="linear", use_disturbance_compensation=True, use_simulator=True):
+def run_dompc_simulation(trajectory_type="spiral", use_disturbance_compensation=True, use_simulator=True):
     """
-    Run do-mpc based NMPC simulation
-
     Args:
-        trajectory_type: Trajectory type
+        trajectory_type: spiral
         use_disturbance_compensation: Whether to use disturbance compensation
-        use_simulator: Whether to use do-mpc Simulator (True) or only MPC controller (False)
+        use_simulator: Must be True for this implementation
 
     Returns:
         dict: Simulation result data
     """
+    if not use_simulator:
+        raise ValueError("This implementation requires use_simulator=True")
+
     logger.info("Starting do-mpc Simulator NMPC simulation - Trajectory type: %s", trajectory_type)
     start_time = timer.time()
 
     # === Initialize components ===
     trajectory = Trajectory()
 
-    # Create do-mpc based controller (including Simulator)
-    controller = DoMPCAirshipController(
+    # Create do-mpc based controller
+    controller = do_mpc_controller(
         use_disturbance_compensation=use_disturbance_compensation,
-        create_simulator=use_simulator
+        create_simulator=True
     )
+
+    # Verify simulator was created
+    if controller.simulator is None:
+        raise RuntimeError("Failed to create do-mpc Simulator")
 
     # === Simulation setup ===
     sim_time = np.arange(0, params.T_SPAN, params.DT)
@@ -69,31 +74,28 @@ def run_dompc_simulation(trajectory_type="linear", use_disturbance_compensation=
     # Set initial state
     current_state = params.X0.copy()
 
-    # Check if simulator was created successfully
-    if use_simulator and controller.simulator is not None:
-        try:
-            # Set do-mpc Simulator initial state
-            x0_dict = controller.mpc.x0
-            x0_dict['pos'] = current_state[0:3].reshape(-1, 1)
-            x0_dict['att'] = current_state[3:6].reshape(-1, 1)
-            x0_dict['vel'] = current_state[6:9].reshape(-1, 1)
-            x0_dict['omega'] = current_state[9:12].reshape(-1, 1)
+    # Initialize do-mpc Simulator with proper initial state
+    try:
+        # Set do-mpc Simulator initial state
+        x0_dict = controller.mpc.x0
+        x0_dict['pos'] = current_state[0:3].reshape(-1, 1)
+        x0_dict['att'] = current_state[3:6].reshape(-1, 1)
+        x0_dict['vel'] = current_state[6:9].reshape(-1, 1)
+        x0_dict['omega'] = current_state[9:12].reshape(-1, 1)
 
-            # Use correct method to set simulator initial state
-            controller.simulator.x0 = controller.mpc.x0
-            logger.info("Using do-mpc Simulator for simulation")
-        except Exception as e:  # pylint: disable=broad-except
-            logger.warning("Failed to set Simulator initial state: %s, using numerical integration", e)
-            use_simulator = False
-    else:
-        logger.info("Using numerical integration for simulation")
-        use_simulator = False
+        # Set simulator initial state
+        controller.simulator.x0 = controller.mpc.x0
+        logger.info("do-mpc Simulator initialized successfully")
+    except Exception as e:
+        raise RuntimeError(f"Failed to initialize do-mpc Simulator: {e}") # pylint: disable=raise-missing-from
 
     # === Main simulation loop ===
     for i, t in enumerate(sim_time):
         # Get reference trajectory
+        # yc: position (zeta_d): [x, y, z] + attitude (gamma_d): [phi, theta, psi]
+        # yc_dot: velocity (zeta_d_dot): [vx, vy, vz] + angular velocity (gamma_d_dot): [p, q, r]
         yc, yc_dot = _get_reference_trajectory(trajectory, trajectory_type, t)
-        reference_trajectory = convert_trajectory_format(yc, yc_dot)
+        reference_trajectory = _convert_trajectory_format(yc, yc_dot) # 12x1
 
         # Record reference trajectory
         reference_state = np.concatenate([yc, yc_dot])
@@ -120,25 +122,23 @@ def run_dompc_simulation(trajectory_type="linear", use_disturbance_compensation=
         # Record current state
         state_history[:, i] = current_state
 
-        # Choose state update method based on mode
-        if use_simulator and controller.simulator is not None:
-            # Use do-mpc Simulator - direct call without wrapper function
-            try:
-                x_next = controller.simulator.make_step(u_cmd.reshape(-1, 1))
-                if hasattr(x_next, 'full'):
-                    current_state = x_next.full().flatten()
-                else:
-                    current_state = np.array(x_next).flatten()
-            except Exception as e: # pylint: disable=broad-exception-caught
-                logger.error("Simulator step failed: %s", e)
-                current_state = _fallback_integration(current_state, u_cmd, actual_delta, params.DT)
-        elif use_simulator:
-            # Error handling for Simulator not properly initialized
-            logger.error("Simulator requested but not properly initialized, falling back to numerical integration")
-            current_state = _fallback_integration(current_state, u_cmd, actual_delta, params.DT)
-        else:
-            # Use traditional numerical integration
-            current_state = _fallback_integration(current_state, u_cmd, actual_delta, params.DT)
+        # === Use do-mpc Simulator for state update ===
+        try:
+            # Update simulator parameters for current time step
+            _update_simulator_parameters(controller.simulator, reference_trajectory, t)
+
+            # Execute simulator step
+            x_next = controller.simulator.make_step(u_cmd.reshape(-1, 1))
+
+            # Extract next state
+            if hasattr(x_next, 'full'):
+                current_state = x_next.full().flatten()
+            else:
+                current_state = np.array(x_next).flatten()
+
+        except Exception as e:
+            logger.error("do-mpc Simulator step failed: %s", e)
+            raise RuntimeError(f"Simulator failed at time {t:.2f}s: {e}") # pylint: disable=raise-missing-from
 
         # Get MPC prediction (optional)
         if i % 5 == 0:  # Record prediction every 5 steps to reduce storage
@@ -176,6 +176,38 @@ def run_dompc_simulation(trajectory_type="linear", use_disturbance_compensation=
     return results
 
 
+def _update_simulator_parameters(simulator, reference_trajectory, t):
+    """
+    Update simulator parameters for current time step
+
+    Args:
+        simulator: do-mpc simulator instance
+        reference_trajectory: Current reference trajectory
+        t: Current time
+    """
+    try:
+        # Get parameter template
+        p_template = simulator.get_p_template()
+
+        # Set reference trajectory parameters
+        p_template['pos_ref'] = reference_trajectory['position'].reshape(-1, 1)
+        p_template['att_ref'] = reference_trajectory['attitude'].reshape(-1, 1)
+        p_template['vel_ref'] = reference_trajectory['velocity'].reshape(-1, 1)
+        p_template['omega_ref'] = reference_trajectory['angular_velocity'].reshape(-1, 1)
+
+        # Set disturbance
+        disturbance = params.disturbance_delta(t)
+        p_template['disturbance'] = disturbance.reshape(-1, 1)
+
+        # Update simulator parameters
+        simulator.set_p_fun(lambda t_now: p_template)
+
+    except Exception as e: # pylint: disable=broad-exception-caught
+        logger.warning("Failed to update simulator parameters: %s", e)
+
+
+
+
 def _get_reference_trajectory(trajectory, trajectory_type, t):
     """Get reference trajectory"""
     if trajectory_type == "spiral":
@@ -185,37 +217,24 @@ def _get_reference_trajectory(trajectory, trajectory_type, t):
 
     return yc, yc_dot
 
-
-def _fallback_integration(current_state, u_cmd, disturbance, dt):
+def _convert_trajectory_format(yc, yc_dot):
     """
-    Improved fallback integration method
-    Uses simplified but more stable dynamics model
+    Convert trajectory format to do-mpc controller required format
+
+    Args:
+        yc: Reference state [position (3) + attitude (3)]
+        yc_dot: Reference state derivatives [position derivatives (3) + attitude derivatives (3)]
+
+    Returns:
+        dict: Formatted reference trajectory
     """
+    return {
+        'position': yc[0:3],
+        'attitude': yc[3:6],
+        'velocity': yc_dot[0:3],
+        'angular_velocity': yc_dot[3:6]
+    }
 
-
-    # Use simplified symbolic model for integration
-    try:
-        symbolic_model = AirshipCasADiSymbolic(params)
-
-        def dynamics_func(t, x):
-            _ = t
-            return symbolic_model.rhs_symbolic(x, u_cmd, external_disturbance=disturbance)
-
-        # Use RK4 integration
-        next_state = rk4_step(dynamics_func, 0, current_state, dt)
-
-        # Angle normalization
-        next_state[3:6] = (next_state[3:6] + np.pi) % (2 * np.pi) - np.pi
-
-        return next_state
-
-    except Exception as e: # pylint: disable=broad-exception-caught
-        logger.warning("Fallback integration failed, using simplest integration: %s", e)
-
-        # Simplest integration as final fallback
-        next_state = current_state.copy()
-        next_state[0:3] += current_state[6:9] * dt  # Position update
-        return next_state
 
 
 def _plot_simulation_results(results, trajectory_type):

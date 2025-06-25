@@ -61,22 +61,21 @@ def main():
     try:
         logger.info("=== Airship Trajectory Tracking Simulation Started ===")
 
-        print("\n=== Airship Simulation Configuration ===")
-        print("Using NMPC Controller with Spiral Trajectory")
-
-        #
         trajectory_type = "spiral"
         logger.info("Selected trajectory type: %s", trajectory_type)
 
         logger.info("Running do-mpc NMPC controller simulation")
         run_dompc_simulation(
             trajectory_type=trajectory_type,
-            use_disturbance_compensation=True,
+            use_disturbance_compensation=False,
             use_simulator=True
         )
 
     except KeyboardInterrupt:
         logger.info("User interrupted the program")
+    except Exception as e:
+        logger.error("Simulation failed: %s", e)
+        raise
     finally:
         logger.info("=== Simulation program ended ===")
 
