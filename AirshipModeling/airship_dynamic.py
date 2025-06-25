@@ -52,15 +52,14 @@ class AirshipCasADiSymbolic:
         self.V_wind = input_params.V_WIND_ERF
         self.AERO_COEFFS = input_params.AERO_COEFFS
 
-    def rhs_symbolic(self, X, U, t=None, external_disturbance=None):
+    def rhs_symbolic(self, X, Thrust_paras, t=None, external_disturbance=None):
         """
         Build symbolic RHS using CasADi.
 
         Args:
             X: 12x1 casadi SX state vector [zeta, gamma, v, omega]
-            U: Control vector - either:
-               - 3x1 [T, μ, v] for direct thrust control
-               - 6x1 [T, μ, v, delta_RUDT, delta_RUDB, delta_ELVL, delta_ELVR] for full control
+            Thrust_paras:
+               - 3x1 [T, μ, v] for direct thrust parameters to force/torque conversion
             t: Time (optional)
             external_disturbance: Optional external disturbance (6x1)
 
@@ -152,22 +151,22 @@ class AirshipCasADiSymbolic:
         #                     Thrust and torque
         #========================================================================
         # check U dimension
-        print(U.shape)
+        print(Thrust_paras.shape)
         # convert thrust parameters to force and torque
-        U_vec = thrust_params_to_force_torque(U, self.rp_r, self.rp_l, use_casadi=True)
+        Thrust_Force_torque = thrust_params_to_force_torque(Thrust_paras, self.rp_r, self.rp_l, use_casadi=True)
 
 
-        print(U_vec.shape)
-        T_total = U_vec[0:3]  # Thrust vectoring in BRF eq.(??)
-        tau_vec = U_vec[3:6]
+        print(Thrust_Force_torque.shape)
+        Thrust_Force = Thrust_Force_torque[0:3]  # Thrust vectoring in BRF eq.(??)
+        Thrust_torque = Thrust_Force_torque[3:6]
 
 
 
         #==================================================================
         #                     Combine forces and moments
         #==================================================================
-        F_forces = fg_BRF - fb_BRF + fa_BRF + T_total
-        F_torques = mg_BRF + mb_BRF + ma_BRF + tau_vec
+        F_forces = fg_BRF - fb_BRF + fa_BRF + Thrust_Force
+        F_torques = mg_BRF + mb_BRF + ma_BRF + Thrust_torque
         F_term = ca.vertcat(F_forces, F_torques)
 
         # --- Add external disturbance if provided ---
@@ -179,6 +178,6 @@ class AirshipCasADiSymbolic:
 
         # --- Combine state derivatives ---
         dXdt = ca.vertcat(y_dot, x_dot)
-        print(dXdt.shape)
+
 
         return dXdt

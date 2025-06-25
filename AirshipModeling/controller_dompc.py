@@ -1,52 +1,34 @@
 """
-NMPC Controller Implementation based on do-mpc        # Create do-mpc model
-        self.model = self._create_model()
-
-        # Create MPC controller
-        self.mpc = self._create_mpc_controller()
-
-        # Create estimator
-        self.estimator = self._create_estimator()
-
-        # Create Simulator (if needed)
-        if create_simulator:
-            self.simulator = self._create_simulator()
-        else:
-            self.simulator = None
-
-        # Initialize controller
-        self._setup_initial_conditions()
-
-        # Store last control input with Simulator support
-Uses do-mpc library to simplify NMPC controller development, providing more stable and efficient implementation
+NMPC Controller Implementation based on do-mpc
 """
 
 # pylint: disable=invalid-name
-# cspell:ignore dompc vertcat radau mterm lterm rterm ndarray fmin fmax idas abstol reltol
+# cspell:ignore dompc vertcat radau mterm lterm rterm ndarray fmin fmax idas abstol reltol Kalman
 # cspell: ignore nlpsol ipopt print_level max_iter acceptable_tol acceptable_obj_change_tol tol
 # cspell: ignore cvodes mu_strategy hessian_approximation limited_memory_max_history alpha_for_y recalc_y max_wall_time print_time
 
+# standard library
+import logging
+
+# third-party library
 import numpy as np
 import casadi as ca
 import do_mpc
 
+# local module
 from config import parameters as params
 from AirshipModeling.airship_dynamic import AirshipCasADiSymbolic
 from AirshipModeling.thrust_vectoring import thrust_params_to_force_torque
+from AirshipModeling.observer import DisturbanceObserver
+
+# set up logger
+logger = logging.getLogger(__name__)
 
 
 
-class DoMPCAirshipController:
+class do_mpc_controller:
     """
     Airship NMPC Controller based on do-mpc
-
-    Advantages:
-    1. Simplified MPC setup and configuration
-    2. Built-in solver configuration and optimization
-    3. Better numerical stability
-    4. Automatic constraint and boundary handling
-    5. Built-in visualization and analysis tools
-    6. Support for do-mpc Simulator integration
     """
 
     def __init__(self, use_disturbance_compensation=True, create_simulator=True):
@@ -65,6 +47,9 @@ class DoMPCAirshipController:
         if use_disturbance_compensation:
             self.disturbance_compensation_factor = getattr(params, 'do_compensation_gain', 0.9)
             self.last_disturbance_estimate = np.zeros(6)
+            self.disturbance_observer = DisturbanceObserver()
+        else:
+            self.disturbance_observer = None
 
         # Create do-mpc model
         self.model = self._create_model()
@@ -89,7 +74,7 @@ class DoMPCAirshipController:
 
     def _create_model(self):
         """
-        Create do-mpc model - Enhanced version
+        Create do-mpc model
 
         Returns:
             do_mpc.model.Model: Airship dynamics model
@@ -124,13 +109,13 @@ class DoMPCAirshipController:
 
         # Combine state vector
         X_state = ca.vertcat(pos, att, vel, omega)
-        U_control = ca.vertcat(T, mu, nu)
+        Thrust_paras = ca.vertcat(T, mu, nu)
 
         # Get dynamics equations (including disturbance)
-        X_dot = symbolic_model.rhs_symbolic(X_state, U_control, external_disturbance=disturbance)
+        X_dot = symbolic_model.rhs_symbolic(X_state, Thrust_paras, external_disturbance=disturbance)
 
         # Add numerical stability - limit derivative magnitudes
-        max_derivative = 1e5
+        max_derivative = 1e10
         X_dot = ca.fmin(ca.fmax(X_dot, -max_derivative), max_derivative)
 
         # Decompose state derivatives
@@ -145,20 +130,21 @@ class DoMPCAirshipController:
         model.set_rhs('vel', vel_dot)
         model.set_rhs('omega', omega_dot)
 
-        # Set state expressions (for objective function)
+        # state error  (for cost function)
         position_error = pos - pos_ref
         attitude_error = att - att_ref
         velocity_error = vel - vel_ref
         angular_error = omega - omega_ref
 
-        # Auxiliary expressions
+        # Auxiliary expressions （Custom intermediate variable expressions）
         model.set_expression('pos_error', position_error)
         model.set_expression('att_error', attitude_error)
         model.set_expression('vel_error', velocity_error)
         model.set_expression('ang_error', angular_error)
 
-        # Add measurement output (for estimator)
-        model.set_expression('y_meas', X_state)  # Assume full state observability
+        # Add measurement output (for estimator) # Assume full state observability
+        # The value that the sensor can measure and the output variable that the system can "observe"
+        model.set_expression('y_meas', X_state)
 
         # Complete model setup
         model.setup()
@@ -167,7 +153,7 @@ class DoMPCAirshipController:
 
     def _create_mpc_controller(self):
         """
-        Create MPC controller - Enhanced version
+        Create MPC controller
 
         Returns:
             do_mpc.controller.MPC: Configured MPC controller
@@ -214,7 +200,6 @@ class DoMPCAirshipController:
             disturbance=np.zeros((6, 1))  # Add disturbance parameters
         )
 
-        # Improved objective function - numerical scaling
         # Scale weight matrices to avoid numerical issues
         Q_scaled = params.Q * 0.01  # Reduce state weights
         Qf_scaled = params.Qf * 0.01
@@ -239,8 +224,9 @@ class DoMPCAirshipController:
 
         mpc.set_objective(mterm=mterm, lterm=lterm)
 
-        # Control input regularization
-        mpc.set_rterm(T=0.1, mu=0.1, nu=0.1)
+        # Setting the penalty weight for the control input
+        # in the objective function this is the "smoothness constraint" of control
+        # mpc.set_rterm(T=0.1, mu=0.1, nu=0.1) # means: rterm = 0.1 * T^2 + 0.1 * mu^2 + 0.1 * nu^2
 
         # Set constraints
         self._set_mpc_constraints(mpc)
@@ -284,17 +270,21 @@ class DoMPCAirshipController:
 
     def _create_estimator(self):
         """
-        Create state estimator
+        Create an estimator that assumes "the complete system state can be directly observed"
+        to pass the current state to the MPC controller for optimization
+        If you replace it with a more complex estimator (such as the Extended Kalman Filter) in the future,
+        it will be replaced here
 
         Returns:
-            do_mpc.estimator.StateFeedback: State feedback estimator
+                State feedback estimator
         """
         estimator = do_mpc.estimator.StateFeedback(self.model)
         return estimator
 
+
     def _create_simulator(self):
         """
-        Create do-mpc Simulator
+        Create do-mpc Simulator - Enhanced version for standalone use
 
         Returns:
             do_mpc.simulator.Simulator: Configured simulator
@@ -304,47 +294,78 @@ class DoMPCAirshipController:
 
         simulator = do_mpc.simulator.Simulator(self.model)
 
-        # Simulator setup
+        # Enhanced simulator setup for stability
         setup_simulator = {
             't_step': params.DT,
-            'integration_tool': 'cvodes', #'idas',  # Use IDAS integrator
-            'abstol': 1e-6,
-            'reltol': 1e-4,
+            'integration_tool': 'cvodes',  # Use CVODES for better stability
+            'abstol': 1e-8,  # Tighter absolute tolerance
+            'reltol': 1e-6,  # Tighter relative tolerance
+            'max_step_size': params.DT / 10,  # Limit maximum step size
+            'min_step_size': params.DT / 1000,  # Set minimum step size
         }
 
         simulator.set_param(**setup_simulator)
 
-        # Set disturbance function
+        # Enhanced parameter function with error handling
         def disturbance_func(t_now):
-            """Define time-varying disturbance"""
+            """Define time-varying disturbance with error handling"""
             try:
                 delta = params.disturbance_delta(t_now)
+                # Ensure proper shape
+                if delta.shape[0] != 6:
+                    raise ValueError(f"Disturbance must be 6-dimensional, got {delta.shape}")
                 return delta.reshape(-1, 1)
-            except Exception: # pylint: disable=broad-exception-caught
+            except Exception as e: # pylint: disable=broad-exception-caught
+                logger.warning("Disturbance function failed at t=%.3f: %s", t_now, e)
                 return np.zeros((6, 1))
 
-        # Set parameter function
+        #
         p_template = simulator.get_p_template()
         p_template['pos_ref'] = np.zeros((3, 1))
         p_template['att_ref'] = np.zeros((3, 1))
         p_template['vel_ref'] = np.zeros((3, 1))
         p_template['omega_ref'] = np.zeros((3, 1))
-        p_template['disturbance'] = disturbance_func
+        p_template['disturbance'] = np.zeros((6, 1))
 
         def p_fun(t_now):
-            """Parameter function"""
-            _ = t_now
-            return p_template
+            """
+            Tell the simulator which values should be used at each simulation moment for disturbance
+            return the current disturbance based on time to be used in simulation
+            """
+            try:
+                # Update disturbance for current time
+                p_template['disturbance'] = disturbance_func(t_now)
+                return p_template
+            except Exception as e: # pylint: disable=broad-exception-caught
+                logger.error("Parameter function failed at t=%.3f: %s", t_now, e)
+                # Return safe default parameters
+                safe_template = simulator.get_p_template()
+                for key in safe_template.keys():
+                    if 'ref' in key:
+                        safe_template[key] = np.zeros((3, 1))
+                    elif key == 'disturbance':
+                        safe_template[key] = np.zeros((6, 1))
+                return safe_template
 
         simulator.set_p_fun(p_fun)
 
-        # Complete Simulator setup
-        simulator.setup()
+        # Complete Simulator setup with validation
+        try:
+            simulator.setup()
+            logger.info("do-mpc Simulator setup completed successfully")
+        except Exception as e: # pylint: disable=broad-exception-caught
+            logger.error("Failed to setup do-mpc Simulator: %s", e)
+            raise RuntimeError(f"Simulator setup failed: {e}") # pylint: disable=raise-missing-from
 
         return simulator
 
     def _setup_initial_conditions(self):
-        """Set initial conditions"""
+        """
+        Setting the initial state and initial guess (initial value) of the MPC controller,
+        estimator and simulator at the beginning of simulation/operation,
+        which is the "startup preparation" of the entire control process.
+
+        """
         # Set initial state
         x0 = params.X0.copy()
 
@@ -389,11 +410,11 @@ class DoMPCAirshipController:
 
         Args:
             current_state: Current state [12x1]
-            reference_trajectory: Reference trajectory dictionary
+            reference_trajectory: Reference trajectory dictionary [position, attitude, velocity, angular_velocity]
             t_current: Current time
 
         Returns:
-            control_input: Control input [T, mu, nu]
+            control_params for thrust: Control input [T, mu, nu]
         """
         _ = t_current
         try:
@@ -419,32 +440,37 @@ class DoMPCAirshipController:
             }
 
             # Add disturbance parameters
-            reference_params['disturbance'] = np.zeros((6, 1))
+            if self.use_disturbance_compensation and self.last_disturbance_estimate is not None:
+                reference_params['disturbance'] = self.last_disturbance_estimate.reshape(6, 1)
+            else:
+                reference_params['disturbance'] = np.zeros((6, 1))
 
-            # Set reference trajectory
+            # Before the execution of each MPC control step, the reference trajectory
+            # and disturbance value at the current moment are passed to the _p parameter variable in the model
             self.mpc.set_uncertainty_values(**reference_params)
 
             # Disturbance compensation
             if self.use_disturbance_compensation:
                 self._update_disturbance_compensation(current_state, reference_trajectory)
 
-            # Execute MPC solution
-            u_mpc = self.mpc.make_step(current_x)
+            # Under the current state current x, solve for the optimal control input u
+            u_mpc = self.mpc.make_step(current_x) # u_mpc is a casadi data structure
 
-            # Extract control input
-            control_input = self._extract_control_input(u_mpc)
+            # It is usually a data structure of casadi (such as casadi.DM),
+            # and you will convert it to numpy.array later to extract control instructions here
+            control_input_params = self._extract_control_input(u_mpc)
 
             # Save control input
-            self.last_control = control_input
+            self.last_control = control_input_params
 
-            return control_input
+            return control_input_params  # [T, mu, nu]
 
         except Exception as e: # pylint: disable=broad-exception-caught
             print(f"MPC step failed: {e}")
             # Return safe default control
-            safe_control = np.array([5.0, 0.0, 0.0])
-            self.last_control = safe_control
-            return safe_control
+            safe_control_params = np.array([5.0, 0.0, 0.0])
+            self.last_control = safe_control_params
+            return safe_control_params
 
     def _update_disturbance_compensation(self, current_state, reference_trajectory):
         """Update disturbance compensation"""
@@ -459,14 +485,18 @@ class DoMPCAirshipController:
 
         # Update disturbance estimation
         gamma = current_state[3:6]
-        tau = thrust_params_to_force_torque(self.last_control, self.params.rp_r, self.params.rp_l)
+        Thrust_Force_torque = thrust_params_to_force_torque(self.last_control, self.params.rp_r, self.params.rp_l)
 
         # Update disturbance observer
-        delta_hat = self.disturbance_observer.update(params.DT, e1, e2, tau, gamma)
+        delta_hat = self.disturbance_observer.update(params.DT, e1, e2, Thrust_Force_torque, gamma)
         self.last_disturbance_estimate = delta_hat
 
     def _extract_control_input(self, u_mpc):
-        """Extract control input"""
+        """
+        Extract control input from casadi structure to numpy array
+        Args:
+            u_mpc: Control input params from MPC (is casadi structure)
+        """
         try:
             if hasattr(u_mpc, 'full'):
                 u_array = u_mpc.full().flatten()
@@ -504,7 +534,19 @@ class DoMPCAirshipController:
         return control_input
 
     def get_prediction(self):
-        """Get MPC prediction results"""
+        """
+        Obtain the state trajectory and control input trajectory predicted by the do-mpc controller
+
+        prediction_data = {
+        'pos': self.mpc.data.prediction(('_x', 'pos')),
+        'att': self.mpc.data.prediction(('_x', 'att')),
+        'vel': self.mpc.data.prediction(('_x', 'vel')),
+        'omega': self.mpc.data.prediction(('_x', 'omega')),
+        'T': self.mpc.data.prediction(('_u', 'T')),
+        'mu': self.mpc.data.prediction(('_u', 'mu')),
+        'nu': self.mpc.data.prediction(('_u', 'nu'))
+}
+        """
         try:
             if hasattr(self.mpc, 'data') and self.mpc.data is not None:
                 # Use public interface to get prediction data
@@ -539,8 +581,11 @@ class DoMPCAirshipController:
             return np.zeros(6)
 
     def reset(self):
-        """Reset controller"""
-        if self.use_disturbance_compensation:
+        """
+        Reset the internal state of the controller to
+        enable the entire MPC control system to "restart" its operation
+        """
+        if self.use_disturbance_compensation and self.disturbance_observer is not None:
             self.disturbance_observer.reset()
             self.last_disturbance_estimate = np.zeros(6)
 
@@ -552,23 +597,3 @@ class DoMPCAirshipController:
         self.estimator.reset_history()
         if self.simulator is not None:
             self.simulator.reset_history()
-
-
-# Auxiliary function: trajectory format conversion
-def convert_trajectory_format(yc, yc_dot):
-    """
-    Convert trajectory format to do-mpc controller required format
-
-    Args:
-        yc: Reference state [position (3) + attitude (3)]
-        yc_dot: Reference state derivatives [position derivatives (3) + attitude derivatives (3)]
-
-    Returns:
-        dict: Formatted reference trajectory
-    """
-    return {
-        'position': yc[0:3],
-        'attitude': yc[3:6],
-        'velocity': yc_dot[0:3],
-        'angular_velocity': yc_dot[3:6]
-    }
