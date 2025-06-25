@@ -13,8 +13,8 @@ Disturbance observer module, supporting disturbance compensation under the NMPC 
 
 import numpy as np
 import casadi as ca
-from config import parameters as params
-from AirshipModeling.rotation_matrices import R_block
+from src.config import parameters as params
+from rotation_matrices import R_block
 
 
 

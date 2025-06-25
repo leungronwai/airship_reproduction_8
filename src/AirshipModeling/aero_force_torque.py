@@ -22,7 +22,7 @@ def calculate_aero_forces_moments(
     args:
         q_dyn (float): dynamic pressure
         alpha (float): angle of attack (rad)
-        beta (float): side slip angle (rad)
+        beta (float): sideslip angle (rad)
         aero_coeffs (dict): aerodynamic coefficient dictionary
         delta_RUDT (float): rudder deflection angle (rad)
         delta_RUDB (float): rudder deflection angle (rad)

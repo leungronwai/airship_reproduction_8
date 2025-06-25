@@ -1,6 +1,9 @@
-'''
-aero_coefficients.py
-'''
+"""
+ aero_coefficients.py
+
+"""
+
+
 
 # pylint: disable=invalid-name
 # pylint: disable=undefined-variable
@@ -8,7 +11,7 @@ aero_coefficients.py
 import numpy as np
 
 
-from config import parameters as params
+from src.config import parameters as params
 
 
 
