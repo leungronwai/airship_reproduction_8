@@ -13,11 +13,12 @@ import time as timer
 import logging
 
 import numpy as np
-import matplotlib.pyplot as plt
 
 from config import parameters as params
 from AirshipModeling.trajectory_ref import Trajectory
 from AirshipModeling.controller_dompc import do_mpc_controller
+from visualization.plot_results import plot_simulation_results
+from analysis.performance_evaluator import evaluate_performance
 
 
 
@@ -170,8 +171,9 @@ def run_dompc_simulation(trajectory_type="spiral", use_disturbance_compensation=
         'predictions': prediction_history
     }
 
-    _plot_simulation_results(results, trajectory_type)
-    _evaluate_performance(results)
+    # Plot results and evaluate performance
+    plot_simulation_results(results, trajectory_type, show_plots=True, save_plots=True)
+    evaluate_performance(results)
 
     return results
 
