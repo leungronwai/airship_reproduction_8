@@ -115,7 +115,7 @@ class do_mpc_controller:
         X_dot = symbolic_model.rhs_symbolic(X_state, Thrust_paras, external_disturbance=disturbance)
 
         # Add numerical stability - limit derivative magnitudes
-        max_derivative = 1e10
+        max_derivative = 1e6
         X_dot = ca.fmin(ca.fmax(X_dot, -max_derivative), max_derivative)
 
         # Decompose state derivatives
@@ -373,7 +373,7 @@ class do_mpc_controller:
         # x0 = np.nan_to_num(x0, nan=0.0, posinf=10.0, neginf=-10.0)
 
         # Limit initial angles to avoid singularities
-        # x0[3:6] = np.clip(x0[3:6], -np.pi/2, np.pi/2)
+        x0[3:6] = np.clip(x0[3:6], -np.pi/2, np.pi/2)
 
         # Reconstruct state vector to do-mpc expected format
         _x0 = np.concatenate([
