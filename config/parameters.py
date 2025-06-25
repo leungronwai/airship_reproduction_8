@@ -154,9 +154,9 @@ V_WIND_ERF = np.array([5.0, 2.0, 0.0])
 
 
 
-# ===  (NMPC Controller Parameters) ===
+# ===  (do-mpc Controller Parameters) ===
 #  prediction horizon length
-N_HORIZON = 10
+N_HORIZON = 8
 
 #  state weight matrix (position and attitude error weights)
 Q = np.diag([10.0, 10.0, 10.0, 5.0, 5.0, 5.0,
@@ -194,19 +194,9 @@ l2 = 1.0       # z2 calculation coefficient
 l3 = 1.5       # z2 feedback coefficient
 l4 = 2.0       # nonlinear term coefficient 1
 l5 = 1.0       # nonlinear term coefficient 2
-beta1 = 0.5    # nonlinear index 1 (0 < beta1 < 1)
+beta1 = 0.5    # nonlinear index 1 (0 < beta1 < 1
 beta2 = 1.5    # nonlinear index 2 (beta2 > 1)
 
 #  disturbance compensation parameters
 do_compensation_gain = 0.9  # compensation gain
 do_filter_coeff = 0.8       # filter coefficient
-
-#  constraint boundary function - for BLF algorithm (optional)
-def kb_func(t):
-    """error constraint over time"""
-    kb = np.zeros(6)
-    kb[0:3] = 10.0 + 5.0 * np.exp(-0.05 * t)  # position error constraint
-    kb[3:6] = 0.2 + 0.1 * np.exp(-0.05 * t)   # attitude error constraint
-    return kb
-
-

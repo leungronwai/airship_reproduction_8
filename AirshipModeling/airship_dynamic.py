@@ -150,13 +150,12 @@ class AirshipCasADiSymbolic:
         #========================================================================
         #                     Thrust and torque
         #========================================================================
-        # check U dimension
-        print(Thrust_paras.shape)
+
         # convert thrust parameters to force and torque
         Thrust_Force_torque = thrust_params_to_force_torque(Thrust_paras, self.rp_r, self.rp_l, use_casadi=True)
 
 
-        print(Thrust_Force_torque.shape)
+
         Thrust_Force = Thrust_Force_torque[0:3]  # Thrust vectoring in BRF eq.(??)
         Thrust_torque = Thrust_Force_torque[3:6]
 
