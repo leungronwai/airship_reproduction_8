@@ -14,7 +14,7 @@ import os
 import numpy as np
 
 # import physical calculation functions
-from AirshipModeling.added_mass_inertia import calculate_added_mass_inertia
+from src.AirshipModeling.added_mass_inertia import calculate_added_mass_inertia
 
 
 # 把项目根目录加入 sys.path

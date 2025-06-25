@@ -14,11 +14,11 @@ import logging
 
 import numpy as np
 
-from config import parameters as params
-from AirshipModeling.trajectory_ref import Trajectory
-from AirshipModeling.controller_dompc import do_mpc_controller
-from visualization.plot_results import plot_simulation_results
-from analysis.performance_evaluator import evaluate_performance
+from src.config import parameters as params
+from src.AirshipModeling.trajectory_ref import Trajectory
+from src.AirshipModeling.controller_dompc import do_mpc_controller
+from src.visualization.plot_results import plot_simulation_results
+from src.analysis.performance_evaluator import evaluate_performance
 
 
 
