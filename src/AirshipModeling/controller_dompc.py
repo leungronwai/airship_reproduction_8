@@ -9,15 +9,13 @@ NMPC Controller Implementation based on do-mpc
 
 # standard library
 import logging
+import warnings
 
 # third-party library
 import numpy as np
 import casadi as ca
 import do_mpc
 
-import warnings
-warnings.filterwarnings("ignore", category=UserWarning, module="do_mpc.sysid")
-warnings.filterwarnings("ignore", category=UserWarning, module="do_mpc.opcua")
 
 # local module
 from config import parameters as params
@@ -25,6 +23,9 @@ from AirshipModeling.airship_dynamic import AirshipCasADiSymbolic
 from AirshipModeling.thrust_vectoring import thrust_params_to_force_torque
 from AirshipModeling.observer import DisturbanceObserver
 
+
+warnings.filterwarnings("ignore", category=UserWarning, module="do_mpc.sysid")
+warnings.filterwarnings("ignore", category=UserWarning, module="do_mpc.opcua")
 # set up logger
 logger = logging.getLogger(__name__)
 
