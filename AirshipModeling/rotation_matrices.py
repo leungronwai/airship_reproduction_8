@@ -111,20 +111,7 @@ def R_y_inv(gamma):
     return R_inv
 
 
-def S_omega(omega):
-    """
-    This function is redundant
-    Calculate the skew-symmetric matrix S(omega) for Coriolis terms - Eq. 14
-    args:
-        omega: angular velocity (p, q, r)
-    return:
-        3x3 rotation matrix
-    """
-    p, q, r = omega[0], omega[1], omega[2]
-    S = np.array([[0, -r, q],
-                  [r, 0, -p],
-                  [-q, p, 0]])
-    return S
+
 
 
 
