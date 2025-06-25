@@ -7,8 +7,8 @@
   "cSpell.ignoreWords": [
     "F_pos"
   ],
-  "python.analysis.extraPaths": ["./airship", "./config", "./simulation"],
-  "python.autoComplete.extraPaths": ["./airship", "./config", "./simulation"],
+  "python.analysis.extraPaths": ["./src"],
+  "python.autoComplete.extraPaths": ["./src"],
   "python.envFile": "${workspaceFolder}/.env",
   "python.testing.pytestArgs": ["test"],
   "python.testing.unittestEnabled": false,
