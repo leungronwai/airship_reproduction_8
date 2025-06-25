@@ -16,10 +16,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from config import parameters as params
-from AirshipModel.trajectory_ref import Trajectory
-from airship_model.controller_dompc import DoMPCAirshipController, convert_trajectory_format
-from airship.utils import rk4_step
-from airship.model import AirshipCasADiSymbolic
+from AirshipModeling.trajectory_ref import Trajectory
+from AirshipModeling.controller_dompc import DoMPCAirshipController, convert_trajectory_format
+from AirshipModeling.rotation_matrices import rk4_step
+from AirshipModeling.airship_dynamic import AirshipCasADiSymbolic
 
 # Add project root directory to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -178,14 +178,8 @@ def run_dompc_simulation(trajectory_type="linear", use_disturbance_compensation=
 
 def _get_reference_trajectory(trajectory, trajectory_type, t):
     """Get reference trajectory"""
-    if trajectory_type == "linear":
-        yc, yc_dot, _, _, _ = trajectory.get_linear_trajectory(t)
-    elif trajectory_type == "spiral":
+    if trajectory_type == "spiral":
         yc, yc_dot, _, _, _ = trajectory.get_spiral_trajectory(t)
-    elif trajectory_type == "figure8":
-        yc, yc_dot, _, _, _ = trajectory.get_figure8_trajectory(t)
-    elif trajectory_type == "lemniscate":
-        yc, yc_dot, _, _, _ = trajectory.get_lemniscate_trajectory(t)
     else:
         raise ValueError(f"Unknown trajectory type: {trajectory_type}")
 
