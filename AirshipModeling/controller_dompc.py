@@ -207,7 +207,7 @@ class do_mpc_controller:
         # Scale weight matrices to avoid numerical issues
         Q_scaled = params.Q * 0.01  # Reduce state weights
         Qf_scaled = params.Qf * 0.01
-        R_scaled = params.R * 100.0  # Increase control weights to promote smoothness
+        _R_scaled = params.R * 100.0  # Increase control weights to promote smoothness
 
 
 
@@ -384,21 +384,21 @@ class do_mpc_controller:
             self.mpc.x0['vel'] = x0[6:9].reshape(-1, 1)
             self.mpc.x0['omega'] = x0[9:12].reshape(-1, 1)
 
-            # 为 MPC 设置初始控制猜测
-            self.mpc.u0['T'] = 10.0    # 合理的推力值
-            self.mpc.u0['mu'] = 0.0    # 零偏转角
-            self.mpc.u0['nu'] = 0.0    # 零偏转角
+            # set initial control guess
+            self.mpc.u0['T'] = 10.0    # reasonable thrust value
+            self.mpc.u0['mu'] = 0.0    # zero deflection angle
+            self.mpc.u0['nu'] = 0.0    # zero deflection angle
 
-            # 设置初始猜测
+            # set initial guess
             self.mpc.set_initial_guess()
 
-            # 为估计器设置初始状态
+            # set initial state for estimator
             self.estimator.x0['pos'] = x0[0:3].reshape(-1, 1)
             self.estimator.x0['att'] = x0[3:6].reshape(-1, 1)
             self.estimator.x0['vel'] = x0[6:9].reshape(-1, 1)
             self.estimator.x0['omega'] = x0[9:12].reshape(-1, 1)
 
-            # 为仿真器设置初始状态（如果存在）
+            # set initial state for simulator (if exists)
             if self.simulator is not None:
                 self.simulator.x0['pos'] = x0[0:3].reshape(-1, 1)
                 self.simulator.x0['att'] = x0[3:6].reshape(-1, 1)
@@ -407,14 +407,14 @@ class do_mpc_controller:
 
             logger.info("Initial conditions set successfully")
 
-        except Exception as e:
-            logger.error(f"Failed to set initial conditions: {e}")
-            # 尝试基本设置
+        except Exception as e: # pylint: disable=broad-exception-caught
+            logger.error("Failed to set initial conditions: %s", e)
+            # try basic setting
             try:
                 self.mpc.set_initial_guess()
                 logger.info("Basic initial guess set")
-            except Exception as e2:
-                logger.error(f"Failed to set even basic initial guess: {e2}")
+            except Exception as e2: # pylint: disable=broad-exception-caught
+                logger.error("Failed to set even basic initial guess: %s", e2)
 
     def step(self, current_state, reference_trajectory, t_current=0.0):
         """
@@ -435,7 +435,7 @@ class do_mpc_controller:
                 print("Warning: Input state contains NaN or infinite values")
                 return np.array([5.0, 0.0, 0.0])
 
-            # Update current state - 使用字典格式而不是向量格式
+            # Update current state - use dictionary format instead of vector format
             self.mpc.x0['pos'] = current_state[0:3].reshape(-1, 1)
             self.mpc.x0['att'] = current_state[3:6].reshape(-1, 1)
             self.mpc.x0['vel'] = current_state[6:9].reshape(-1, 1)
@@ -467,8 +467,8 @@ class do_mpc_controller:
             # 执行 MPC 求解 - 传入字典格式的状态
             try:
                 u_mpc = self.mpc.make_step(self.mpc.x0)
-            except Exception as mpc_error:
-                logger.warning(f"MPC make_step failed: {mpc_error}, using previous control")
+            except Exception as mpc_error: # pylint: disable=broad-exception-caught
+                logger.warning("MPC make_step failed: %s, using previous control", mpc_error)
                 return self.last_control if hasattr(self, 'last_control') else np.array([5.0, 0.0, 0.0])
 
             # It is usually a data structure of casadi (such as casadi.DM),
