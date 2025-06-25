@@ -4,7 +4,7 @@ NMPC Controller Implementation based on do-mpc
 
 # pylint: disable=invalid-name
 # cspell:ignore dompc vertcat radau mterm lterm rterm ndarray fmin fmax idas abstol reltol Kalman
-# cspell: ignore nlpsol ipopt print_level max_iter acceptable_tol acceptable_obj_change_tol tol
+# cspell: ignore nlpsol ipopt print_level max_iter acceptable_tol acceptable_obj_change_tol tol opcua
 # cspell: ignore cvodes mu_strategy hessian_approximation limited_memory_max_history alpha_for_y recalc_y max_wall_time print_time
 
 # standard library
@@ -14,6 +14,10 @@ import logging
 import numpy as np
 import casadi as ca
 import do_mpc
+
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning, module="do_mpc.sysid")
+warnings.filterwarnings("ignore", category=UserWarning, module="do_mpc.opcua")
 
 # local module
 from config import parameters as params
@@ -217,16 +221,14 @@ class do_mpc_controller:
         lterm = (self.model.aux['pos_error'].T @ Q_scaled[0:3, 0:3] @ self.model.aux['pos_error'] +
                  self.model.aux['att_error'].T @ Q_scaled[3:6, 3:6] @ self.model.aux['att_error'] +
                  self.model.aux['vel_error'].T @ Q_scaled[6:9, 6:9] @ self.model.aux['vel_error'] +
-                 self.model.aux['ang_error'].T @ Q_scaled[9:12, 9:12] @ self.model.aux['ang_error'] +
-                 self.model.u['T']**2 * R_scaled[0, 0] +
-                 self.model.u['mu']**2 * R_scaled[1, 1] +
-                 self.model.u['nu']**2 * R_scaled[2, 2])
+                 self.model.aux['ang_error'].T @ Q_scaled[9:12, 9:12] @ self.model.aux['ang_error'] )
+        # + self.model.u['T']**2 * R_scaled[0, 0] + self.model.u['mu']**2 * R_scaled[1, 1] + self.model.u['nu']**2 * R_scaled[2, 2]
 
         mpc.set_objective(mterm=mterm, lterm=lterm)
 
         # Setting the penalty weight for the control input
         # in the objective function this is the "smoothness constraint" of control
-        # mpc.set_rterm(T=0.1, mu=0.1, nu=0.1) # means: rterm = 0.1 * T^2 + 0.1 * mu^2 + 0.1 * nu^2
+        mpc.set_rterm(T=0.1, mu=0.1, nu=0.1) # means: rterm = 0.1 * T^2 + 0.1 * mu^2 + 0.1 * nu^2
 
         # Set constraints
         self._set_mpc_constraints(mpc)
@@ -375,34 +377,44 @@ class do_mpc_controller:
         # Limit initial angles to avoid singularities
         x0[3:6] = np.clip(x0[3:6], -np.pi/2, np.pi/2)
 
-        # Reconstruct state vector to do-mpc expected format
-        _x0 = np.concatenate([
-            x0[0:3].reshape(-1, 1),   # pos
-            x0[3:6].reshape(-1, 1),   # att
-            x0[6:9].reshape(-1, 1),   # vel
-            x0[9:12].reshape(-1, 1)   # omega
-        ])
-
-        # Set initial states for all components
-        self.mpc.x0 = _x0
-        self.estimator.x0 = _x0
-        if self.simulator is not None:
-            self.simulator.x0 = _x0
-
-        # Improved initial guess
         try:
-            # Set conservative initial control guess
-            u0 = np.array([[5.0], [0.0], [0.0]])  # Stable thrust, zero moment
+            # set initial state for MPC
+            self.mpc.x0['pos'] = x0[0:3].reshape(-1, 1)
+            self.mpc.x0['att'] = x0[3:6].reshape(-1, 1)
+            self.mpc.x0['vel'] = x0[6:9].reshape(-1, 1)
+            self.mpc.x0['omega'] = x0[9:12].reshape(-1, 1)
 
-            # Set initial guess for entire prediction horizon
-            for k in range(self.mpc.settings.n_horizon):
-                self.mpc.u0[k] = u0
-                self.mpc.x0[k+1] = _x0  # Keep states stable
+            # 为 MPC 设置初始控制猜测
+            self.mpc.u0['T'] = 10.0    # 合理的推力值
+            self.mpc.u0['mu'] = 0.0    # 零偏转角
+            self.mpc.u0['nu'] = 0.0    # 零偏转角
 
+            # 设置初始猜测
             self.mpc.set_initial_guess()
 
-        except Exception as e: # pylint: disable=broad-exception-caught
-            print(f"Failed to set initial guess: {e}")
+            # 为估计器设置初始状态
+            self.estimator.x0['pos'] = x0[0:3].reshape(-1, 1)
+            self.estimator.x0['att'] = x0[3:6].reshape(-1, 1)
+            self.estimator.x0['vel'] = x0[6:9].reshape(-1, 1)
+            self.estimator.x0['omega'] = x0[9:12].reshape(-1, 1)
+
+            # 为仿真器设置初始状态（如果存在）
+            if self.simulator is not None:
+                self.simulator.x0['pos'] = x0[0:3].reshape(-1, 1)
+                self.simulator.x0['att'] = x0[3:6].reshape(-1, 1)
+                self.simulator.x0['vel'] = x0[6:9].reshape(-1, 1)
+                self.simulator.x0['omega'] = x0[9:12].reshape(-1, 1)
+
+            logger.info("Initial conditions set successfully")
+
+        except Exception as e:
+            logger.error(f"Failed to set initial conditions: {e}")
+            # 尝试基本设置
+            try:
+                self.mpc.set_initial_guess()
+                logger.info("Basic initial guess set")
+            except Exception as e2:
+                logger.error(f"Failed to set even basic initial guess: {e2}")
 
     def step(self, current_state, reference_trajectory, t_current=0.0):
         """
@@ -418,18 +430,16 @@ class do_mpc_controller:
         """
         _ = t_current
         try:
-            # Update current state
-            current_x = np.concatenate([
-                current_state[0:3].reshape(-1, 1),   # pos
-                current_state[3:6].reshape(-1, 1),   # att
-                current_state[6:9].reshape(-1, 1),   # vel
-                current_state[9:12].reshape(-1, 1)   # omega
-            ])
-
             # Check input validity
-            if np.any(np.isnan(current_x)) or np.any(np.isinf(current_x)):
+            if np.any(np.isnan(current_state)) or np.any(np.isinf(current_state)):
                 print("Warning: Input state contains NaN or infinite values")
                 return np.array([5.0, 0.0, 0.0])
+
+            # Update current state - 使用字典格式而不是向量格式
+            self.mpc.x0['pos'] = current_state[0:3].reshape(-1, 1)
+            self.mpc.x0['att'] = current_state[3:6].reshape(-1, 1)
+            self.mpc.x0['vel'] = current_state[6:9].reshape(-1, 1)
+            self.mpc.x0['omega'] = current_state[9:12].reshape(-1, 1)
 
             # Update reference trajectory parameters
             reference_params = {
@@ -454,7 +464,12 @@ class do_mpc_controller:
                 self._update_disturbance_compensation(current_state, reference_trajectory)
 
             # Under the current state current x, solve for the optimal control input u
-            u_mpc = self.mpc.make_step(current_x) # u_mpc is a casadi data structure
+            # 执行 MPC 求解 - 传入字典格式的状态
+            try:
+                u_mpc = self.mpc.make_step(self.mpc.x0)
+            except Exception as mpc_error:
+                logger.warning(f"MPC make_step failed: {mpc_error}, using previous control")
+                return self.last_control if hasattr(self, 'last_control') else np.array([5.0, 0.0, 0.0])
 
             # It is usually a data structure of casadi (such as casadi.DM),
             # and you will convert it to numpy.array later to extract control instructions here
