@@ -3,7 +3,7 @@
 Thrust parameter conversion module.
 Provide functions to convert thrust parameters to force and torque vectors for thrust vectoring.
 """
-# cspell:ignore vertcat arctan allclose
+# cspell:ignore vertcat arctan allclose casadi
 # pylint: disable=invalid-name
 # pylint: disable=line-too-long
 import numpy as np

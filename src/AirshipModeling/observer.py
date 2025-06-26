@@ -5,7 +5,7 @@ Disturbance observer module, supporting disturbance compensation under the NMPC 
 """
 
 
-# cspell:ignore R_block coeff
+# cspell:ignore R_block coeff casadi NMPC
 # pylint: disable=invalid-name
 
 
@@ -13,8 +13,8 @@ Disturbance observer module, supporting disturbance compensation under the NMPC 
 
 import numpy as np
 import casadi as ca
-from src.config import parameters as params
-from rotation_matrices import R_block
+from config import parameters as params
+from AirshipModeling.rotation_matrices import R_block
 
 
 

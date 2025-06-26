@@ -5,23 +5,21 @@ refer to      Error-constrained fixed-time trajectory tracking control for a str
 """
 # pylint: disable=invalid-name
 # cspell:ignore coeffs ddelta eta_f Sh Sg Sf Cdcf dalpha arcsin coeff ndarray linalg vertcat xdot
-# cspell:ignore arctan RUDT RUDB ELVL ELVR unmodeled
+# cspell:ignore arctan RUDT RUDB ELVL ELVR unmodeled casadi
 
-# === standard libraries ===
-import sys
-import os
+
+
 
 # === third-party libraries ===
 import numpy as np
 import casadi as ca
 
 # === local modules ===
-from aero_force_torque import calculate_aero_forces_moments, calculate_relative_velocity, calculate_aoa_sideslip
-from thrust_vectoring import thrust_params_to_force_torque
-from rotation_matrices import R_zeta, R_block
+from AirshipModeling.aero_force_torque import calculate_aero_forces_moments, calculate_relative_velocity, calculate_aoa_sideslip
+from AirshipModeling.thrust_vectoring import thrust_params_to_force_torque
+from AirshipModeling.rotation_matrices import R_zeta, R_block
 
-# === set the path (if needed) ===
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 
 
 

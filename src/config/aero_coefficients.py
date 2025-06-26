@@ -1,5 +1,5 @@
 """
- aero_coefficients.py
+aero_coefficients.py
 
 """
 
@@ -11,7 +11,7 @@
 import numpy as np
 
 
-from src.config import parameters as params
+from config import parameters as params
 
 
 

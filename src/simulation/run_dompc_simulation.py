@@ -7,23 +7,24 @@ Demonstrates how to use the complete do-mpc ecosystem for airship trajectory tra
 # cspell:ignore linalg suptitle sharex sharey whitegrid
 # cspell: ignore dompc levelname figsize set_xlabel set_ylabel set_zlabel
 
-import os
-import sys
+
 import time as timer
 import logging
 
 import numpy as np
 
-from src.config import parameters as params
-from src.AirshipModeling.trajectory_ref import Trajectory
-from src.AirshipModeling.controller_dompc import do_mpc_controller
-from src.visualization.plot_results import plot_simulation_results
-from src.analysis.performance_evaluator import evaluate_performance
 
 
 
-# Add project root directory to path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from config import parameters as params
+from AirshipModeling.trajectory_ref import Trajectory
+from AirshipModeling.controller_dompc import do_mpc_controller
+from visualization.plot_results import plot_simulation_results
+from analysis.performance_evaluator import evaluate_performance
+
+
+
+
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
