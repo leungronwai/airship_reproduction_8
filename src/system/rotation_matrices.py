@@ -6,7 +6,7 @@ refer to Nonlinear adaptive trajectory tracking control for a stratospheric airs
 # pylint: disable=invalid-name
 # pylint: disable=too-many-lines
 # cspell:ignore R_zeta R_y_inv Rc_z Rc_y_inv ddot arctan2 linalg
-# cspell:ignore cphi cth cpsi sphi sth spsi casadi
+# cspell:ignore cphi cth cpsi sphi sth spsi casadi blockcat
 
 import numpy as np
 import casadi as ca
@@ -125,10 +125,7 @@ def R_block(gamma):
     """
     Rz = R_zeta(gamma) # numpy array
     Ry = R_gamma(gamma) # numpy array
-    Rz = ca.MX(Rz)  # casadi MX
-    Ry = ca.MX(Ry)  # casadi MX
 
-    R = ca.MX.zeros(6, 6)
-    R[0:3, 0:3] = Rz
-    R[3:6, 3:6] = Ry
-    return R
+    R = ca.MX.zeros(3, 3)
+    r_block = ca.blockcat(Rz, R , R , Ry)
+    return r_block
