@@ -11,14 +11,14 @@
 import numpy as np
 
 # import physical calculation functions
-from AirshipModeling.added_mass_inertia import calculate_added_mass_inertia
+from src.system.added_mass_inertia import calculate_added_mass_inertia
 
 
 
 
 
 # === simulation parameters (Simulation Parameters) ===
-DT = 0.1  # simulation step size (Simulation step size) [s]
+DT = 0.01  # simulation step size (Simulation step size) [s]
 T_SPAN = 50  # simulation total time (Total simulation time) [s] # Reduced for faster testing, original paper used longer
 
 # --- (Physical Parameters - Placeholder Values!) ---
@@ -74,7 +74,7 @@ try:
     # Calculate k1, k2, k3 based on added mass factors
     k1_val, k2_val, _, = k1, k2, k3
 
-    from config.aero_coefficients import get_aero_coefficients # noqa: E402
+    from src.config.aero_coefficients import get_aero_coefficients # noqa: E402
 
     # Calculate aerodynamic coefficients
     AERO_COEFFS = get_aero_coefficients(k1=k1_val, k2=k2_val)

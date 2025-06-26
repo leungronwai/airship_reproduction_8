@@ -18,9 +18,9 @@ import do_mpc
 
 
 # local module
-from src.airship_modeling.airship_dynamic import AirshipCasADiSymbolic
-from src.airship_modeling.thrust_vectoring import thrust_params_to_force_torque
-from src.airship_modeling.observer import DisturbanceObserver
+from src.system.airship_dynamic import AirshipCasADiSymbolic
+from src.system.thrust_vectoring import thrust_params_to_force_torque
+from src.system.observer import DisturbanceObserver
 from src.config import parameters as params
 
 warnings.filterwarnings("ignore", category=UserWarning, module="do_mpc.sysid")
