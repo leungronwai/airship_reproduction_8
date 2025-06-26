@@ -7,7 +7,7 @@ Trajectory generation module (trajectory.py)
 # cspell:ignore phidot phiddot psidot psiddot thetaddot ydot
 
 import numpy as np
-from AirshipModeling.rotation_matrices import R_zeta, R_y_inv
+from src.system.rotation_matrices import R_zeta, R_y_inv
 
 class Trajectory:
     """
@@ -58,7 +58,9 @@ class Trajectory:
                     Angular velocity rate: [dωφ/dt, dωθ/dt, dωψ/dt], the time rate of change of angular velocity.
     """
     def __init__(self):
-        pass  # No specific initialization needed for this trajectory
+        self.omega = 0.04  # Angular velocity (rad/s)
+        self.r = 2500  # Radius (m)
+        self.h_max = 2000  # Maximum height (m)
 
     # ┌─────────────────────────────────────────────────────┐
     # │          Spiral trajectory function                  │
@@ -78,9 +80,9 @@ class Trajectory:
         dt_small = 1e-4
 
         # --- Trajectory parameters ---
-        omega = 0.07  # Angular velocity
-        r = 1500  # Radius
-        h_max = 2000  # Maximum height
+        omega = self.omega  # Angular velocity
+        r = self.r # Radius
+        h_max = self.h_max  # Maximum height
 
         # Print starting point information at initial time
         if abs(t) < 1e-3:  # When t approaches 0
@@ -157,9 +159,9 @@ class Trajectory:
         Avoid recursive calls to define_spiral_trajectory
         """
         # --- Trajectory parameters ---
-        omega = 0.07  # Angular velocity (rad/s)
-        r = 1500  # Basic radius (m)
-        h_max = 2000  # Maximum height (m)
+        omega = self.omega  # Angular velocity (rad/s)
+        r = self.r # Basic radius (m)
+        h_max = self.h_max  # Maximum height (m)
 
         # --- Position calculation ---
         theta = omega * t

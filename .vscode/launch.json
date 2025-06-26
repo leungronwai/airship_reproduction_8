@@ -5,8 +5,8 @@
         "name": "Debug arbitrary module in src/",
         "type": "debugpy",
         "request": "launch",
-        "program": "${file}",
-        "cwd": "${workspaceFolder}/src",
+        "program": "${workspaceFolder}/main.py",
+        "cwd": "${workspaceFolder}",
         "envFile": "${workspaceFolder}/.env",
         "console": "integratedTerminal",
         "justMyCode": true

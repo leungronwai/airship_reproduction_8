@@ -123,9 +123,12 @@ def R_block(gamma):
     return:
         6x6 rotation matrix R
     """
-    Rz = R_zeta(gamma)
-    Ry = R_gamma(gamma)
-    R = np.zeros((6, 6))
+    Rz = R_zeta(gamma) # numpy array
+    Ry = R_gamma(gamma) # numpy array
+    Rz = ca.MX(Rz)  # casadi MX
+    Ry = ca.MX(Ry)  # casadi MX
+
+    R = ca.MX.zeros(6, 6)
     R[0:3, 0:3] = Rz
     R[3:6, 3:6] = Ry
     return R

@@ -11,7 +11,7 @@ aero_coefficients.py
 import numpy as np
 
 
-from config import parameters as params
+from src.config import parameters as params
 
 
 

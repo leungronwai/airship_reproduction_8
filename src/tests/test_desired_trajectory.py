@@ -10,7 +10,7 @@
 import argparse
 import numpy as np
 import matplotlib.pyplot as plt
-from airship.trajectory import Trajectory
+from src.system.trajectory_ref import Trajectory
 
 
 
@@ -30,7 +30,11 @@ def plot_trajectory(trajectory_type="all", simulation_time=200, num_points=1000)
     trajectory = Trajectory()
 
     # 设置图形布局
-    plt.figure(figsize=(18, 10))
+    # plt.figure(figsize=(36, 20))
+    fig = plt.figure(figsize=(36, 20))
+    fig.subplots_adjust(left=0.15, right=0.85, top=0.85, bottom=0.15)
+
+
 
     # 使用 2 行 2 列的布局
     if trajectory_type == "all" or trajectory_type == "spiral":
@@ -94,7 +98,14 @@ def plot_specific_trajectory(trajectory, t_values, trajectory_type, subplot_posi
 
     # 标记起点和终点
     ax.scatter(x_values[0], y_values[0], z_values[0], color="green", s=100, label="Start")
+    ax.text(x_values[0], y_values[0], z_values[0] + 150, "Start Point", color="green", fontsize=12, weight='bold')
+
     ax.scatter(x_values[-1], y_values[-1], z_values[-1], color="red", s=100, label="End")
+    ax.text(x_values[-1], y_values[-1], z_values[-1] + 150, "Target Point", color="red", fontsize=12, weight='bold')
+
+    # Add legend handles for Start and Target Point using invisible plot markers
+    ax.plot([], [], color="green", marker='o', linestyle='None', label="Start Point")
+    ax.plot([], [], color="red", marker='o', linestyle='None', label="Target Point")
 
 
 def plot_linear_trajectory(trajectory, t_values, subplot_position):
@@ -164,7 +175,7 @@ python test_desired_trajectory.py --type lemniscate
 python test_desired_trajectory.py --type linear
 
 # 只绘制螺旋轨迹
-python test_desired_trajectory.py --type spiral
+python -m src.tests.test_desired_trajectory --type spiral
 
 # 自定义仿真时间和点数
 python test_desired_trajectory.py --type all --time 100 --points 500
