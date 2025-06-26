@@ -4,7 +4,7 @@ NMPC Controller Implementation based on do-mpc
 
 # pylint: disable=invalid-name
 # cspell:ignore dompc vertcat radau mterm lterm rterm ndarray fmin fmax idas abstol reltol Kalman
-# cspell: ignore nlpsol ipopt print_level max_iter acceptable_tol acceptable_obj_change_tol tol opcua
+# cspell: ignore nlpsol ipopt print_level max_iter acceptable_tol acceptable_obj_change_tol tol opcua casadi
 # cspell: ignore cvodes mu_strategy hessian_approximation limited_memory_max_history alpha_for_y recalc_y max_wall_time print_time
 
 # standard library
@@ -18,11 +18,10 @@ import do_mpc
 
 
 # local module
-from src.config import parameters as params
-from airship_dynamic import AirshipCasADiSymbolic
-from thrust_vectoring import thrust_params_to_force_torque
-from observer import DisturbanceObserver
-
+from AirshipModeling.airship_dynamic import AirshipCasADiSymbolic
+from AirshipModeling.thrust_vectoring import thrust_params_to_force_torque
+from AirshipModeling.observer import DisturbanceObserver
+from config import parameters as params
 
 warnings.filterwarnings("ignore", category=UserWarning, module="do_mpc.sysid")
 warnings.filterwarnings("ignore", category=UserWarning, module="do_mpc.opcua")

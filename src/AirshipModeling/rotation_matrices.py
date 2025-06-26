@@ -6,7 +6,7 @@ refer to Nonlinear adaptive trajectory tracking control for a stratospheric airs
 # pylint: disable=invalid-name
 # pylint: disable=too-many-lines
 # cspell:ignore R_zeta R_y_inv Rc_z Rc_y_inv ddot arctan2 linalg
-# cspell:ignore cphi cth cpsi sphi sth spsi
+# cspell:ignore cphi cth cpsi sphi sth spsi casadi
 
 import numpy as np
 import casadi as ca

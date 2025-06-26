@@ -8,6 +8,7 @@
 import sys
 import os
 import logging
+import pprint
 
 from datetime import datetime
 
@@ -15,10 +16,7 @@ from simulation.run_dompc_simulation import run_dompc_simulation
 
 
 
-# Add project root directory to sys.path
-PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-if PROJECT_ROOT not in sys.path:
-    sys.path.append(PROJECT_ROOT)
+pprint.pprint(sys.path)
 
 
 

@@ -7,7 +7,7 @@ Trajectory generation module (trajectory.py)
 # cspell:ignore phidot phiddot psidot psiddot thetaddot ydot
 
 import numpy as np
-from rotation_matrices import R_zeta, R_y_inv
+from AirshipModeling.rotation_matrices import R_zeta, R_y_inv
 
 class Trajectory:
     """

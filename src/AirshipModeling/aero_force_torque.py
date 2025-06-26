@@ -5,7 +5,7 @@ Provides functions to calculate aerodynamic forces and moments for airships.
 """
 # pylint: disable=invalid-name
 # cspell:ignore coeffs ddelta eta_f Sh Sg Sf Cdcf dalpha arcsin coeff ndarray linalg vertcat xdot nlpsol xlabel ylabel zlabel
-# cspell:ignore delta_RUDT delta_RUDB delta_ELVL delta_ELVR arctan
+# cspell:ignore delta_RUDT delta_RUDB delta_ELVL delta_ELVR arctan casadi
 # pylint: disable= line-too-long
 
 import numpy as np
