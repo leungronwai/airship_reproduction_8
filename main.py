@@ -3,7 +3,7 @@
 
 """
 # pylint: disable=invalid-name
-# cspell:ignore dompc levelname figsize traj
+# cspell:ignore dompc levelname figsize traj NMPC
 
 import sys
 import os

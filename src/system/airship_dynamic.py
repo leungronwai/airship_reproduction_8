@@ -15,9 +15,9 @@ import numpy as np
 import casadi as ca
 
 # === local modules ===
-from AirshipModeling.aero_force_torque import calculate_aero_forces_moments, calculate_relative_velocity, calculate_aoa_sideslip
-from AirshipModeling.thrust_vectoring import thrust_params_to_force_torque
-from AirshipModeling.rotation_matrices import R_zeta, R_block
+from src.airship_modeling.aero_force_torque import calculate_aero_forces_moments, calculate_relative_velocity, calculate_aoa_sideslip
+from src.airship_modeling.thrust_vectoring import thrust_params_to_force_torque
+from src.airship_modeling.rotation_matrices import R_zeta, R_block
 
 
 
