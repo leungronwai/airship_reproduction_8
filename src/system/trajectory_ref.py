@@ -112,14 +112,14 @@ class Trajectory:
         acc = np.array([xd_ddot, yd_ddot, zd_ddot])
 
         # Construct position and velocity vectors
-        zeta_d = pos
-        zeta_d_dot = vel
-        zeta_d_ddot = acc
+        zeta_d = pos.flatten()
+        zeta_d_dot = vel.flatten()
+        zeta_d_ddot = acc.flatten()
 
         # Calculate attitude
         phi_d = 0.0  # Maintain zero roll
-        theta_d = float(np.arctan2(-vel[2], np.sqrt(vel[0] ** 2 + vel[1] ** 2)) ) # Pitch angle
-        psi_d = float(np.arctan2(vel[1], vel[0]) ) # Yaw angle
+        theta_d = float(np.arctan2(-vel[2], np.sqrt(vel[0] ** 2 + vel[1] ** 2)))  # Pitch angle
+        psi_d = float(np.arctan2(vel[1], vel[0]))  # Yaw angle
         gamma_d = np.array([phi_d, theta_d, psi_d])
 
         # Use numerical differentiation to get attitude derivatives
@@ -176,8 +176,8 @@ class Trajectory:
 
         # --- Attitude calculation ---
         phi_d = 0.0  # Maintain zero roll
-        theta_d = np.arctan2(-zd_dot, np.sqrt(xd_dot**2 + yd_dot**2))  # Pitch angle
-        psi_d = np.arctan2(yd_dot, xd_dot)  # Yaw angle
+        theta_d = float(np.arctan2(-zd_dot, np.sqrt(xd_dot**2 + yd_dot**2)))  # Pitch angle
+        psi_d = float(np.arctan2(yd_dot, xd_dot))  # Yaw angle
         gamma_d = np.array([phi_d, theta_d, psi_d])
 
         return zeta_d, gamma_d
