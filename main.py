@@ -25,6 +25,15 @@ from src.system.controller_dompc import DoMpcConfig
 
 
 def run_simulation():
+    """
+    Run the simulation
+
+    Args:
+        None
+
+    Returns:
+        None
+    """
     # user settings
     show_animations = False  # Set to True to show animations
     store_results = False
@@ -69,6 +78,7 @@ def run_simulation():
     for i in range(int(params.T_SPAN / params.DT)):
 
         # for the current state x0, mpc computes the optimal control action u0
+        print(f"Time: {i * params.DT:.2f}s")
         timer.tic()
         u0 = mpc.make_step(x0)
         timer.toc()
