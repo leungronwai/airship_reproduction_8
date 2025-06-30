@@ -57,9 +57,9 @@ class Trajectory:
                     Angular velocity rate: [dωφ/dt, dωθ/dt, dωψ/dt], the time rate of change of angular velocity.
     """
     def __init__(self):
-        self.omega = 0.04  # Angular velocity (rad/s)
-        self.r = 2500  # Radius (m)
-        self.h_max = 2000  # Maximum height (m)
+        self.omega = 0.04  # 减小角速度 (原来 0.04)
+        self.r = 2500       # 减小半径 (原来 2500)
+        self.h_max = 2000   # 减小最大高度 (原来 2000)
 
     # ┌─────────────────────────────────────────────────────┐
     # │          Spiral trajectory function                  │

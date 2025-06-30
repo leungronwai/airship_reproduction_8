@@ -44,7 +44,8 @@ def run_simulation():
     model = airship_mpc.model
 
     # setting up a mpc controller, given the model
-    mpc = airship_mpc.create_mpc_controller(model)
+    # mpc = airship_mpc.create_mpc_controller(model)
+    mpc = airship_mpc.create_mpc_controller(silence_solver=True)
 
 
     # setting up a simulator, given the model
@@ -74,15 +75,34 @@ def run_simulation():
     optimal_states = []
     optimal_states.append(x0)
 
+    # 添加软启动参数
+    # ramp_up_time = 5.0  # 软启动时间（秒）
+
 
     for i in range(int(params.T_SPAN / params.DT)):
+        current_time = i * params.DT
+
+        # 软启动因子
+        # if current_time < ramp_up_time:
+        #     ramp_factor = current_time / ramp_up_time
+        # else:
+        #     ramp_factor = 1.0
+
 
         # for the current state x0, mpc computes the optimal control action u0
-        print(f"Time: {i * params.DT:.2f}s")
+        # print(f"Time: {current_time:.2f}s, Ramp factor: {ramp_factor:.2f}")
         timer.tic()
         u0 = mpc.make_step(x0)
         timer.toc()
 
+        # 应用软启动到控制输入
+        # if current_time < ramp_up_time:
+        #     # 在软启动阶段逐渐增加控制力度
+        #     u0_smooth = u0.copy()
+        #     u0_smooth[0] = u0[0] * ramp_factor + params.T_HOVER * (1 - ramp_factor)
+        #     u0_smooth[1] *= ramp_factor
+        #     u0_smooth[2] *= ramp_factor
+        #     u0 = u0_smooth
 
         # for the current state u0, computes the next state y_next
         y_next = simulator.make_step(u0)
@@ -109,6 +129,10 @@ def run_simulation():
     plt.show()
 
     optimal_states = np.array(optimal_states)
+
+    # Wrap yaw angle (index 5) to [-π, π] range to avoid sawtooth in plots
+    optimal_states[:, 5] = np.arctan2(np.sin(optimal_states[:, 5]), np.cos(optimal_states[:, 5]))
+
     plt.figure(figsize=(12, 8))
 
     # Position plot

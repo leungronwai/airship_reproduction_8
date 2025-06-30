@@ -12,6 +12,7 @@ import numpy as np
 
 # import physical calculation functions
 from src.system.added_mass_inertia import calculate_added_mass_inertia
+from src.system.trajectory_ref import Trajectory
 
 
 
@@ -19,7 +20,7 @@ from src.system.added_mass_inertia import calculate_added_mass_inertia
 
 # === simulation parameters (Simulation Parameters) ===
 DT = 1  # simulation step size (Simulation step size) [s]
-T_SPAN = 20  # simulation total time (Total simulation time) [s] # Reduced for faster testing, original paper used longer
+T_SPAN = 40  # simulation total time (Total simulation time) [s] # Reduced for faster testing, original paper used longer
 
 # --- (Physical Parameters - Placeholder Values!) ---
 m = 9400  # mass (Mass) [kg] - Placeholder
@@ -92,10 +93,17 @@ def setup_spiral_initial_conditions():
     Returns:
         initial_state_vector: Complete initial state vector [position, attitude, velocity, angular_velocity]
     """
-    initial_position = np.array([1500.0, 0.0, 0.0])  # Initial position [m]
-    initial_attitude = np.array([0.0, 0.0, np.pi/2])  # Initial attitude [rad] (roll, pitch, yaw)
-    initial_velocity = np.array([0.0, 105.0, 14.0])  # Initial linear velocity [m/s] (u, v, w)
-    initial_angular_velocity = np.array([0.0, 0.0, 0.07])  # Initial angular velocity [rad/s] (p, q, r)
+    # 从轨迹生成器获取 t=0 时的期望状态
+    trajectory = Trajectory()
+    yc, yc_dot, _, _, _ = trajectory.get_spiral_trajectory(0.0)
+
+    # 使用轨迹的初始状态作为初始条件
+    # initial_position = yc[0:3]  # Initial position [m]
+    # initial_position[2] += 5  # Adjust altitude to 0.5m above ground
+    initial_position = np.array([2500.0, 0.0, 0.0])
+    initial_attitude = np.array([0.0, 0.0, np.pi / 2])  # Initial attitude [rad] (roll, pitch, yaw) 面朝 Y 方向（90°朝右）
+    initial_velocity = np.array([0, 0.0, 0.0])               # 稍有向前速度（缓慢推进）  # Initial linear velocity [m/s] (u, v, w)
+    initial_angular_velocity = np.array([0.0, 0.0, 0.00])      # 缓慢右转（偏航角速度）  # Initial angular velocity [rad/s] (p, q, r)
 
     _X0 = np.concatenate([initial_position, initial_attitude, initial_velocity, initial_angular_velocity])
 
@@ -166,7 +174,7 @@ Qf = np.diag([20.0, 20.0, 20.0, 10.0, 10.0, 10.0,
                2.0, 2.0, 2.0, 1.0, 1.0, 1.0])
 
 #  thrust boundary (N)
-T_HOVER = 10.0
+T_HOVER = 8.0
 T_MIN = 0.5 * T_HOVER
 T_MAX = 2.0 * T_HOVER
 
