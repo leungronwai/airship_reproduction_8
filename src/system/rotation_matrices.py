@@ -39,19 +39,17 @@ def R_zeta(gamma):
     args:
         gamma: attitude angles (phi, theta, psi)
     return:
-        3x3 rotation matrix R
+        3x3 rotation matrix R (CasADi MX type)
     """
     phi, theta, psi = gamma[0], gamma[1], gamma[2]
-    cphi, sphi = np.cos(phi), np.sin(phi)
-    cth, sth = np.cos(theta), np.sin(theta)
-    cpsi, spsi = np.cos(psi), np.sin(psi)
+    cphi, sphi = ca.cos(phi), ca.sin(phi)
+    cth, sth = ca.cos(theta), ca.sin(theta)
+    cpsi, spsi = ca.cos(psi), ca.sin(psi)
 
-    r_zeta = np.array(
-        [
-            [cth * cpsi, sphi * sth * cpsi - cphi * spsi, cphi * sth * cpsi + sphi * spsi],
-            [cth * spsi, sphi * sth * spsi + cphi * cpsi, cphi * sth * spsi - sphi * cpsi],
-            [-sth, sphi * cth, cphi * cth],
-        ]
+    r_zeta = ca.vertcat(
+        ca.horzcat(cth * cpsi, sphi * sth * cpsi - cphi * spsi, cphi * sth * cpsi + sphi * spsi),
+        ca.horzcat(cth * spsi, sphi * sth * spsi + cphi * cpsi, cphi * sth * spsi - sphi * cpsi),
+        ca.horzcat(-sth, sphi * cth, cphi * cth),
     )
     return r_zeta
 
@@ -59,22 +57,24 @@ def R_zeta(gamma):
 def R_gamma(gamma):
     """
     Calculate angular velocity transformation matrix R_y - Eq. 7
-
     Calculate the rotation matrix from Inertial Reference Frame to Body Reference Frame
     args:
         gamma: attitude angles (phi, theta, psi)
     return:
-        3x3 rotation matrix R
+        3x3 rotation matrix R (CasADi MX type)
     """
     phi, theta, _psi = gamma[0], gamma[1], gamma[2]
-    cphi, sphi = np.cos(phi), np.sin(phi)
-    cth, sth = np.cos(theta), np.sin(theta)
+    cphi, sphi = ca.cos(phi), ca.sin(phi)
+    cth, sth = ca.cos(theta), ca.sin(theta)
 
+    # Ensure cth is safe for division
     _cth_safe = ca.if_else(ca.fabs(cth) < 1e-6, 1e-6, cth)
 
-    r_gamma = np.array([[1, sphi * sth / cth, cphi * sth / cth],
-                      [0, cphi, -sphi],
-                      [0, sphi / cth, cphi / cth]])
+    r_gamma = ca.vertcat(
+        ca.horzcat(1, sphi * sth / _cth_safe, cphi * sth / _cth_safe),
+        ca.horzcat(0, cphi, -sphi),
+        ca.horzcat(0, sphi / _cth_safe, cphi / _cth_safe),
+    )
     return r_gamma
 
 
@@ -123,8 +123,8 @@ def R_block(gamma):
     return:
         6x6 rotation matrix R
     """
-    Rz = R_zeta(gamma) # numpy array
-    Ry = R_gamma(gamma) # numpy array
+    Rz = R_zeta(gamma)
+    Ry = R_gamma(gamma)
 
     R = ca.MX.zeros(3, 3)
     r_block = ca.blockcat(Rz, R , R , Ry)

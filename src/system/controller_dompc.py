@@ -12,6 +12,7 @@ import warnings
 import numpy as np
 import casadi as ca
 import do_mpc
+from do_mpc.model import Model
 
 
 # local module
@@ -40,6 +41,9 @@ class DoMpcConfig:
             use_disturbance_compensation: Whether to enable disturbance compensation
             create_simulator: Whether to create do-mpc Simulator
         """
+        # Create reference trajectory
+        self.trajectory = Trajectory()
+
         self.use_disturbance_compensation = use_disturbance_compensation
         self.params = params
 
@@ -50,7 +54,7 @@ class DoMpcConfig:
         self.model = self.create_model()
 
         # Create MPC controller
-        self.mpc = self.create_mpc_controller()
+        self.mpc = self.create_mpc_controller(self.model)
 
 
 
@@ -60,8 +64,7 @@ class DoMpcConfig:
         # Store last control input
         self.last_control = np.array([5.0, 0.0, 0.0])
 
-        # Create reference trajectory
-        self.trajectory = Trajectory()
+
 
     def create_model(self, symvar_type='MX'):
         """
@@ -73,7 +76,8 @@ class DoMpcConfig:
         """
         # Create model type (continuous time)
         model_type = 'continuous'
-        model = do_mpc.model.Model(model_type, symvar_type)
+        model = Model(model_type, symvar_type)
+        # model = do_mpc.model.Model(model_type, symvar_type)
 
         # Define state variables - 12-dimensional state vector
         pos = model.set_variable(var_type='_x', var_name='pos', shape=(3, 1))      # Position [x, y, z]
@@ -87,13 +91,13 @@ class DoMpcConfig:
         nu = model.set_variable(var_type='_u', var_name='nu')        # Vertical deflection angle
 
         # Define reference trajectory parameters
-        pos_ref = model.set_variable(var_type='_p', var_name='pos_ref', shape=(3, 1))
-        att_ref = model.set_variable(var_type='_p', var_name='att_ref', shape=(3, 1))
-        vel_ref = model.set_variable(var_type='_p', var_name='vel_ref', shape=(3, 1))
-        omega_ref = model.set_variable(var_type='_p', var_name='omega_ref', shape=(3, 1))
+        pos_ref = model.set_variable(var_type='_tvp', var_name='pos_ref', shape=(3, 1))
+        att_ref = model.set_variable(var_type='_tvp', var_name='att_ref', shape=(3, 1))
+        vel_ref = model.set_variable(var_type='_tvp', var_name='vel_ref', shape=(3, 1))
+        omega_ref = model.set_variable(var_type='_tvp', var_name='omega_ref', shape=(3, 1))
 
         # Define disturbance variables (for Simulator)
-        disturbance = model.set_variable(var_type='_p', var_name='disturbance', shape=(6, 1))
+        disturbance = model.set_variable(var_type='_tvp', var_name='disturbance', shape=(6, 1))
 
 
         # Use existing symbolic dynamics model
@@ -141,7 +145,7 @@ class DoMpcConfig:
 
         return model
 
-    def create_mpc_controller(self, silence_solver=False):
+    def create_mpc_controller(self, model, silence_solver=False):
         """
         Create MPC controller
 
@@ -180,6 +184,8 @@ class DoMpcConfig:
         }
 
         mpc.set_param(**setup_mpc)
+
+
 
         if silence_solver:
             mpc.set_param(nlpsol_opts={'ipopt.print_level': 0}) # print_level = 0 means no print
@@ -228,6 +234,28 @@ class DoMpcConfig:
 
         # Set constraints
         self._set_mpc_constraints(mpc)
+
+        # # === Assign TVP (Time-Varying Parameters) ===
+        tvp_template = mpc.get_tvp_template()
+
+
+        def tvp_fun(t_now):
+            """Update reference trajectory parameters."""
+            yc, yc_dot, _, _, _ = self.trajectory.get_spiral_trajectory(t_now)
+
+            tvp_current = tvp_template()
+
+            # 使用正确的 TVP 访问方式 - 基于调试输出的结构
+            tvp_current['_tvp', :, 'pos_ref'] = yc[0:3].reshape(-1, 1).astype(float)
+            tvp_current['_tvp', :, 'att_ref'] = yc[3:6].reshape(-1, 1).astype(float)
+            tvp_current['_tvp', :, 'vel_ref'] = yc_dot[0:3].reshape(-1, 1).astype(float)
+            tvp_current['_tvp', :, 'omega_ref'] = yc_dot[3:6].reshape(-1, 1).astype(float)
+            tvp_current['_tvp', :, 'disturbance'] = params.disturbance_delta(t_now).reshape(-1, 1).astype(float)
+
+            return tvp_current
+
+
+        mpc.set_tvp_fun(tvp_fun)
 
         # Complete MPC setup
         mpc.setup()
@@ -303,23 +331,22 @@ class DoMpcConfig:
         simulator.set_param(**simulator_params)
 
         # # Set initial state
-        tvp_num = simulator.get_tvp_template()
-        tvp_num['pos_ref'] = np.zeros((3, 1))  # Initial position [x, y, z]
-        tvp_num['att_ref'] = np.zeros((3, 1))  # Initial attitude [phi, theta, psi]
-        tvp_num['vel_ref'] = np.zeros((3, 1))  # Initial velocity [vx, vy, vz]
-        tvp_num['omega_ref'] = np.zeros((3, 1))  # Initial angular velocity [p, q, r]
-        tvp_num['disturbance'] = np.zeros((6, 1))  # Initial disturbance [d1, d2, d3, d4, d5, d6]
-
+        # 使用 simulator 的 TVP template
+        tvp_template = simulator.get_tvp_template()
 
         def tvp_fun(t_now):
             """Update disturbance parameters for current simulation time"""
             yc, yc_dot, _, _, _ = self.trajectory.get_spiral_trajectory(t_now)
-            tvp_num['pos_ref'] = yc[0:3].reshape(-1, 1)  # 位置参考 [x, y, z]
-            tvp_num['att_ref'] = yc[3:6].reshape(-1, 1)  # 姿态参考 [phi, theta, psi]
-            tvp_num['vel_ref'] = yc_dot[0:3].reshape(-1, 1)  # 速度参考 [vx, vy, vz]
-            tvp_num['omega_ref'] = yc_dot[3:6].reshape(-1, 1)  # 角速度参考 [p, q, r]
-            tvp_num['disturbance'] = params.disturbance_delta(t_now).reshape(-1, 1)
-            return tvp_num
+
+            tvp_current = tvp_template()
+
+            tvp_current['pos_ref'] = yc[0:3].reshape(-1, 1).astype(float)
+            tvp_current['att_ref'] = yc[3:6].reshape(-1, 1).astype(float)
+            tvp_current['vel_ref'] = yc_dot[0:3].reshape(-1, 1).astype(float)
+            tvp_current['omega_ref'] = yc_dot[3:6].reshape(-1, 1).astype(float)
+            tvp_current['disturbance'] = params.disturbance_delta(t_now).reshape(-1, 1).astype(float)
+
+            return tvp_current
 
         simulator.set_tvp_fun(tvp_fun)
 

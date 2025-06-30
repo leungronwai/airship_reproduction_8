@@ -73,6 +73,7 @@ def run_simulation():
         u0 = mpc.make_step(x0)
         timer.toc()
 
+
         # for the current state u0, computes the next state y_next
         y_next = simulator.make_step(u0)
 
