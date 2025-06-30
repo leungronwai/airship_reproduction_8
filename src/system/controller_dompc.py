@@ -3,14 +3,11 @@ NMPC Controller Implementation based on do-mpc
 """
 
 # pylint: disable=invalid-name
-# cspell:ignore dompc vertcat radau mterm lterm rterm ndarray fmin fmax idas abstol reltol Kalman
+# cspell:ignore dompc vertcat radau mterm lterm rterm ndarray fmin fmax idas abstol reltol Kalman symvar
 # cspell: ignore nlpsol ipopt print_level max_iter acceptable_tol acceptable_obj_change_tol tol opcua casadi NMPC
 # cspell: ignore cvodes mu_strategy hessian_approximation limited_memory_max_history alpha_for_y recalc_y max_wall_time print_time
 
-# standard library
-import logging
 import warnings
-
 # third-party library
 import numpy as np
 import casadi as ca
@@ -19,18 +16,18 @@ import do_mpc
 
 # local module
 from src.system.airship_dynamic import AirshipCasADiSymbolic
-from src.system.thrust_vectoring import thrust_params_to_force_torque
-from src.system.observer import DisturbanceObserver
+from src.system.trajectory_ref import Trajectory
+
 from src.config import parameters as params
 
 warnings.filterwarnings("ignore", category=UserWarning, module="do_mpc.sysid")
 warnings.filterwarnings("ignore", category=UserWarning, module="do_mpc.opcua")
-# set up logger
-logger = logging.getLogger(__name__)
 
 
 
-class do_mpc_controller:
+
+
+class do_mpc_config:
     """
     Airship NMPC Controller based on do-mpc
     """
@@ -47,13 +44,7 @@ class do_mpc_controller:
         self.params = params
         self.create_simulator = create_simulator
 
-        # Initialize disturbance observer
-        if use_disturbance_compensation:
-            self.disturbance_compensation_factor = getattr(params, 'do_compensation_gain', 0.9)
-            self.last_disturbance_estimate = np.zeros(6)
-            self.disturbance_observer = DisturbanceObserver()
-        else:
-            self.disturbance_observer = None
+
 
         # Create do-mpc model
         self.model = self._create_model()
@@ -61,14 +52,10 @@ class do_mpc_controller:
         # Create MPC controller
         self.mpc = self._create_mpc_controller()
 
-        # Create estimator
-        self.estimator = self._create_estimator()
 
-        # Create Simulator (if needed)
-        if create_simulator:
-            self.simulator = self._create_simulator()
-        else:
-            self.simulator = None
+
+        self.simulator = self._create_simulator()
+
 
         # Initialize controller
         self._setup_initial_conditions()
@@ -76,16 +63,20 @@ class do_mpc_controller:
         # Store last control input
         self.last_control = np.array([5.0, 0.0, 0.0])
 
-    def _create_model(self):
+        # Create reference trajectory
+        self.trajectory = Trajectory()
+
+    def create_model(self, symvar_type='MX'):
         """
         Create do-mpc model
+        here is placeholder for symbolic variable type
 
         Returns:
             do_mpc.model.Model: Airship dynamics model
         """
         # Create model type (continuous time)
         model_type = 'continuous'
-        model = do_mpc.model.Model(model_type)
+        model = do_mpc.model.Model(model_type, symvar_type)
 
         # Define state variables - 12-dimensional state vector
         pos = model.set_variable(var_type='_x', var_name='pos', shape=(3, 1))      # Position [x, y, z]
@@ -119,8 +110,8 @@ class do_mpc_controller:
         X_dot = symbolic_model.rhs_symbolic(X_state, Thrust_paras, external_disturbance=disturbance)
 
         # Add numerical stability - limit derivative magnitudes
-        max_derivative = 1e6
-        X_dot = ca.fmin(ca.fmax(X_dot, -max_derivative), max_derivative)
+        # max_derivative = 1e6
+        # X_dot = ca.fmin(ca.fmax(X_dot, -max_derivative), max_derivative)
 
         # Decompose state derivatives
         pos_dot = X_dot[0:3]
@@ -155,7 +146,7 @@ class do_mpc_controller:
 
         return model
 
-    def _create_mpc_controller(self):
+    def create_mpc_controller(self, silence_solver=False):
         """
         Create MPC controller
 
@@ -195,19 +186,29 @@ class do_mpc_controller:
 
         mpc.set_param(**setup_mpc)
 
-        # Set uncertainty values (disturbance compensation)
-        mpc.set_uncertainty_values(
-            pos_ref=np.zeros((3, 1)),
-            att_ref=np.zeros((3, 1)),
-            vel_ref=np.zeros((3, 1)),
-            omega_ref=np.zeros((3, 1)),
-            disturbance=np.zeros((6, 1))  # Add disturbance parameters
-        )
+        if silence_solver:
+            mpc.set_param(nlpsol_opts={'ipopt.print_level': 0}) # print_level = 0 means no print
 
-        # Scale weight matrices to avoid numerical issues
-        Q_scaled = params.Q * 0.01  # Reduce state weights
-        Qf_scaled = params.Qf * 0.01
-        _R_scaled = params.R * 100.0  # Increase control weights to promote smoothness
+
+        # 设置各分量的缩放因子
+        pos_weight = 10
+        att_weight = 5
+        vel_weight = 1
+        ang_weight = 0.5
+
+        Q_scaled = params.Q.copy()
+        Qf_scaled = params.Qf.copy()
+
+        # 缩放各类状态误差
+        Q_scaled[0:3, 0:3] *= pos_weight  # 增强位置误差权重（x, y, z）
+        Q_scaled[3:6, 3:6] *= att_weight
+        Q_scaled[6:9, 6:9] *= vel_weight
+        Q_scaled[9:12, 9:12] *= ang_weight
+
+        Qf_scaled[0:3, 0:3] *= pos_weight * 2    # 终端位置更强调
+        Qf_scaled[3:6, 3:6] *= att_weight * 2
+        Qf_scaled[6:9, 6:9] *= vel_weight * 0.2    # 减弱速度/角速度误差在代价函数中的影响
+        Qf_scaled[9:12, 9:12] *= ang_weight * 0.2
 
 
 
@@ -228,7 +229,7 @@ class do_mpc_controller:
 
         # Setting the penalty weight for the control input
         # in the objective function this is the "smoothness constraint" of control
-        mpc.set_rterm(T=0.1, mu=0.1, nu=0.1) # means: rterm = 0.1 * T^2 + 0.1 * mu^2 + 0.1 * nu^2
+        mpc.set_rterm(T=1, mu=1, nu=1) # means: rterm = 1 * T^2 + 1 * mu^2 + 1 * nu^2
 
         # Set constraints
         self._set_mpc_constraints(mpc)
@@ -240,53 +241,51 @@ class do_mpc_controller:
 
     def _set_mpc_constraints(self, mpc):
         """Set MPC constraints"""
-        # Control input constraints
-        mpc.bounds['lower', '_u', 'T'] = max(params.T_MIN, 0.1)  # Avoid zero thrust
+        # === Control input constraints ===
+        # Thrust: avoid zero, ensure minimum lift
+        mpc.bounds['lower', '_u', 'T'] = max(params.T_MIN, 5.0)
         mpc.bounds['upper', '_u', 'T'] = params.T_MAX
+
+        # Deflection angles: mu and nu (typically ±30°)
         mpc.bounds['lower', '_u', 'mu'] = params.MU_MIN
         mpc.bounds['upper', '_u', 'mu'] = params.MU_MAX
         mpc.bounds['lower', '_u', 'nu'] = params.NU_MIN
         mpc.bounds['upper', '_u', 'nu'] = params.NU_MAX
 
-        # State constraints
-        max_position = 200.0  # Reduce to reasonable range
-        max_angle = np.pi/2   # Limit attitude angles to prevent singularities
-        max_velocity = 30.0
-        max_angular_velocity = np.pi/2  # Reasonable angular velocity limits
+        # === State constraints ===
+        max_position = 50.0                         # Maximum range from origin in meters
+        max_angle = np.deg2rad(45)                  # Limit roll/yaw to ±45°
+        max_pitch = np.deg2rad(30)                  # Limit pitch tighter ±30°
+        max_velocity = 10.0                         # Limit linear velocity (m/s)
+        max_angular_velocity = np.deg2rad(45)       # Limit angular velocity (rad/s)
 
         # Position constraints
         mpc.bounds['lower', '_x', 'pos'] = -max_position
         mpc.bounds['upper', '_x', 'pos'] = max_position
 
-        # Attitude constraints
+        # Attitude constraints (Euler angles: [roll, pitch, yaw])
         mpc.bounds['lower', '_x', 'att'] = -max_angle
         mpc.bounds['upper', '_x', 'att'] = max_angle
-        mpc.bounds['lower', '_x', 'att', 1] = -max_angle/6  # Pitch angle theta limits
-        mpc.bounds['upper', '_x', 'att', 1] = max_angle/6
 
-        # Velocity constraints
+        # Pitch angle (theta, index 1) more restrictive
+        mpc.bounds['lower', '_x', 'att', 1] = -max_pitch
+        mpc.bounds['upper', '_x', 'att', 1] = max_pitch
+
+        # Linear velocity constraints
         mpc.bounds['lower', '_x', 'vel'] = -max_velocity
         mpc.bounds['upper', '_x', 'vel'] = max_velocity
+
+        # Angular velocity constraints
         mpc.bounds['lower', '_x', 'omega'] = -max_angular_velocity
         mpc.bounds['upper', '_x', 'omega'] = max_angular_velocity
 
-    def _create_estimator(self):
-        """
-        Create an estimator that assumes "the complete system state can be directly observed"
-        to pass the current state to the MPC controller for optimization
-        If you replace it with a more complex estimator (such as the Extended Kalman Filter) in the future,
-        it will be replaced here
-
-        Returns:
-                State feedback estimator
-        """
-        estimator = do_mpc.estimator.StateFeedback(self.model)
-        return estimator
 
 
-    def _create_simulator(self):
+
+
+    def create_simulator(self):
         """
-        Create do-mpc Simulator - Enhanced version for standalone use
+        Create do-mpc Simulator with clean structure
 
         Returns:
             do_mpc.simulator.Simulator: Configured simulator
@@ -296,319 +295,39 @@ class do_mpc_controller:
 
         simulator = do_mpc.simulator.Simulator(self.model)
 
-        # Enhanced simulator setup for stability
-        setup_simulator = {
+        # Configure simulator parameters
+        simulator_params = {
             't_step': params.DT,
-            'integration_tool': 'cvodes',  # Use CVODES for better stability
-            'abstol': 1e-8,  # Tighter absolute tolerance
-            'reltol': 1e-6,  # Tighter relative tolerance
-            'max_step_size': params.DT / 10,  # Limit maximum step size
-            'min_step_size': params.DT / 1000,  # Set minimum step size
+            'integration_tool': 'cvodes',
+            'abstol': 1e-8,
+            'reltol': 1e-6,
+            'max_step_size': params.DT / 5,
+            'min_step_size': params.DT / 500,
         }
+        simulator.set_param(**simulator_params)
 
-        simulator.set_param(**setup_simulator)
+        # # Set initial state
+        tvp_num = simulator.get_tvp_template()
+        tvp_num['pos_ref'] = np.zeros((3, 1))  # Initial position [x, y, z]
+        tvp_num['att_ref'] = np.zeros((3, 1))  # Initial attitude [phi, theta, psi]
+        tvp_num['vel_ref'] = np.zeros((3, 1))  # Initial velocity [vx, vy, vz]
+        tvp_num['omega_ref'] = np.zeros((3, 1))  # Initial angular velocity [p, q, r]
+        tvp_num['disturbance'] = np.zeros((6, 1))  # Initial disturbance [d1, d2, d3, d4, d5, d6]
 
-        # Enhanced parameter function with error handling
-        def disturbance_func(t_now):
-            """Define time-varying disturbance with error handling"""
-            try:
-                delta = params.disturbance_delta(t_now)
-                # Ensure proper shape
-                if delta.shape[0] != 6:
-                    raise ValueError(f"Disturbance must be 6-dimensional, got {delta.shape}")
-                return delta.reshape(-1, 1)
-            except Exception as e: # pylint: disable=broad-exception-caught
-                logger.warning("Disturbance function failed at t=%.3f: %s", t_now, e)
-                return np.zeros((6, 1))
 
-        #
-        p_template = simulator.get_p_template()
-        p_template['pos_ref'] = np.zeros((3, 1))
-        p_template['att_ref'] = np.zeros((3, 1))
-        p_template['vel_ref'] = np.zeros((3, 1))
-        p_template['omega_ref'] = np.zeros((3, 1))
-        p_template['disturbance'] = np.zeros((6, 1))
+        def tvp_fun(t_now):
+            """Update disturbance parameters for current simulation time"""
+            yc, yc_dot, _, _, _ = self.trajectory.get_spiral_trajectory(t_now)
+            tvp_num['pos_ref'] = yc[0:3].reshape(-1, 1)  # 位置参考 [x, y, z]
+            tvp_num['att_ref'] = yc[3:6].reshape(-1, 1)  # 姿态参考 [phi, theta, psi]
+            tvp_num['vel_ref'] = yc_dot[0:3].reshape(-1, 1)  # 速度参考 [vx, vy, vz]
+            tvp_num['omega_ref'] = yc_dot[3:6].reshape(-1, 1)  # 角速度参考 [p, q, r]
+            tvp_num['disturbance'] = params.disturbance_delta(t_now).reshape(-1, 1)
+            return tvp_num
 
-        def p_fun(t_now):
-            """
-            Tell the simulator which values should be used at each simulation moment for disturbance
-            return the current disturbance based on time to be used in simulation
-            """
-            try:
-                # Update disturbance for current time
-                p_template['disturbance'] = disturbance_func(t_now)
-                return p_template
-            except Exception as e: # pylint: disable=broad-exception-caught
-                logger.error("Parameter function failed at t=%.3f: %s", t_now, e)
-                # Return safe default parameters
-                safe_template = simulator.get_p_template()
-                for key in safe_template.keys():
-                    if 'ref' in key:
-                        safe_template[key] = np.zeros((3, 1))
-                    elif key == 'disturbance':
-                        safe_template[key] = np.zeros((6, 1))
-                return safe_template
+        simulator.set_tvp_fun(tvp_fun)
 
-        simulator.set_p_fun(p_fun)
+        simulator.setup()
 
-        # Complete Simulator setup with validation
-        try:
-            simulator.setup()
-            logger.info("do-mpc Simulator setup completed successfully")
-        except Exception as e: # pylint: disable=broad-exception-caught
-            logger.error("Failed to setup do-mpc Simulator: %s", e)
-            raise RuntimeError(f"Simulator setup failed: {e}") # pylint: disable=raise-missing-from
-
+        print("do-mpc Simulator setup completed successfully")
         return simulator
-
-    def _setup_initial_conditions(self):
-        """
-        Setting the initial state and initial guess (initial value) of the MPC controller,
-        estimator and simulator at the beginning of simulation/operation,
-        which is the "startup preparation" of the entire control process.
-
-        """
-        # Set initial state
-        x0 = params.X0.copy()
-
-        # Stricter numerical cleaning
-        # x0 = np.nan_to_num(x0, nan=0.0, posinf=10.0, neginf=-10.0)
-
-        # Limit initial angles to avoid singularities
-        x0[3:6] = np.clip(x0[3:6], -np.pi/2, np.pi/2)
-
-        try:
-            # set initial state for MPC
-            self.mpc.x0['pos'] = x0[0:3].reshape(-1, 1)
-            self.mpc.x0['att'] = x0[3:6].reshape(-1, 1)
-            self.mpc.x0['vel'] = x0[6:9].reshape(-1, 1)
-            self.mpc.x0['omega'] = x0[9:12].reshape(-1, 1)
-
-            # set initial control guess
-            self.mpc.u0['T'] = 10.0    # reasonable thrust value
-            self.mpc.u0['mu'] = 0.0    # zero deflection angle
-            self.mpc.u0['nu'] = 0.0    # zero deflection angle
-
-            # set initial guess
-            self.mpc.set_initial_guess()
-
-            # set initial state for estimator
-            self.estimator.x0['pos'] = x0[0:3].reshape(-1, 1)
-            self.estimator.x0['att'] = x0[3:6].reshape(-1, 1)
-            self.estimator.x0['vel'] = x0[6:9].reshape(-1, 1)
-            self.estimator.x0['omega'] = x0[9:12].reshape(-1, 1)
-
-            # set initial state for simulator (if exists)
-            if self.simulator is not None:
-                self.simulator.x0['pos'] = x0[0:3].reshape(-1, 1)
-                self.simulator.x0['att'] = x0[3:6].reshape(-1, 1)
-                self.simulator.x0['vel'] = x0[6:9].reshape(-1, 1)
-                self.simulator.x0['omega'] = x0[9:12].reshape(-1, 1)
-
-            logger.info("Initial conditions set successfully")
-
-        except Exception as e: # pylint: disable=broad-exception-caught
-            logger.error("Failed to set initial conditions: %s", e)
-            # try basic setting
-            try:
-                self.mpc.set_initial_guess()
-                logger.info("Basic initial guess set")
-            except Exception as e2: # pylint: disable=broad-exception-caught
-                logger.error("Failed to set even basic initial guess: %s", e2)
-
-    def step(self, current_state, reference_trajectory, t_current=0.0):
-        """
-        Execute one step of MPC control
-
-        Args:
-            current_state: Current state [12x1]
-            reference_trajectory: Reference trajectory dictionary [position, attitude, velocity, angular_velocity]
-            t_current: Current time
-
-        Returns:
-            control_params for thrust: Control input [T, mu, nu]
-        """
-        _ = t_current
-        try:
-            # Check input validity
-            if np.any(np.isnan(current_state)) or np.any(np.isinf(current_state)):
-                print("Warning: Input state contains NaN or infinite values")
-                return np.array([5.0, 0.0, 0.0])
-
-            # Update current state - use dictionary format instead of vector format
-            self.mpc.x0['pos'] = current_state[0:3].reshape(-1, 1)
-            self.mpc.x0['att'] = current_state[3:6].reshape(-1, 1)
-            self.mpc.x0['vel'] = current_state[6:9].reshape(-1, 1)
-            self.mpc.x0['omega'] = current_state[9:12].reshape(-1, 1)
-
-            # Update reference trajectory parameters
-            reference_params = {
-                'pos_ref': reference_trajectory['position'].reshape(-1, 1),
-                'att_ref': reference_trajectory['attitude'].reshape(-1, 1),
-                'vel_ref': reference_trajectory['velocity'].reshape(-1, 1),
-                'omega_ref': reference_trajectory['angular_velocity'].reshape(-1, 1)
-            }
-
-            # Add disturbance parameters
-            if self.use_disturbance_compensation and self.last_disturbance_estimate is not None:
-                reference_params['disturbance'] = self.last_disturbance_estimate.reshape(6, 1)
-            else:
-                reference_params['disturbance'] = np.zeros((6, 1))
-
-            # Before the execution of each MPC control step, the reference trajectory
-            # and disturbance value at the current moment are passed to the _p parameter variable in the model
-            self.mpc.set_uncertainty_values(**reference_params)
-
-            # Disturbance compensation
-            if self.use_disturbance_compensation:
-                self._update_disturbance_compensation(current_state, reference_trajectory)
-
-            # Under the current state current x, solve for the optimal control input u
-            # 执行 MPC 求解 - 传入字典格式的状态
-            try:
-                u_mpc = self.mpc.make_step(self.mpc.x0)
-            except Exception as mpc_error: # pylint: disable=broad-exception-caught
-                logger.warning("MPC make_step failed: %s, using previous control", mpc_error)
-                return self.last_control if hasattr(self, 'last_control') else np.array([5.0, 0.0, 0.0])
-
-            # It is usually a data structure of casadi (such as casadi.DM),
-            # and you will convert it to numpy.array later to extract control instructions here
-            control_input_params = self._extract_control_input(u_mpc)
-
-            # Save control input
-            self.last_control = control_input_params
-
-            return control_input_params  # [T, mu, nu]
-
-        except Exception as e: # pylint: disable=broad-exception-caught
-            print(f"MPC step failed: {e}")
-            # Return safe default control
-            safe_control_params = np.array([5.0, 0.0, 0.0])
-            self.last_control = safe_control_params
-            return safe_control_params
-
-    def _update_disturbance_compensation(self, current_state, reference_trajectory):
-        """Update disturbance compensation"""
-        # Calculate errors
-        pos_error = current_state[0:3] - reference_trajectory['position']
-        att_error = current_state[3:6] - reference_trajectory['attitude']
-        vel_error = current_state[6:9] - reference_trajectory['velocity']
-        ang_error = current_state[9:12] - reference_trajectory['angular_velocity']
-
-        e1 = np.concatenate([pos_error, att_error])
-        e2 = np.concatenate([vel_error, ang_error])
-
-        # Update disturbance estimation
-        gamma = current_state[3:6]
-        Thrust_Force_torque = thrust_params_to_force_torque(self.last_control, self.params.rp_r, self.params.rp_l)
-
-        # Update disturbance observer
-        delta_hat = self.disturbance_observer.update(params.DT, e1, e2, Thrust_Force_torque, gamma)
-        self.last_disturbance_estimate = delta_hat
-
-    def _extract_control_input(self, u_mpc):
-        """
-        Extract control input from casadi structure to numpy array
-        Args:
-            u_mpc: Control input params from MPC (is casadi structure)
-        """
-        try:
-            if hasattr(u_mpc, 'full'):
-                u_array = u_mpc.full().flatten()
-                control_input = np.array([
-                    float(u_array[0]),  # T
-                    float(u_array[1]),  # mu
-                    float(u_array[2])   # nu
-                ])
-            elif isinstance(u_mpc, np.ndarray):
-                control_input = np.array([
-                    float(u_mpc[0]),
-                    float(u_mpc[1]),
-                    float(u_mpc[2])
-                ])
-            else:
-                u_flat = np.array(u_mpc).flatten()
-                control_input = np.array([
-                    float(u_flat[0]),
-                    float(u_flat[1]),
-                    float(u_flat[2])
-                ])
-        except (IndexError, ValueError, TypeError):
-            print("Warning: Unable to properly extract control input")
-            control_input = np.array([5.0, 0.0, 0.0])
-
-        # Check validity and limit range
-        if np.any(np.isnan(control_input)) or np.any(np.isinf(control_input)):
-            print("Warning: Control input contains NaN or infinite values")
-            return np.array([5.0, 0.0, 0.0])
-
-        control_input[0] = np.clip(control_input[0], params.T_MIN, params.T_MAX)
-        control_input[1] = np.clip(control_input[1], params.MU_MIN, params.MU_MAX)
-        control_input[2] = np.clip(control_input[2], params.NU_MIN, params.NU_MAX)
-
-        return control_input
-
-    def get_prediction(self):
-        """
-        Obtain the state trajectory and control input trajectory predicted by the do-mpc controller
-
-        prediction_data = {
-        'pos': self.mpc.data.prediction(('_x', 'pos')),
-        'att': self.mpc.data.prediction(('_x', 'att')),
-        'vel': self.mpc.data.prediction(('_x', 'vel')),
-        'omega': self.mpc.data.prediction(('_x', 'omega')),
-        'T': self.mpc.data.prediction(('_u', 'T')),
-        'mu': self.mpc.data.prediction(('_u', 'mu')),
-        'nu': self.mpc.data.prediction(('_u', 'nu'))
-}
-        """
-        try:
-            if hasattr(self.mpc, 'data') and self.mpc.data is not None:
-                # Use public interface to get prediction data
-                prediction_data = {
-                    'states': self.mpc.data.prediction(('_x', 'pos')),
-                    'controls': self.mpc.data.prediction(('_u', 'T'))
-                }
-                return prediction_data
-            else:
-                return {'states': None, 'controls': None}
-        except Exception: # pylint: disable=broad-exception-caught
-            return {'states': None, 'controls': None}
-
-
-
-    def get_current_disturbance_estimate(self):
-        """Get current disturbance estimate"""
-        if self.use_disturbance_compensation and self.last_disturbance_estimate is not None:
-            try:
-                # Handle CasADi DM objects
-                if hasattr(self.last_disturbance_estimate, 'full'):
-                    return self.last_disturbance_estimate.full().flatten()
-                # Handle numpy arrays
-                elif hasattr(self.last_disturbance_estimate, 'flatten'):
-                    return self.last_disturbance_estimate.flatten()
-                # Handle other types
-                else:
-                    return np.array(self.last_disturbance_estimate).flatten()
-            except (AttributeError, ValueError):
-                return np.zeros(6)
-        else:
-            return np.zeros(6)
-
-    def reset(self):
-        """
-        Reset the internal state of the controller to
-        enable the entire MPC control system to "restart" its operation
-        """
-        if self.use_disturbance_compensation and self.disturbance_observer is not None:
-            self.disturbance_observer.reset()
-            self.last_disturbance_estimate = np.zeros(6)
-
-        # Reset initial conditions
-        self._setup_initial_conditions()
-
-        # Clear history data
-        self.mpc.reset_history()
-        self.estimator.reset_history()
-        if self.simulator is not None:
-            self.simulator.reset_history()

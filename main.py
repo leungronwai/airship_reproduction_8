@@ -1,85 +1,118 @@
 """
 # main.py
-
+Airship Trajectory Tracking Simulation
 """
 # pylint: disable=invalid-name
-# cspell:ignore dompc levelname figsize traj NMPC
+# cspell:disable symvar_type
 
-import sys
+
 import os
-import logging
-import pprint
+import sys
+import numpy as np
+import matplotlib.pyplot as plt
+from casadi import *
+from casadi.tools import *
+import do_mpc
 
-from datetime import datetime
-
-from src.simulation.run_dompc_simulation import run_dompc_simulation
-
-
-
-pprint.pprint(sys.path)
+from do_mpc.tools import Timer
 
 
 
-
-def setup_logger():
-    """
-    Global logging configuration: Configure once here, and other modules in the project
-    can retrieve the same logger.
-    """
-    log_dir = "logs"
-    os.makedirs(log_dir, exist_ok=True)  # Create logs directory if it doesn't exist
-
-    # Generate log filename with timestamp
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_filename = os.path.join(log_dir, f"simulation_{timestamp}.log")
-
-    # Configure log format
-    log_format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-
-    # Configure logging
-    logging.basicConfig(
-        level=logging.INFO,
-        format=log_format,
-        handlers=[
-            # logging.FileHandler(log_filename, encoding='utf-8'),  # File handler - save to file
-            logging.StreamHandler(sys.stdout)  # Console handler
-        ]
-    )
-
-    logger = logging.getLogger(__name__)
-    logger.info("Logging system initialized")
-    logger.info("Log file: %s", log_filename)
-    return logger
+from src.config import parameters as params
+from src.system.trajectory_ref import Trajectory
+from src.system.controller_dompc import do_mpc_config
 
 
-def main():
-    """Main program entry point"""
-    logger = setup_logger()
 
-    try:
-        logger.info("=== Airship Trajectory Tracking Simulation Started ===")
+def run_simulation():
+    # user settings
+    show_animations = False  # Set to True to show animations
+    store_results = False
 
-        trajectory_type = "spiral"
-        logger.info("Selected trajectory type: %s", trajectory_type)
+    # setting up the model
+    airship_mpc = do_mpc_config()
 
-        logger.info("Running do-mpc NMPC controller simulation")
-        run_dompc_simulation(
-            trajectory_type=trajectory_type,
-            use_disturbance_compensation=False,
-            use_simulator=True
-        )
+    model = airship_mpc.model
 
-    except KeyboardInterrupt:
-        logger.info("User interrupted the program")
-    except Exception as e:
-        logger.error("Simulation failed: %s", e)
-        raise
-    finally:
-        logger.info("=== Simulation program ended ===")
+    # setting up a mpc controller, given the model
+    mpc = airship_mpc.create_mpc_controller(model)
 
 
+    # setting up a simulator, given the model
+    simulator = airship_mpc.create_simulator(model)
+
+
+    # setting up an estimator, given the model
+    estimator = do_mpc.estimator.StateFeedback(model)
+
+
+    # Set the initial state of mpc and simulator
+    x0 = params.X0.copy().reshape(-1, 1)
+
+    # pushing initial condition to mpc and the simulator
+    mpc.x0 = x0
+    simulator.x0 = x0
+
+
+    # setting up initial guesses
+    mpc.set_initial_guess()
+
+
+
+    # simulation of the plant
+    timer = Timer()
+    optimal_control = []
+    optimal_states = []
+    optimal_states.append(x0)
+
+
+    for i in range(params.N_sim):
+
+        # for the current state x0, mpc computes the optimal control action u0
+        timer.tic()
+        u0 = mpc.make_step(x0)
+        timer.toc()
+
+        # for the current state u0, computes the next state y_next
+        y_next = simulator.make_step(u0)
+
+        # for the current state y_next, estimates the next state x0
+        x0 = estimator.make_step(y_next)
+
+        # store the optimal control and state
+        optimal_control.append(u0)
+        optimal_states.append(x0)
+
+
+    # make plots
+    optimal_control = np.array(optimal_control)
+    plt.plot(optimal_control[:, 0], label='Delta')
+    plt.plot(optimal_control[:, 1], label='Acc')
+    plt.legend()
+    plt.show()
+
+    optimal_states = np.array(optimal_states)
+    plt.plot(optimal_states[:, 0], label='X_p')
+    plt.plot(optimal_states[:, 1], label='Y_p')
+    plt.plot(optimal_states[:, 2], label='Psi')
+    plt.plot(optimal_states[:, 3], label='V')
+
+    plt.legend()
+    plt.show()
+
+    plt.plot(optimal_states[:, 0], optimal_states[:, 1])
+    plt.show()
 
 
 
 if __name__ == "__main__":
-    main()
+    run_simulation()
+
+
+
+
+
+
+
+
+
