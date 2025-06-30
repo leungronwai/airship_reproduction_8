@@ -135,15 +135,15 @@ class Trajectory:
         Rc_z = R_zeta(gamma_d)
         Rc_y_inv = R_y_inv(gamma_d)
         vc = Rc_z.T @ zeta_d_dot.reshape(-1, 1)
-        vc = vc.flatten()
+        vc = vc.reshape((-1,1))
         wc = Rc_y_inv @ gamma_d_dot.reshape(-1, 1)
-        wc = wc.flatten()
+        wc = wc.reshape((-1,1))
         xc = np.concatenate((vc, wc))
 
         # xc_dot simplified approximation through symbolic derivatives
         vc_dot = Rc_z.T @ zeta_d_ddot.reshape(-1, 1)
-        vc_dot = vc_dot.flatten()
-        wc_dot = np.zeros(3)  # Simplified processing, assuming small angular velocity change rate
+        vc_dot = vc_dot.reshape((-1,1))
+        wc_dot = np.zeros(3).reshape(-1, 1)  # Simplified processing, assuming small angular velocity change rate
         xc_dot = np.concatenate((vc_dot, wc_dot))
 
         # yc_ddot simplified processing

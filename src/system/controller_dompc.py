@@ -40,6 +40,9 @@ class DoMpcConfig:
             use_disturbance_compensation: Whether to enable disturbance compensation
             create_simulator: Whether to create do-mpc Simulator
         """
+        # Create reference trajectory
+        self.trajectory = Trajectory()
+
         self.use_disturbance_compensation = use_disturbance_compensation
         self.params = params
 
@@ -60,8 +63,7 @@ class DoMpcConfig:
         # Store last control input
         self.last_control = np.array([5.0, 0.0, 0.0])
 
-        # Create reference trajectory
-        self.trajectory = Trajectory()
+
 
     def create_model(self, symvar_type='MX'):
         """
@@ -181,6 +183,8 @@ class DoMpcConfig:
 
         mpc.set_param(**setup_mpc)
 
+
+
         if silence_solver:
             mpc.set_param(nlpsol_opts={'ipopt.print_level': 0}) # print_level = 0 means no print
 
@@ -228,6 +232,27 @@ class DoMpcConfig:
 
         # Set constraints
         self._set_mpc_constraints(mpc)
+
+        # === Assign TVP (Time-Varying Parameters) ===
+
+        tvp_template = mpc.get_tvp_template()
+
+        def tvp_fun(t_now):
+            """Update reference trajectory parameters."""
+            yc, yc_dot, _, _, _ = self.trajectory.get_spiral_trajectory(t_now)
+
+            # 创建新的 TVP 结构，而不是修改模板
+            tvp_current = tvp_template.copy()
+
+            # 将 numpy 数组转换为适当的数值并赋值
+            tvp_current['pos_ref'] = yc[0:3].reshape(-1, 1).astype(float)
+            tvp_current['att_ref'] = yc[3:6].reshape(-1, 1).astype(float)
+            tvp_current['vel_ref'] = yc_dot[0:3].reshape(-1, 1).astype(float)
+            tvp_current['omega_ref'] = yc_dot[3:6].reshape(-1, 1).astype(float)
+
+            return tvp_current
+
+        mpc.set_tvp_fun(tvp_fun)
 
         # Complete MPC setup
         mpc.setup()
@@ -314,12 +339,17 @@ class DoMpcConfig:
         def tvp_fun(t_now):
             """Update disturbance parameters for current simulation time"""
             yc, yc_dot, _, _, _ = self.trajectory.get_spiral_trajectory(t_now)
-            tvp_num['pos_ref'] = yc[0:3].reshape(-1, 1)  # 位置参考 [x, y, z]
-            tvp_num['att_ref'] = yc[3:6].reshape(-1, 1)  # 姿态参考 [phi, theta, psi]
-            tvp_num['vel_ref'] = yc_dot[0:3].reshape(-1, 1)  # 速度参考 [vx, vy, vz]
-            tvp_num['omega_ref'] = yc_dot[3:6].reshape(-1, 1)  # 角速度参考 [p, q, r]
-            tvp_num['disturbance'] = params.disturbance_delta(t_now).reshape(-1, 1)
-            return tvp_num
+
+            # 创建新的 TVP 结构
+            tvp_current = tvp_num.copy()
+
+            tvp_current['pos_ref'] = yc[0:3].reshape(-1, 1).astype(float)  # 位置参考 [x, y, z]
+            tvp_current['att_ref'] = yc[3:6].reshape(-1, 1).astype(float)  # 姿态参考 [phi, theta, psi]
+            tvp_current['vel_ref'] = yc_dot[0:3].reshape(-1, 1).astype(float)  # 速度参考 [vx, vy, vz]
+            tvp_current['omega_ref'] = yc_dot[3:6].reshape(-1, 1).astype(float)  # 角速度参考 [p, q, r]
+            tvp_current['disturbance'] = params.disturbance_delta(t_now).reshape(-1, 1).astype(float)
+
+            return tvp_current
 
         simulator.set_tvp_fun(tvp_fun)
 
