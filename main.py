@@ -97,21 +97,75 @@ def run_simulation():
 
     # make plots
     optimal_control = np.array(optimal_control)
-    plt.plot(optimal_control[:, 0], label='Delta')
-    plt.plot(optimal_control[:, 1], label='Acc')
+    plt.figure(figsize=(10, 6))
+    plt.plot(optimal_control[:, 0], label='T (Thrust)')
+    plt.plot(optimal_control[:, 1], label='μ (Horizontal Deflection)')
+    plt.plot(optimal_control[:, 2], label='ν (Vertical Deflection)')
+    plt.xlabel('Time Step')
+    plt.ylabel('Control Values')
+    plt.title('Control Inputs')
     plt.legend()
+    plt.grid(True)
     plt.show()
 
     optimal_states = np.array(optimal_states)
-    plt.plot(optimal_states[:, 0], label='X_p')
-    plt.plot(optimal_states[:, 1], label='Y_p')
-    plt.plot(optimal_states[:, 2], label='Psi')
-    plt.plot(optimal_states[:, 3], label='V')
+    plt.figure(figsize=(12, 8))
 
+    # Position plot
+    plt.subplot(2, 2, 1)
+    plt.plot(optimal_states[:, 0], label='X Position')
+    plt.plot(optimal_states[:, 1], label='Y Position')
+    plt.plot(optimal_states[:, 2], label='Z Position')
+    plt.xlabel('Time Step')
+    plt.ylabel('Position (m)')
+    plt.title('Position')
     plt.legend()
+    plt.grid(True)
+
+    # Attitude plot
+    plt.subplot(2, 2, 2)
+    plt.plot(optimal_states[:, 3], label='φ (Roll)')
+    plt.plot(optimal_states[:, 4], label='θ (Pitch)')
+    plt.plot(optimal_states[:, 5], label='ψ (Yaw)')
+    plt.xlabel('Time Step')
+    plt.ylabel('Attitude (rad)')
+    plt.title('Attitude')
+    plt.legend()
+    plt.grid(True)
+
+    # Velocity plot
+    plt.subplot(2, 2, 3)
+    plt.plot(optimal_states[:, 6], label='u (X Velocity)')
+    plt.plot(optimal_states[:, 7], label='v (Y Velocity)')
+    plt.plot(optimal_states[:, 8], label='w (Z Velocity)')
+    plt.xlabel('Time Step')
+    plt.ylabel('Velocity (m/s)')
+    plt.title('Linear Velocity')
+    plt.legend()
+    plt.grid(True)
+
+    # Angular velocity plot
+    plt.subplot(2, 2, 4)
+    plt.plot(optimal_states[:, 9], label='p (Roll Rate)')
+    plt.plot(optimal_states[:, 10], label='q (Pitch Rate)')
+    plt.plot(optimal_states[:, 11], label='r (Yaw Rate)')
+    plt.xlabel('Time Step')
+    plt.ylabel('Angular Velocity (rad/s)')
+    plt.title('Angular Velocity')
+    plt.legend()
+    plt.grid(True)
+
+    plt.tight_layout()
     plt.show()
 
-    plt.plot(optimal_states[:, 0], optimal_states[:, 1])
+    # 3D trajectory plot
+    plt.figure(figsize=(10, 8))
+    plt.plot(optimal_states[:, 0], optimal_states[:, 1], label='XY Trajectory')
+    plt.xlabel('X Position (m)')
+    plt.ylabel('Y Position (m)')
+    plt.title('2D Trajectory (XY Plane)')
+    plt.grid(True)
+    plt.axis('equal')
     plt.show()
 
 
