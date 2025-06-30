@@ -8,6 +8,7 @@ Airship Trajectory Tracking Simulation
 
 import os
 import sys
+import subprocess
 import numpy as np
 import matplotlib.pyplot as plt
 from casadi import *
@@ -37,6 +38,9 @@ def run_simulation():
     # user settings
     show_animations = False  # Set to True to show animations
     store_results = False
+
+    print("Generating reference trajectory...")
+    subprocess.run([sys.executable, "-m", "src.tests.test_desired_trajectory", "--type", "spiral"])
 
     # setting up the model
     airship_mpc = DoMpcConfig()
@@ -191,6 +195,8 @@ def run_simulation():
     plt.grid(True)
     plt.axis('equal')
     plt.show()
+
+
 
 
 
