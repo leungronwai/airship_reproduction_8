@@ -3,8 +3,7 @@ Trajectory generation module (trajectory.py)
 """
 # pylint: disable=invalid-name
 # pylint: disable=line-too-long
-# cspell:ignore R_zeta R_y_inv Rc_z Rc_y_inv ddot arctan2 linalg xdot phiddot phidot    psiddot
-# cspell:ignore phidot phiddot psidot psiddot thetaddot ydot
+
 
 import numpy as np
 from src.system.rotation_matrices import R_zeta, R_y_inv

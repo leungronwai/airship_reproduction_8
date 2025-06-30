@@ -1,4 +1,12 @@
 {
     "python.analysis.extraPaths": ["./src"],
-    "python.defaultInterpreterPath": "/opt/miniconda3/bin/python"
+    "python.defaultInterpreterPath": "/opt/miniconda3/bin/python",
+    "cSpell.words": [
+      "arctan",
+      "ddot",
+      "dompc",
+      "levelname",
+      "linalg",
+      "NMPC"
+    ]
   }

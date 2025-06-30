@@ -166,16 +166,20 @@ Qf = np.diag([20.0, 20.0, 20.0, 10.0, 10.0, 10.0,
                2.0, 2.0, 2.0, 1.0, 1.0, 1.0])
 
 #  thrust boundary (N)
-T_MIN = 0.0
-T_MAX = 20.0
+T_HOVER = 10.0
+T_MIN = 0.5 * T_HOVER
+T_MAX = 2.0 * T_HOVER
 
 # μ parameter boundary (rad)
-MU_MIN = -np.pi/4
-MU_MAX = np.pi/4
+MAX_THRUST_ANGLE_DEG = 30
+MU_MIN = -np.radians(MAX_THRUST_ANGLE_DEG)
+MU_MAX = np.radians(MAX_THRUST_ANGLE_DEG)
 
 # ν parameter boundary (rad)
-NU_MIN = -np.pi/4
-NU_MAX = np.pi/4
+MAX_YAW_RATE_DEG = 30
+NU_MIN = -np.radians(MAX_YAW_RATE_DEG)
+NU_MAX = np.radians(MAX_YAW_RATE_DEG)
+
 
 
 
