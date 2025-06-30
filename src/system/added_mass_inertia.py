@@ -78,7 +78,7 @@ def calculate_added_mass_inertia(a1, a2, b, rho_air_):
         # Ensure a^2 > 0 and 1 - (b^2 / a^2) >= 0
 
         term_inside_sqrt = 1.0 - (b**2 / a)
-        if (1.0 - (b**2 / (a))) < 0:
+        if (1.0 - (b**2 / a)) < 0:
             # This should not happen theoretically when a >= b, unless there are numerical errors
             print(f"Warning: Eccentricity calculation issue " f"(term = {term_inside_sqrt:.2e}). Setting e as 0.")
             _e = 0.0

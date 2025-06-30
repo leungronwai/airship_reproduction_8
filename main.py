@@ -19,8 +19,8 @@ from do_mpc.tools import Timer
 
 
 from src.config import parameters as params
-from src.system.trajectory_ref import Trajectory
-from src.system.controller_dompc import do_mpc_config
+
+from src.system.controller_dompc import DoMpcConfig
 
 
 
@@ -30,7 +30,7 @@ def run_simulation():
     store_results = False
 
     # setting up the model
-    airship_mpc = do_mpc_config()
+    airship_mpc = DoMpcConfig()
 
     model = airship_mpc.model
 
@@ -39,7 +39,7 @@ def run_simulation():
 
 
     # setting up a simulator, given the model
-    simulator = airship_mpc.create_simulator(model)
+    simulator = airship_mpc.create_simulator()
 
 
     # setting up an estimator, given the model
@@ -66,7 +66,7 @@ def run_simulation():
     optimal_states.append(x0)
 
 
-    for i in range(params.N_sim):
+    for i in range(int(params.T_SPAN / params.DT)):
 
         # for the current state x0, mpc computes the optimal control action u0
         timer.tic()

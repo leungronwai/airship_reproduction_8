@@ -18,8 +18,8 @@ from src.system.added_mass_inertia import calculate_added_mass_inertia
 
 
 # === simulation parameters (Simulation Parameters) ===
-DT = 0.01  # simulation step size (Simulation step size) [s]
-T_SPAN = 50  # simulation total time (Total simulation time) [s] # Reduced for faster testing, original paper used longer
+DT = 1  # simulation step size (Simulation step size) [s]
+T_SPAN = 20  # simulation total time (Total simulation time) [s] # Reduced for faster testing, original paper used longer
 
 # --- (Physical Parameters - Placeholder Values!) ---
 m = 9400  # mass (Mass) [kg] - Placeholder
