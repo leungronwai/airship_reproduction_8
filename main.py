@@ -72,6 +72,7 @@ def run_simulation():
         timer.tic()
         u0 = mpc.make_step(x0)
         timer.toc()
+        print(f"Time taken: {timer.diff:.3f}s")
 
         # for the current state u0, computes the next state y_next
         y_next = simulator.make_step(u0)
