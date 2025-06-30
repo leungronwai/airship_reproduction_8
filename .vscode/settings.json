@@ -5,8 +5,10 @@
       "arctan",
       "ddot",
       "dompc",
+      "horzcat",
       "levelname",
       "linalg",
-      "NMPC"
+      "NMPC",
+      "vertcat"
     ]
   }
