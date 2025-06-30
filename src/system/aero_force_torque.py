@@ -153,7 +153,7 @@ def calculate_relative_velocity(v_airship_brf, V_wind_BRF):
 
 def calculate_aoa_sideslip(u_rel, v_rel_body, w_rel, V_rel_mag=None, use_casadi=False):
     """
-    Calculate angle of attack and side slip angle.
+    Calculate angle of attack and sideslip angle.
 
     args:
         u_rel: relative wind speed X component
@@ -163,7 +163,7 @@ def calculate_aoa_sideslip(u_rel, v_rel_body, w_rel, V_rel_mag=None, use_casadi=
         use_casadi: whether to use CasADi
 
     return:
-        tuple: (alpha, beta) - angle of attack and side slip angle (rad)
+        tuple: (alpha, beta) - angle of attack and sideslip angle (rad)
     """
     if use_casadi:
         ca = __import__("casadi")

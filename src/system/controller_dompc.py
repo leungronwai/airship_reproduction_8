@@ -27,7 +27,7 @@ warnings.filterwarnings("ignore", category=UserWarning, module="do_mpc.opcua")
 
 
 
-class do_mpc_config:
+class DoMpcConfig:
     """
     Airship NMPC Controller based on do-mpc
     """
@@ -42,23 +42,20 @@ class do_mpc_config:
         """
         self.use_disturbance_compensation = use_disturbance_compensation
         self.params = params
-        self.create_simulator = create_simulator
+
 
 
 
         # Create do-mpc model
-        self.model = self._create_model()
+        self.model = self.create_model()
 
         # Create MPC controller
-        self.mpc = self._create_mpc_controller()
+        self.mpc = self.create_mpc_controller()
 
 
 
-        self.simulator = self._create_simulator()
 
 
-        # Initialize controller
-        self._setup_initial_conditions()
 
         # Store last control input
         self.last_control = np.array([5.0, 0.0, 0.0])
@@ -109,9 +106,7 @@ class do_mpc_config:
         # Get dynamics equations (including disturbance)
         X_dot = symbolic_model.rhs_symbolic(X_state, Thrust_paras, external_disturbance=disturbance)
 
-        # Add numerical stability - limit derivative magnitudes
-        # max_derivative = 1e6
-        # X_dot = ca.fmin(ca.fmax(X_dot, -max_derivative), max_derivative)
+
 
         # Decompose state derivatives
         pos_dot = X_dot[0:3]
@@ -239,7 +234,8 @@ class do_mpc_config:
 
         return mpc
 
-    def _set_mpc_constraints(self, mpc):
+    @staticmethod
+    def _set_mpc_constraints(mpc):
         """Set MPC constraints"""
         # === Control input constraints ===
         # Thrust: avoid zero, ensure minimum lift
