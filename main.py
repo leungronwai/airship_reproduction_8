@@ -29,12 +29,8 @@ def run_simulation():
     """
     Run the simulation
 
-    Args:
-        None
-
-    Returns:
-        None
     """
+
     # user settings
     show_animations = False  # Set to True to show animations
     store_results = False
@@ -86,6 +82,11 @@ def run_simulation():
     for i in range(int(params.T_SPAN / params.DT)):
         current_time = i * params.DT
 
+        # 获取当前参考轨迹信息
+        yc_ref, yc_dot_ref, _, _, _ = airship_mpc.trajectory.get_spiral_trajectory(current_time)
+        ref_vel_x, ref_vel_y, ref_vel_z = yc_dot_ref[0:3]  # 提取参考速度分量
+        ref_vel_magnitude = np.linalg.norm(yc_dot_ref[0:3])  # 计算参考速度大小
+
         # 软启动因子
         # if current_time < ramp_up_time:
         #     ramp_factor = current_time / ramp_up_time
@@ -113,6 +114,26 @@ def run_simulation():
 
         # for the current state y_next, estimates the next state x0
         x0 = estimator.make_step(y_next)
+
+        # 修复 NumPy 弃用警告
+        vel_x = float(x0[6].item())  # 使用 .item() 方法
+        vel_y = float(x0[7].item())
+        vel_z = float(x0[8].item())
+        vel_magnitude = np.sqrt(vel_x**2 + vel_y**2 + vel_z**2)  # 计算实际速度大小
+
+        # 打印参考速度和实际速度
+        print(f"\n=== Time: {current_time:.1f}s ===")
+        print(f"Reference velocity: [{ref_vel_x:.2f}, {ref_vel_y:.2f}, {ref_vel_z:.2f}] m/s")
+        print(f"Reference |v|: {ref_vel_magnitude:.2f} m/s")
+        print(f"Actual velocity: [{vel_x:.2f}, {vel_y:.2f}, {vel_z:.2f}] m/s")
+        print(f"Actual |v|: {vel_magnitude:.2f} m/s")
+
+        # 强制限制实际速度
+        MAX_VEL = 20.0
+        if vel_magnitude > MAX_VEL:
+            print(f"强制限制速度：{vel_magnitude:.2f} → {MAX_VEL} m/s")
+            scale_factor = MAX_VEL / vel_magnitude
+            x0[6:9] = x0[6:9] * scale_factor  # 直接赋值而不是 *=
 
         # store the optimal control and state
         optimal_control.append(u0)
