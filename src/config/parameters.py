@@ -20,7 +20,7 @@ from src.system.trajectory_ref import Trajectory
 
 # === simulation parameters (Simulation Parameters) ===
 DT = 1  # simulation step size (Simulation step size) [s]
-T_SPAN = 40  # simulation total time (Total simulation time) [s] # Reduced for faster testing, original paper used longer
+T_SPAN = 20  # simulation total time (Total simulation time) [s] # Reduced for faster testing, original paper used longer
 
 # --- (Physical Parameters - Placeholder Values!) ---
 m = 9400  # mass (Mass) [kg] - Placeholder
@@ -129,13 +129,13 @@ X0 = setup_spiral_initial_conditions()
 def disturbance_delta(t):
     """ Define external disturbance vector"""
     d = np.zeros(6)
-    d[0] = 0.5 + 2 * np.sin(0.1 * t)
-    d[1] = 0.4 + 1.5 * np.cos(0.1 * t)
-    d[2] = 0.6 + 1.5 * np.sin(0.1 * t)
-    d[3] = 1.5 + 2 * np.sin(0.1 * t)
-    d[4] = 1.5 + 1.5 * np.sin(0.1 * t)
-    d[5] = 1.5 + 2 * np.cos(0.1 * t)
-    return 5000 * d  # Paper scales by 5000
+    # d[0] = 0.5 + 2 * np.sin(0.1 * t)
+    # d[1] = 0.4 + 1.5 * np.cos(0.1 * t)
+    # d[2] = 0.6 + 1.5 * np.sin(0.1 * t)
+    # d[3] = 1.5 + 2 * np.sin(0.1 * t)
+    # d[4] = 1.5 + 1.5 * np.sin(0.1 * t)
+    # d[5] = 1.5 + 2 * np.cos(0.1 * t)
+    return 10 * d  # Paper scales by 5000
 
 
 # ===  Wind Definition ===

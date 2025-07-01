@@ -61,8 +61,7 @@ class DoMpcConfig:
 
 
 
-        # Store last control input
-        self.last_control = np.array([5.0, 0.0, 0.0])
+
 
 
 
@@ -161,30 +160,20 @@ class DoMpcConfig:
 
         # MPC setup
         setup_mpc = {
-            'n_horizon': min(params.N_HORIZON, 8),
+            'n_horizon': 20,
             'n_robust': 1,
-            'open_loop': 0,
             't_step': params.DT,
-            'state_discretization': 'collocation',  # Back to collocation
-            'collocation_type': 'radau',  # Change to legendre for better stability
-            'collocation_deg': 2,
-            'collocation_ni': 1,  # Reduce internal point count
-            'store_full_solution': False, #True,
-            # Optimized solver options
+            'store_full_solution': True,
             'nlpsol_opts': {
-                'ipopt.print_level': 0,
-                'ipopt.max_iter': 50,  # Reduce maximum iterations
-                'ipopt.acceptable_tol': 1e-3,  # Relax tolerance
-                'ipopt.acceptable_obj_change_tol': 1e-3,
-                'ipopt.tol': 1e-3,
+                'ipopt.print_level': 0,  # 减少输出以避免过多的 NaN 警告
+                'ipopt.max_iter': 300,
+                'ipopt.tol': 1e-4,  # 放宽容差
+                'ipopt.acceptable_tol': 1e-3,
+                'ipopt.constr_viol_tol': 1e-4,
                 'ipopt.mu_strategy': 'adaptive',
-                'ipopt.hessian_approximation': 'limited-memory',
-                'ipopt.limited_memory_max_history': 5,  # Reduce history records
-                'ipopt.alpha_for_y': 'primal',
-                'ipopt.recalc_y': 'yes',
-                'ipopt.max_wall_time': 3.0,  # Further limit solving time
-                'ipopt.warm_start_init_point': 'yes',  # Enable warm start
-                'print_time': 0
+                'ipopt.hessian_approximation': 'limited-memory',  # 使用 L-BFGS 近似
+                'print_time': 0,
+                'verbose': False,
             }
         }
 
@@ -197,10 +186,10 @@ class DoMpcConfig:
 
 
         # 设置各分量的缩放因子
-        pos_weight = 5
+        pos_weight = 10
         att_weight = 20
-        vel_weight = 10
-        ang_weight = 0.5
+        vel_weight = 2000
+        ang_weight = 5
 
         Q_scaled = params.Q.copy()
         Qf_scaled = params.Qf.copy()
@@ -213,7 +202,7 @@ class DoMpcConfig:
 
         Qf_scaled[0:3, 0:3] *= pos_weight * 2    # 终端位置更强调
         Qf_scaled[3:6, 3:6] *= att_weight * 2
-        Qf_scaled[6:9, 6:9] *= vel_weight * 0.2    # 减弱速度/角速度误差在代价函数中的影响
+        Qf_scaled[6:9, 6:9] *= vel_weight * 2    # 减弱速度/角速度误差在代价函数中的影响
         Qf_scaled[9:12, 9:12] *= ang_weight * 0.2
 
 
@@ -230,6 +219,43 @@ class DoMpcConfig:
                  self.model.aux['vel_error'].T @ Q_scaled[6:9, 6:9] @ self.model.aux['vel_error'] +
                  self.model.aux['ang_error'].T @ Q_scaled[9:12, 9:12] @ self.model.aux['ang_error'] )
         # + self.model.u['T']**2 * R_scaled[0, 0] + self.model.u['mu']**2 * R_scaled[1, 1] + self.model.u['nu']**2 * R_scaled[2, 2]
+
+        # === 添加速度约束惩罚项 ===
+        # 计算速度大小
+        velocity_magnitude = ca.sqrt(
+            self.model.x['vel', 0]**2 +
+            self.model.x['vel', 1]**2 +
+            self.model.x['vel', 2]**2
+        )
+
+        # 定义速度约束惩罚项（线性形式）
+        max_vel = 20.0  # 最大速度约束
+        vel_penalty_weight = 10000.0  # 惩罚权重
+        vel_penalty = vel_penalty_weight * ca.fmax(0, velocity_magnitude - max_vel)
+
+        # 将速度约束惩罚项添加到代价函数
+        lterm = lterm + vel_penalty
+        mterm = mterm + vel_penalty * 10.0  # 在终端代价中增加更高的权重
+
+
+        # === 修复速度约束惩罚项 ===
+        # 计算速度大小（添加数值稳定性）
+        velocity_magnitude = ca.sqrt(
+            self.model.x['vel', 0]**2 +
+            self.model.x['vel', 1]**2 +
+            self.model.x['vel', 2]**2 + 1e-8  # 添加小的数值稳定项
+        )
+
+        # 定义速度约束惩罚项（使用平滑的约束）
+        max_vel = 18.0  # 比硬约束小一些
+        vel_penalty_weight = 50000.0  # 增加惩罚权重
+        vel_excess = velocity_magnitude - max_vel
+        vel_penalty = vel_penalty_weight * ca.fmax(0, vel_excess)**2
+
+        # 将速度约束惩罚项添加到代价函数
+        lterm = lterm + vel_penalty
+        mterm = mterm + vel_penalty * 5.0  # 在终端代价中增加权重
+
 
         mpc.set_objective(mterm=mterm, lterm=lterm)
 
