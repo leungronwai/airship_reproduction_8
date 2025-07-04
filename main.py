@@ -8,12 +8,13 @@ Airship Trajectory Tracking Simulation
 
 import os
 import sys
-import subprocess
+
 import numpy as np
 import matplotlib.pyplot as plt
 from casadi import *
 from casadi.tools import *
 import do_mpc
+from mpl_toolkits.mplot3d import Axes3D
 
 from do_mpc.tools import Timer
 
@@ -35,8 +36,7 @@ def run_simulation():
     show_animations = False  # Set to True to show animations
     store_results = False
 
-    print("Generating reference trajectory...")
-    subprocess.run([sys.executable, "-m", "src.tests.test_desired_trajectory", "--type", "spiral"])
+
 
     # setting up the model
     airship_mpc = DoMpcConfig()
@@ -49,7 +49,7 @@ def run_simulation():
 
 
     # setting up a simulator, given the model
-    simulator = airship_mpc.create_simulator()
+    simulator = airship_mpc.create_simulator(model)
 
 
     # setting up an estimator, given the model
@@ -66,6 +66,7 @@ def run_simulation():
 
     # setting up initial guesses
     mpc.set_initial_guess()
+    simulator.set_initial_guess()
 
 
 
@@ -74,9 +75,9 @@ def run_simulation():
     optimal_control = []
     optimal_states = []
     optimal_states.append(x0)
+    reference_trajectory = []  # 用于存储参考轨迹信息
 
-    # 添加软启动参数
-    # ramp_up_time = 5.0  # 软启动时间（秒）
+
 
 
     for i in range(int(params.T_SPAN / params.DT)):
@@ -87,11 +88,9 @@ def run_simulation():
         ref_vel_x, ref_vel_y, ref_vel_z = yc_dot_ref[0:3]  # 提取参考速度分量
         ref_vel_magnitude = np.linalg.norm(yc_dot_ref[0:3])  # 计算参考速度大小
 
-        # 软启动因子
-        # if current_time < ramp_up_time:
-        #     ramp_factor = current_time / ramp_up_time
-        # else:
-        #     ramp_factor = 1.0
+        reference_trajectory.append(yc_ref[:3]) # 只存储位置部分
+
+
 
 
         # for the current state x0, mpc computes the optimal control action u0
@@ -100,14 +99,7 @@ def run_simulation():
         u0 = mpc.make_step(x0)
         timer.toc()
 
-        # 应用软启动到控制输入
-        # if current_time < ramp_up_time:
-        #     # 在软启动阶段逐渐增加控制力度
-        #     u0_smooth = u0.copy()
-        #     u0_smooth[0] = u0[0] * ramp_factor + params.T_HOVER * (1 - ramp_factor)
-        #     u0_smooth[1] *= ramp_factor
-        #     u0_smooth[2] *= ramp_factor
-        #     u0 = u0_smooth
+
 
         # for the current state u0, computes the next state y_next
         y_next = simulator.make_step(u0)
@@ -138,6 +130,25 @@ def run_simulation():
         # store the optimal control and state
         optimal_control.append(u0)
         optimal_states.append(x0)
+
+
+    # reference trajectory plot
+    plt.figure(figsize=(10, 8))
+    ax = plt.axes(projection='3d')
+    reference_trajectory = np.array(reference_trajectory)
+    ax.plot3D(reference_trajectory[:, 0], reference_trajectory[:, 1], reference_trajectory[:, 2], label='Reference Trajectory', color='blue')
+    # 标记起点和终点
+    ax.scatter(reference_trajectory[0, 0], reference_trajectory[0, 1], reference_trajectory[0, 2], color="green", s=100, label="Start")
+    ax.text(reference_trajectory[0, 0], reference_trajectory[0, 1], reference_trajectory[0, 2] + 150, "Start Point", color="green", fontsize=12, weight='bold')
+    ax.scatter(reference_trajectory[-1, 0], reference_trajectory[-1, 1], reference_trajectory[-1, 2], color="red", s=100, label="End")
+    ax.text(reference_trajectory[-1, 0], reference_trajectory[-1, 1], reference_trajectory[-1, 2] + 150, "Target Point", color="red", fontsize=12, weight='bold')
+    ax.set_xlabel('X Pos (m)')
+    ax.set_ylabel('Y Pos (m)')
+    ax.set_zlabel('Z Pos (m)')
+    ax.set_title('3D Reference Trajectory')
+    ax.legend()
+    plt.grid(True)
+    plt.show()
 
 
     # make plots

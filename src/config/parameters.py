@@ -135,7 +135,7 @@ def disturbance_delta(t):
     # d[3] = 1.5 + 2 * np.sin(0.1 * t)
     # d[4] = 1.5 + 1.5 * np.sin(0.1 * t)
     # d[5] = 1.5 + 2 * np.cos(0.1 * t)
-    return 10 * d  # Paper scales by 5000
+    return d  # Paper scales by 5000
 
 
 # ===  Wind Definition ===
@@ -158,53 +158,23 @@ V_WIND_ERF = np.array([5.0, 2.0, 0.0])
 
 
 
+
+
 # ===  (do-mpc Controller Parameters) ===
 #  prediction horizon length
 N_HORIZON = 8
 
 #  state weight matrix (position and attitude error weights)
-Q = np.diag([10.0, 10.0, 10.0, 5.0, 5.0, 5.0,
-              1.0, 1.0, 1.0, 0.5, 0.5, 0.5])
+Q = np.diag([10.0, 10.0, 10.0,
+            5.0, 5.0, 5.0,
+            1.0, 1.0, 1.0,
+            0.5, 0.5, 0.5])
 
-#  control input weight matrix
-R = np.diag([0.1, 0.1, 0.1])
+# 控制输入权重矩阵 (平衡控制能耗与性能)
+R = np.diag([5.0, 10.0, 10.0])  # [推力，水平偏转，垂直偏转]
 
 #  terminal state weight matrix
-Qf = np.diag([20.0, 20.0, 20.0, 10.0, 10.0, 10.0,
-               2.0, 2.0, 2.0, 1.0, 1.0, 1.0])
-
-#  thrust boundary (N)
-T_HOVER = 8.0
-T_MIN = 0.5 * T_HOVER
-T_MAX = 2.0 * T_HOVER
-
-# μ parameter boundary (rad)
-MAX_THRUST_ANGLE_DEG = 30
-MU_MIN = -np.radians(MAX_THRUST_ANGLE_DEG)
-MU_MAX = np.radians(MAX_THRUST_ANGLE_DEG)
-
-# ν parameter boundary (rad)
-MAX_YAW_RATE_DEG = 30
-NU_MIN = -np.radians(MAX_YAW_RATE_DEG)
-NU_MAX = np.radians(MAX_YAW_RATE_DEG)
-
-
-
-
-
-
-
-
-# === (Disturbance Observer Parameters) ===
-#  fixed time disturbance observer parameters
-l1 = 2.0       # first order term coefficient
-l2 = 1.0       # z2 calculation coefficient
-l3 = 1.5       # z2 feedback coefficient
-l4 = 2.0       # nonlinear term coefficient 1
-l5 = 1.0       # nonlinear term coefficient 2
-beta1 = 0.5    # nonlinear index 1 (0 < beta1 < 1
-beta2 = 1.5    # nonlinear index 2 (beta2 > 1)
-
-#  disturbance compensation parameters
-do_compensation_gain = 0.9  # compensation gain
-do_filter_coeff = 0.8       # filter coefficient
+Qf = np.diag([20.0, 20.0, 20.0,
+            10.0, 10.0, 10.0,
+            2.0, 2.0, 2.0,
+            1.0, 1.0, 1.0])
