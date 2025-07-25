@@ -58,8 +58,8 @@ class Trajectory:
     """
     def __init__(self):
         self.omega = 0.008  # 减小角速度 (原来 0.04)
-        self.r = 1500       # 减小半径 (原来 2500)
-        self.h_max = 2000   # 减小最大高度 (原来 2000)
+        self.r = 1500       # 减小半径
+        self.h_max = 1000   # 减小最大高度
 
     # ┌─────────────────────────────────────────────────────┐
     # │          Spiral trajectory function                  │
@@ -106,6 +106,7 @@ class Trajectory:
         vel = np.array([xd_dot, yd_dot, zd_dot])
 
         # Acceleration
+        print("111")
         xd_ddot = -r * omega**2 * np.cos(theta)
         yd_ddot = -r * omega**2 * np.sin(theta)
         zd_ddot = -h_max * (1 / 10) * omega**2 * np.exp(-theta / 10)
