@@ -41,20 +41,44 @@ class DoMpcConfig:
             use_disturbance_compensation: Whether to enable disturbance compensation
             create_simulator: Whether to create do-mpc Simulator
         """
+        # --- 控制器参数 ---
+        self.DT = 1  # 仿真步长 (s)
+        self.N_HORIZON = 10  # 预测时域长度
+        
+        # --- 权重矩阵 ---
+        self.Q = np.diag([10.0, 10.0, 10.0,    # 位置权重
+                         5.0, 5.0, 5.0,        # 姿态权重
+                         1.0, 1.0, 1.0,        # 线速度权重
+                         0.5, 0.5, 0.5])       # 角速度权重
+        
+        self.R = np.diag([5.0, 10.0, 10.0])    # 控制输入权重
+        
+        self.Qf = np.diag([20.0, 20.0, 20.0,   # 终端位置权重
+                          10.0, 10.0, 10.0,    # 终端姿态权重
+                          2.0, 2.0, 2.0,       # 终端线速度权重
+                          1.0, 1.0, 1.0])      # 终端角速度权重
+        
         # Create reference trajectory
         self.trajectory = Trajectory()
 
         self.use_disturbance_compensation = use_disturbance_compensation
-        self.params = params
-
-
-
 
         # Create do-mpc model
         self.model = self.create_model()
 
         # Create MPC controller
         self.mpc = self.create_mpc_controller(self.model)
+        
+    def disturbance_delta(self, t):
+        """ Define external disturbance vector"""
+        d = np.zeros(6)
+        # d[0] = 0.5 + 2 * np.sin(0.1 * t)
+        # d[1] = 0.4 + 1.5 * np.cos(0.1 * t)
+        # d[2] = 0.6 + 1.5 * np.sin(0.1 * t)
+        # d[3] = 1.5 + 2 * np.sin(0.1 * t)
+        # d[4] = 1.5 + 1.5 * np.sin(0.1 * t)
+        # d[5] = 1.5 + 2 * np.cos(0.1 * t)
+        return d
 
 
 
@@ -100,7 +124,7 @@ class DoMpcConfig:
 
 
         # Use existing symbolic dynamics model
-        symbolic_model = AirshipCasADiSymbolic(self.params)
+        symbolic_model = AirshipCasADiSymbolic()
 
         # Combine state vector
         X_state = ca.vertcat(pos, att, vel, omega)
@@ -163,7 +187,7 @@ class DoMpcConfig:
         setup_mpc = {
             'n_horizon': 10,
             'n_robust': 1,
-            't_step': params.DT,
+            't_step': self.DT,
             'store_full_solution': True,
             'nlpsol_opts': {
                 'ipopt.print_level': 0,  # 减少输出以避免过多的 NaN 警告
@@ -189,14 +213,14 @@ class DoMpcConfig:
 
 
         # 设置各分量的缩放因子
-        pos_weight = 10
-        att_weight = 20
-        vel_weight = 2000
-        ang_weight = 5
+        pos_weight = 10000
+        att_weight = 2
+        vel_weight = 200000
+        ang_weight = 1
 
 
-        Q_scaled = params.Q.copy()
-        Qf_scaled = params.Qf.copy()
+        Q_scaled = self.Q.copy()
+        Qf_scaled = self.Qf.copy()
 
         # 缩放各类状态误差
         Q_scaled[0:3, 0:3] *= pos_weight  # 增强位置误差权重（x, y, z）
@@ -221,7 +245,11 @@ class DoMpcConfig:
         lterm = (self.model.aux['pos_error'].T @ Q_scaled[0:3, 0:3] @ self.model.aux['pos_error'] +
                  self.model.aux['att_error'].T @ Q_scaled[3:6, 3:6] @ self.model.aux['att_error'] +
                  self.model.aux['vel_error'].T @ Q_scaled[6:9, 6:9] @ self.model.aux['vel_error'] +
-                 self.model.aux['ang_error'].T @ Q_scaled[9:12, 9:12] @ self.model.aux['ang_error'] )
+                 self.model.aux['ang_error'].T @ Q_scaled[9:12, 9:12] @ self.model.aux['ang_error'] +
+                 200 * self.model.u['T'] ** 2 +
+                 50 * self.model.u['mu'] ** 2 +
+                 50 * self.model.u['nu'] ** 2)
+
         # + self.model.u['T']**2 * R_scaled[0, 0] + self.model.u['mu']**2 * R_scaled[1, 1] + self.model.u['nu']**2 * R_scaled[2, 2]
 
         mpc.set_objective(mterm=mterm, lterm=lterm)
@@ -277,27 +305,27 @@ class DoMpcConfig:
         mpc.bounds['upper', '_x', 'omega', 2] = np.deg2rad(8)    # r (Yaw rate 最大值 +8°/s)
 
 
-        # 状态变量缩放
-        mpc.scaling['_x', 'pos', 0] = 1000.0  # x 位置缩放：1km -> 1
-        mpc.scaling['_x', 'pos', 1] = 1000.0  # y 位置缩放：1km -> 1
-        mpc.scaling['_x', 'pos', 2] = 1000.0  # z 位置缩放：1km -> 1
-
-        mpc.scaling['_x', 'att', 0] = 1.0     # roll 缩放：保持原始值
-        mpc.scaling['_x', 'att', 1] = 1.0     # pitch 缩放：保持原始值
-        mpc.scaling['_x', 'att', 2] = 1.0     # yaw 缩放：保持原始值
-
-        mpc.scaling['_x', 'vel', 0] = 10.0    # x 速度缩放：10m/s -> 1
-        mpc.scaling['_x', 'vel', 1] = 10.0    # y 速度缩放：10m/s -> 1
-        mpc.scaling['_x', 'vel', 2] = 5.0     # z 速度缩放：5m/s -> 1
-
-        mpc.scaling['_x', 'omega', 0] = 0.1   # roll rate 缩放：0.1rad/s -> 1
-        mpc.scaling['_x', 'omega', 1] = 0.1   # pitch rate 缩放：0.1rad/s -> 1
-        mpc.scaling['_x', 'omega', 2] = 0.1   # yaw rate 缩放：0.1rad/s -> 1
-
-        # 控制输入缩放
-        mpc.scaling['_u', 'T'] = 10.0         # 推力缩放：10N -> 1
-        mpc.scaling['_u', 'mu'] = 1.0         # 水平偏转角缩放：保持原始值
-        mpc.scaling['_u', 'nu'] = 1.0         # 垂直偏转角缩放：保持原始值
+        # # 状态变量缩放
+        # mpc.scaling['_x', 'pos', 0] = 1000.0  # x 位置缩放：1km -> 1
+        # mpc.scaling['_x', 'pos', 1] = 1000.0  # y 位置缩放：1km -> 1
+        # mpc.scaling['_x', 'pos', 2] = 1000.0  # z 位置缩放：1km -> 1
+        #
+        # mpc.scaling['_x', 'att', 0] = 1.0     # roll 缩放：保持原始值
+        # mpc.scaling['_x', 'att', 1] = 1.0     # pitch 缩放：保持原始值
+        # mpc.scaling['_x', 'att', 2] = 1.0     # yaw 缩放：保持原始值
+        #
+        # mpc.scaling['_x', 'vel', 0] = 10.0    # x 速度缩放：10m/s -> 1
+        # mpc.scaling['_x', 'vel', 1] = 10.0    # y 速度缩放：10m/s -> 1
+        # mpc.scaling['_x', 'vel', 2] = 5.0     # z 速度缩放：5m/s -> 1
+        #
+        # mpc.scaling['_x', 'omega', 0] = 0.1   # roll rate 缩放：0.1rad/s -> 1
+        # mpc.scaling['_x', 'omega', 1] = 0.1   # pitch rate 缩放：0.1rad/s -> 1
+        # mpc.scaling['_x', 'omega', 2] = 0.1   # yaw rate 缩放：0.1rad/s -> 1
+        #
+        # # 控制输入缩放
+        # mpc.scaling['_u', 'T'] = 10.0         # 推力缩放：10N -> 1
+        # mpc.scaling['_u', 'mu'] = 1.0         # 水平偏转角缩放：保持原始值
+        # mpc.scaling['_u', 'nu'] = 1.0         # 垂直偏转角缩放：保持原始值
 
 
 
@@ -319,7 +347,7 @@ class DoMpcConfig:
             tvp_current['_tvp', :, 'att_ref'] = yc[3:6].reshape(-1, 1).astype(float)
             tvp_current['_tvp', :, 'vel_ref'] = yc_dot[0:3].reshape(-1, 1).astype(float)
             tvp_current['_tvp', :, 'omega_ref'] = yc_dot[3:6].reshape(-1, 1).astype(float)
-            tvp_current['_tvp', :, 'disturbance'] = params.disturbance_delta(t_now).reshape(-1, 1).astype(float)
+            tvp_current['_tvp', :, 'disturbance'] = self.disturbance_delta(t_now).reshape(-1, 1).astype(float)
 
             return tvp_current
 
@@ -349,12 +377,12 @@ class DoMpcConfig:
 
         # Configure simulator parameters
         simulator_params = {
-            't_step': params.DT,
+            't_step': self.DT,
             'integration_tool': 'cvodes',
             'abstol': 1e-8,
             'reltol': 1e-6,
-            'max_step_size': params.DT / 5,
-            'min_step_size': params.DT / 500,
+            'max_step_size': self.DT / 5,
+            'min_step_size': self.DT / 500,
         }
         simulator.set_param(**simulator_params)
 
@@ -370,7 +398,7 @@ class DoMpcConfig:
             tvp_template['att_ref'] = yc[3:6].reshape(-1, 1).astype(float)
             tvp_template['vel_ref'] = yc_dot[0:3].reshape(-1, 1).astype(float)
             tvp_template['omega_ref'] = yc_dot[3:6].reshape(-1, 1).astype(float)
-            tvp_template['disturbance'] = params.disturbance_delta(t_now).reshape(-1, 1).astype(float)
+            tvp_template['disturbance'] = self.disturbance_delta(t_now).reshape(-1, 1).astype(float)
 
             return tvp_template
 

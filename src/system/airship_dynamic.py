@@ -1,180 +1,182 @@
 # model.py
 """
-Airship dynamic model module (model.py)
-refer to      Error-constrained fixed-time trajectory tracking control for a stratospheric airship with disturbances
+飞艇动力学模型模块 (model.py)
+参考文献 Error-constrained fixed-time trajectory tracking control for a stratospheric airship with disturbances
 """
 # pylint: disable=invalid-name
 # cspell:ignore coeffs ddelta eta_f Sh Sg Sf Cdcf dalpha arcsin coeff ndarray linalg vertcat xdot
 # cspell:ignore arctan RUDT RUDB ELVL ELVR unmodeled casadi
+# pylint: disable=too-many-locals
 
 
-
-
-# === third-party libraries ===
-import numpy as np
 import casadi as ca
+# === 第三方库 ===
+import numpy as np
 
-# === local modules ===
-from src.system.aero_force_torque import calculate_aero_forces_moments, calculate_relative_velocity, calculate_aoa_sideslip
+# === 本地模块 ===
+from src.system.rotation_matrices import R_zeta, R_gamma
 from src.system.thrust_vectoring import thrust_params_to_force_torque
-from src.system.rotation_matrices import R_zeta, R_block
-
-
-
-
-
-
-
 
 
 class AirshipCasADiSymbolic:
     """
-    Airship symbolic model class
+    飞艇符号化模型类
     """
-    def __init__(self, input_params):
+
+    def __init__(self, input_params=None):
+        # 物理参数
         self.params = input_params
-        self.m = input_params.m
-        self.g = input_params.g
-        self.I0 = input_params.I0
-        self.M = input_params.M_cfg
-        self.M_inv = input_params.M_inv
-        self.M_upper_left = self.M[0:3, 0:3]
-        self.rc = input_params.rc.flatten()
-        self.rb = input_params.rb.flatten()
-        self.rp_r = input_params.rp_r.flatten()
-        self.rp_l = input_params.rp_l.flatten()
-        self.Vol_airship = input_params.Vol_airship
-        self.rho_air = input_params.rho_air
-        self.S_ref = input_params.S_ref
-        self.L_ref = input_params.L_ref
-        self.V_wind = input_params.V_WIND_ERF
-        self.AERO_COEFFS = input_params.AERO_COEFFS
+        self.m = 5300  # 质量 [kg]
+        self.Volume = 10700  # 体积 [m^3]
+        self.g = 9.74  # 重力加速度 [m/s^2]
+        self.S_ref = self.Volume ** (2 / 3)  # 参考面积 [m^2]
+        self.L_ref = 38.0  # 参考长度 [m]
+
+        # 转动惯量
+        self.Ix = 2.5e6
+        self.Iy = 5.5e6
+        self.Iz = 5.5e6
+        self.Ixz = -2.5e6
+        self.I0 = np.diag([self.Ix, self.Iy, self.Iz])  # 惯性矩阵
+
+        # 几何参数
+        self.airship_a1 = 62.50  # 前椭球半长轴 [m]
+        self.airship_a2 = 73.5  # 后椭球半长轴 [m]
+        self.airship_b = 19.0  # 半短轴 [m]
+
+        # 距离向量
+        self.xg = 1  # 重心
+        self.yg = 0
+        self.zg = 3
+        self.rg = np.array([self.xg, self.yg, self.zg])
+        self.rb = np.array([0, 0, 0])  # 浮心
+        self.rp_r = np.array([0.8 * self.airship_a1, self.airship_b, 2.0])  # 右侧推力点
+        self.rp_l = np.array([0.8 * self.airship_a1, -self.airship_b, 2.0])  # 左侧推力点
+
+        # 气动参数
+
+        self.rho = 0.088  # ~20km 高度的空气密度 [kg/m^3]
+
+        # 气动系数
+        self.C_l1 = 2.4e4
+        self.C_m1, self.C_m2, self.C_m3, self.C_m4 = 7.7e4, 7.7e4, 7.7e4, 7.7e4
+        self.C_n1, self.C_n2, self.C_n3, self.C_n4 = 7.7e4, 7.7e4, 7.7e4, 7.7e4
+        self.C_x1, self.C_x2 = 657.0, 657.0
+        self.C_y1, self.C_y2, self.C_y3, self.C_y4 = 657.0, 657.0, 657.0, 657.0
+        self.C_z1, self.C_z2, self.C_z3, self.C_z4 = 657.0, 657.0, 657.0, 657.0
 
     def rhs_symbolic(self, X, Thrust_paras, t=None, external_disturbance=None):
         """
-        Build symbolic RHS using CasADi.
 
-        Args:
-            X: 12x1 casadi SX state vector [zeta, gamma, v, omega]
+        参数：
+            X: 12x1 casadi SX 状态向量 [zeta, gamma, v, omega]
             Thrust_paras:
-               - 3x1 [T, μ, v] for direct thrust parameters to force/torque conversion
-            t: Time (optional)
-            external_disturbance: Optional external disturbance (6x1)
+            - 3x1 [T, μ, v] 用于将直接推力参数转换为力/力矩
+            t: 时间 (可选)
+            external_disturbance: 可选的外部扰动 (6x1)
 
-        Returns:
-            dX/dt as casadi SX 12x1
+        返回：
+            dX/dt 作为 casadi SX 12x1
         """
 
         _ = t
 
-        # === Deconstruct the state ===
-        _zeta = X[0:3]  # Position in ERF
-        gamma = X[3:6]  # Attitude (Euler angles)
-        v = X[6:9]  # Linear velocity in BRF
-        omega = X[9:12]  # Angular velocity in BRF
+        # === 解构状态量 ===
+        _zeta = X[0:3]  # ERF 中的位置
+        gamma = X[3:6]  # 姿态 (欧拉角)
+        v = X[6:9]  # BRF 中的线速度
+        omega = X[9:12]  # BRF 中的角速度
 
-        # === 运动学 (Kinematics) ===
-        R = R_block(gamma)  # Combined rotation matrix R = diag(R_zeta, R_gamma) eq.(5)
-        y_dot = R @ ca.vertcat(v, omega)  # y_dot = [zeta_dot, gamma_dot] eq.(5)
+        # === 运动学 ===
+        R_block = ca.diagcat(R_zeta(gamma), R_gamma(gamma))
+        y_dot = R_block @ ca.vertcat(v, omega)  # y_dot = [zeta_dot, gamma_dot] eq.(5)
 
-
-
-        # === 动力学 (Dynamics) ===
-        #=================================================================
-        #                     Coriolis and Centrifugal Effects
-        #=================================================================
-        # --- Calculate N term (Coriolis and centrifugal effects) --- eq.(10)
-        omega_cross_v = ca.cross(omega, v)
-        omega_cross_rc = ca.cross(omega, self.rc)
-        omega_cross_omega_cross_rc = ca.cross(omega, omega_cross_rc)
-        omega_cross_I0_omega = ca.cross(omega, self.I0 @ omega)
-        rc_cross_omega_cross_v = ca.cross(self.rc, omega_cross_v)
-
-        N1 = self.M_upper_left @ omega_cross_v + self.m * omega_cross_omega_cross_rc
-        N2 = omega_cross_I0_omega + self.m * rc_cross_omega_cross_v
-        N_term = ca.vertcat(N1, N2)
-
-        # =============================================================
-        #                     Gravity force and moment
-        # =============================================================
-        Rz = R_zeta(gamma)
-        fg_earth = ca.vertcat(0, 0, self.m * self.g)  # Gravity in Earth Frame
-        fg_BRF = Rz.T @ fg_earth  # Rotate gravity vector to Body Frame
-        mg_BRF = ca.cross(self.rc, fg_BRF)  # Torque due to gravity acting at CG (rc is CV->CG)
-
-
-        #========================================================================
-        #                     Buoyancy force and moment
-        #========================================================================
-        F_buoy_earth = ca.vertcat(0, 0, -self.rho_air * self.Vol_airship * self.g)
-        fb_BRF = Rz.T @ F_buoy_earth
-        mb_BRF = ca.cross(-self.rb, fb_BRF)  # Torque due to buoyancy acting at CB (assumed at CV, so arm is -rb)
-
-
-        #========================================================================
-        #                     aerodynamic forces and moments
-        #========================================================================
-        # === Wind and relative velocity calculation ===
-        V_wind_ERF = self.V_wind  # Wind velocity in ERF
-        V_wind_BRF = Rz.T @ V_wind_ERF  # Transform wind to BRF
-
-        # Calculate relative velocity
-        v_rel_brf, u_rel, v_rel_body, w_rel = calculate_relative_velocity(v, V_wind_BRF)
-
-        # Dynamic pressure
-        V_rel_mag = ca.norm_2(v_rel_brf)
-        q_dyn = 0.5 * self.rho_air * V_rel_mag**2
-
-        # Angle of attack and sideslip angle
-        alpha, beta = calculate_aoa_sideslip(u_rel, v_rel_body, w_rel, V_rel_mag, use_casadi=True)
-
-        # === 获取控制舵面偏转角 (Get Control Surface Deflections) ===
-
-        # Critical Placeholder: These values need to be determined by a Control Allocation module based on tau[3:6] !!!
-        delta_RUDT = np.deg2rad(0.0)  # [rad] - Placeholder
-        delta_RUDB = np.deg2rad(0.0)  # [rad] - Placeholder
-        delta_ELVL = np.deg2rad(0.0)  # [rad] - Placeholder
-        delta_ELVR = np.deg2rad(0.0)  # [rad] - Placeholder
-
-        # Use the extracted function to calculate aerodynamic forces and moments
-        fa_BRF, ma_BRF = calculate_aero_forces_moments(
-            q_dyn, alpha, beta,
-            self.AERO_COEFFS,
-            delta_RUDT, delta_RUDB, delta_ELVL, delta_ELVR,
-            use_casadi=True
+        # === 动力学 ===
+        # ===  (Calculate Added Mass/Inertia) ===
+        k1, k2, k3 = 0.17, 0.83, 0.52
+        m_air = self.rho * self.Volume  # displaced air mass
+        M_added = m_air * ca.diag([k1, k2, k2])  # eq.[M'] eq 42
+        I_added = m_air * ca.diag([0.0, k3, k3])  # eq.[I'_0] eq 42
+        # === Skew matrix of CG ===
+        rG_skew = ca.vertcat(
+            ca.horzcat(0, -self.zg, self.yg),
+            ca.horzcat(self.zg, 0, -self.xg),
+            ca.horzcat(-self.yg, self.xg, 0)
+        )
+        # === Rigid Body Inertia Matrix ===
+        M_rigid_add = ca.vertcat(
+            ca.horzcat(self.m * ca.MX_eye(3) + M_added, -self.m * rG_skew),
+            ca.horzcat(self.m * rG_skew, self.I0 + I_added)
         )
 
+        # ===  # 计算科里奥利力和离心力项 (eq.10) ===
+        N1 = (self.m * ca.MX.eye(3) + M_added) @ ca.cross(omega, v) + self.m * ca.cross(omega, ca.cross(omega, self.rg))
+        N2 = ca.cross(omega, self.I0 @ omega) + self.m * ca.cross(self.rg, ca.cross(omega, v))
+        N_term = ca.vertcat(N1, N2)
 
-        #========================================================================
-        #                     Thrust and torque
-        #========================================================================
+        # =======================重力作用力和力矩gravity======================================
+        Rz = R_zeta(gamma)
+        fg_earth = ca.vertcat(0, 0, self.m * self.g)  # 地球坐标系中的重力
+        fg_BRF = Rz.T @ fg_earth  # 将重力向量旋转到机体坐标系
+        mg_BRF = ca.cross(self.rg, fg_BRF)  # 重力在 CG 处产生的力矩 (rg 是 CV->CG)
 
-        # convert thrust parameters to force and torque
-        Thrust_Force_torque = thrust_params_to_force_torque(Thrust_paras, self.rp_r, self.rp_l, use_casadi=True)
+        # =======================浮力作用力和力矩======================================
+        F_buoy_earth = ca.vertcat(0, 0, -self.rho * self.Volume * self.g)
+        fb_BRF = Rz.T @ F_buoy_earth
+        mb_BRF = ca.cross(self.rb, fb_BRF)  # 浮力在 CB 处产生的力矩 (假设作用点在 CV，因此力臂为 -rb)
 
+        # =======================气动力和气动力矩======================================
+        #    风速和相对速度计算
+        V_wind_ERF = np.array([0.0, 0.0, 0.0])  # 地球坐标系中的风速
+        V_wind_BRF = Rz.T @ V_wind_ERF  # 将风速转换到机体坐标系
 
+        # 动压
+        q_dyn = 0.5 * self.rho * ca.norm_2(v - V_wind_BRF) ** 2
 
-        Thrust_Force = Thrust_Force_torque[0:3]  # Thrust vectoring in BRF eq.(??)
-        Thrust_torque = Thrust_Force_torque[3:6]
+        # 计算相对速度
+        u_rel, v_rel_body, w_rel = (v - V_wind_BRF)[0], (v - V_wind_BRF)[1], (v - V_wind_BRF)[2]
+        # 攻角和侧滑角
+        alpha = ca.atan2(w_rel, u_rel)  # calculate relative wind speed magnitude (if not provided)
+        V_rel_mag = ca.sqrt(u_rel ** 2 + v_rel_body ** 2 + w_rel ** 2)
+        beta = ca.asin(v_rel_body / (V_rel_mag + 1e-6))  # calculate side slip angle
 
+        # 使用提取的函数计算气动力和气动力矩
+        X_a = -q_dyn * (self.C_x1 * ca.cos(alpha) ** 2 * ca.cos(beta) ** 2 + self.C_x2 * ca.sin(2 * alpha) * ca.sin(
+            alpha / 2))
+        Y_a = -q_dyn * (
+                    self.C_y1 * ca.cos(beta / 2) * ca.sin(2 * beta) + self.C_y2 * ca.sin(2 * beta) + self.C_y3 * ca.sin(
+                beta) * ca.sin(ca.fabs(beta)))
+        Z_a = -q_dyn * (self.C_z1 * ca.cos(alpha / 2) * ca.sin(2 * alpha) + self.C_z2 * ca.sin(
+            2 * alpha) + self.C_z3 * ca.sin(alpha) * ca.sin(ca.fabs(alpha)))
+        L_a = q_dyn * self.C_l1 * ca.sin(beta) * ca.sin(ca.fabs(beta))
+        M_a = -q_dyn * (self.C_m1 * ca.cos(alpha / 2) * ca.sin(2 * alpha) + self.C_m2 * ca.sin(
+            2 * alpha) + self.C_m3 * ca.sin(alpha) * ca.sin(ca.fabs(alpha)))
+        N_a = q_dyn * (
+                    self.C_n1 * ca.cos(beta / 2) * ca.sin(2 * beta) + self.C_n2 * ca.sin(2 * beta) + self.C_n3 * ca.sin(
+                beta) * ca.sin(ca.fabs(beta)))
 
+        fa_BRF, ma_BRF = ca.vertcat(X_a, Y_a, Z_a), ca.vertcat(L_a, M_a, N_a)
 
-        #==================================================================
-        #                     Combine forces and moments
-        #==================================================================
-        F_forces = fg_BRF - fb_BRF + fa_BRF + Thrust_Force
-        F_torques = mg_BRF + mb_BRF + ma_BRF + Thrust_torque
+        # =======================推力和推力矩======================================
+        # 将推力参数转换为力和力矩
+        Thrust_Force_torque = thrust_params_to_force_torque(Thrust_paras, self.rp_r, self.rp_l)
+
+        Thrust_Force = [400,0,0 ] # Thrust_Force_torque[0s:3]  # BRF 中的推力向量
+        Thrust_torque = [0,0,0] # Thrust_Force_torque[3:6]
+
+        # =======================合并力和力矩======================================
+        F_forces = (fg_BRF + fb_BRF)*0 + fa_BRF + Thrust_Force
+        F_torques = (mg_BRF + mb_BRF)*0 + ma_BRF + Thrust_torque
         F_term = ca.vertcat(F_forces, F_torques)
 
-        # --- Add external disturbance if provided ---
+        # --- 如果提供了外部扰动，则添加 ---
         if external_disturbance is not None:
             F_term = F_term + external_disturbance
 
-        # --- Dynamics equation: Mx_dot + N = F ---
-        x_dot = self.M_inv @ (F_term - N_term)
+        # --- 动力学方程：Mx_dot + N = F ---
+        x_dot = ca.inv(M_rigid_add) @ (F_term - N_term)
 
-        # --- Combine state derivatives ---
-        dXdt = ca.vertcat(y_dot, x_dot)
+        # --- 合并状态导数 ---
+        dxdt = ca.vertcat(y_dot, x_dot)
 
-
-        return dXdt
+        return dxdt
