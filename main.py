@@ -10,6 +10,7 @@ import do_mpc
 import matplotlib.pyplot as plt
 from casadi.tools import *
 from do_mpc.tools import Timer
+from matplotlib.ticker import ScalarFormatter
 
 from src.system.controller_dompc import DoMpcConfig
 
@@ -41,10 +42,11 @@ def run_simulation():
 
     # Set the initial state of mpc and simulator
     # 初始化状态设置
-    initial_position = np.array([1500.0, 0.0, 0.0])  # 起始位置
-    initial_attitude = np.array([0.0, 0.0, np.pi / 2])  # 起始姿态（面朝 Y 方向）
-    initial_velocity = np.array([0, 0.0, 0.0])  # 起始线速度
-    initial_angular_velocity = np.array([0.0, 0.0, 0.00])  # 起始角速度
+    # 设置初始状态，考虑 Z 轴向下为正的坐标系 - 修改为 20km 高度
+    initial_position = np.array([0.0, 0.0, -20000.0])  # Z=-20000 表示在地面上方 20km
+    initial_attitude = np.array([0.0, 0.0, 0.0])  # 水平飞行，面向 X 轴正方向
+    initial_velocity = np.array([15.0, 0.0, 0.0])  # 初始水平速度，Z 速度为 0
+    initial_angular_velocity = np.array([0.0, 0.0, 0.0])  # 初始无角速度
 
     X0 = np.concatenate([initial_position, initial_attitude, initial_velocity, initial_angular_velocity])
     x0 = X0.copy().reshape(-1, 1)
@@ -72,7 +74,7 @@ def run_simulation():
         current_time = i * DT
 
         # 获取当前参考轨迹信息
-        yc_ref, yc_dot_ref, _, _, _ = airship_mpc.trajectory.get_spiral_trajectory(current_time)
+        yc_ref, yc_dot_ref, _, _, _ = airship_mpc.trajectory.get_straight_line_trajectory(current_time)
         ref_vel_x, ref_vel_y, ref_vel_z = yc_dot_ref[0:3]  # 提取参考速度分量
         ref_vel_magnitude = np.linalg.norm(yc_dot_ref[0:3])  # 计算参考速度大小
 
@@ -122,23 +124,54 @@ def run_simulation():
     ax = plt.axes(projection='3d')
     reference_trajectory = np.array(reference_trajectory)
     optimal_states = np.array(optimal_states)
-    ax.plot3D(reference_trajectory[:, 0], reference_trajectory[:, 1], reference_trajectory[:, 2],
+
+    print("\n=== Trajectory Summary ===")
+    print(f"Reference Trajectory Start: {reference_trajectory[0]} (meters)")
+    print(f"Actual Trajectory Start: {optimal_states[0, :3]} (meters)")
+    print(f"Reference Trajectory End: {reference_trajectory[-1]} (meters)")
+    print(f"Actual Trajectory End: {optimal_states[-1, :3]} (meters)")
+
+    # 绘制轨迹时将 Z 坐标转换为 km（将 Z 值乘以 -1 并除以 1000）
+    ax.plot3D(reference_trajectory[:, 0], reference_trajectory[:, 1], -reference_trajectory[:, 2] / 1000,
               label='Reference Trajectory', color='blue')
-    ax.plot3D(optimal_states[:, 0], optimal_states[:, 1], optimal_states[:, 2],
+    ax.plot3D(optimal_states[:, 0], optimal_states[:, 1], -optimal_states[:, 2] / 1000,
               label='Actual Trajectory', color='orange')
-    ax.scatter(reference_trajectory[0, 0], reference_trajectory[0, 1], reference_trajectory[0, 2],
+
+    # 起点和终点也需要将 Z 坐标转换为 km
+    ax.scatter(reference_trajectory[0, 0], reference_trajectory[0, 1], -reference_trajectory[0, 2] / 1000,
                color="green", s=100, label="Start")
-    ax.text(reference_trajectory[0, 0], reference_trajectory[0, 1], reference_trajectory[0, 2] + 150,
+    ax.text(reference_trajectory[0, 0], reference_trajectory[0, 1], -reference_trajectory[0, 2] / 1000 - 0.15,
             "Start Point", color="green", fontsize=12, weight='bold')
-    ax.scatter(reference_trajectory[-1, 0], reference_trajectory[-1, 1], reference_trajectory[-1, 2],
+    ax.scatter(reference_trajectory[-1, 0], reference_trajectory[-1, 1], -reference_trajectory[-1, 2] / 1000,
                color="red", s=100, label="End")
-    ax.text(reference_trajectory[-1, 0], reference_trajectory[-1, 1], reference_trajectory[-1, 2] + 150,
+    ax.text(reference_trajectory[-1, 0], reference_trajectory[-1, 1], -reference_trajectory[-1, 2] / 1000 - 0.15,
             "Target Point", color="red", fontsize=12, weight='bold')
+
+    # 修改 Z 轴标签以反映实际含义，并设置刻度单位为 km
     ax.set_xlabel('X Pos (m)')
     ax.set_ylabel('Y Pos (m)')
-    ax.set_zlabel('Z Pos (m)')
+    ax.set_zlabel('Altitude (km)')
     ax.set_title('3D Trajectory Comparison')
     ax.legend()
+
+    # 设置 Y 轴范围和刻度
+    ax.set_ylim(0, 500)  # Y 轴范围：0 到 500m
+    y_ticks = np.arange(0, 501, 50)  # Y 轴刻度：0, 50, 100, 150, ..., 500
+    ax.set_yticks(y_ticks)
+
+    # 设置 Z 轴刻度：从 0 开始，每 2km 一个刻度，最大 28km
+    z_ticks = np.arange(0, 30, 2)  # 从 0 到 28，每 2 为一个刻度 (0, 2, 4, ..., 28)
+    ax.set_zticks(z_ticks)
+    ax.set_zlim(0, 28)  # 设置 Z 轴范围为 0 到 28km
+
+    # 设置所有轴的格式器，强制显示原始值而不是科学计数法
+    formatter = ScalarFormatter(useOffset=False, useMathText=False)
+    formatter.set_scientific(False)
+
+    ax.xaxis.set_major_formatter(formatter)  # X 轴格式器
+    ax.yaxis.set_major_formatter(formatter)  # Y 轴格式器
+    ax.zaxis.set_major_formatter(formatter)  # Z 轴格式器
+
     plt.grid(True)
     plt.show()
 

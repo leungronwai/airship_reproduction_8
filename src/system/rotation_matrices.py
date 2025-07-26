@@ -9,7 +9,7 @@ refer to Nonlinear adaptive trajectory tracking control for a stratospheric airs
 # cspell:ignore cphi cth cpsi sphi sth spsi casadi blockcat
 
 import casadi as ca
-import numpy as np
+
 
 
 def R_zeta(gamma):

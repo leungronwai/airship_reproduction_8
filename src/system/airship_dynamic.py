@@ -26,44 +26,45 @@ class AirshipCasADiSymbolic:
     def __init__(self, input_params=None):
         # 物理参数
         self.params = input_params
-        self.m = 5300  # 质量 [kg]
-        self.Volume = 10700  # 体积 [m^3]
+        self.m = 2934  # 质量 [kg]
+        self.Volume = 35705  # 体积 [m^3]
         self.g = 9.74  # 重力加速度 [m/s^2]
         self.S_ref = self.Volume ** (2 / 3)  # 参考面积 [m^2]
-        self.L_ref = 38.0  # 参考长度 [m]
+        self.L_ref = 88.70  # 参考长度 [m]
 
         # 转动惯量
-        self.Ix = 2.5e6
-        self.Iy = 5.5e6
-        self.Iz = 5.5e6
-        self.Ixz = -2.5e6
+        self.Ix = 393187
+        self.Iy = 1224880
+        self.Iz = 939666
+        self.Ixz = -62882
         self.I0 = np.diag([self.Ix, self.Iy, self.Iz])  # 惯性矩阵
 
         # 几何参数
-        self.airship_a1 = 62.50  # 前椭球半长轴 [m]
-        self.airship_a2 = 73.5  # 后椭球半长轴 [m]
-        self.airship_b = 19.0  # 半短轴 [m]
+        self.airship_a1 = 88.70 / 2  # 前椭球半长轴 [m]
+        self.airship_a2 = 88.70 / 2  # 后椭球半长轴 [m]
+        self.airship_b = 27.7 / 2  # 半短轴 [m]
 
         # 距离向量
-        self.xg = 1  # 重心
+        self.xg = 0  # 重心
         self.yg = 0
-        self.zg = 3
+        self.zg = 0#4.66
         self.rg = np.array([self.xg, self.yg, self.zg])
         self.rb = np.array([0, 0, 0])  # 浮心
-        self.rp_r = np.array([0.8 * self.airship_a1, self.airship_b, 2.0])  # 右侧推力点
-        self.rp_l = np.array([0.8 * self.airship_a1, -self.airship_b, 2.0])  # 左侧推力点
+        self.rp_r = np.array([0 * self.airship_a1, self.airship_b, 3])  # 右侧推力点
+        self.rp_l = np.array([0 * self.airship_a1, -self.airship_b, 3])  # 左侧推力点
 
         # 气动参数
 
-        self.rho = 0.088  # ~20km 高度的空气密度 [kg/m^3]
+        self.rho = 0.0822  # ~20km 高度的空气密度 [kg/m^3]
 
         # 气动系数
-        self.C_l1 = 2.4e4
-        self.C_m1, self.C_m2, self.C_m3, self.C_m4 = 7.7e4, 7.7e4, 7.7e4, 7.7e4
-        self.C_n1, self.C_n2, self.C_n3, self.C_n4 = 7.7e4, 7.7e4, 7.7e4, 7.7e4
-        self.C_x1, self.C_x2 = 657.0, 657.0
-        self.C_y1, self.C_y2, self.C_y3, self.C_y4 = 657.0, 657.0, 657.0, 657.0
-        self.C_z1, self.C_z2, self.C_z3, self.C_z4 = 657.0, 657.0, 657.0, 657.0
+
+        self.C_l1 = 2.4e4/28.8
+        self.C_m1, self.C_m2, self.C_m3, self.C_m4 = 7.7e4/28.8, 7.7e4/28.8, 7.7e4/28.8, 7.7e4/28.8
+        self.C_n1, self.C_n2, self.C_n3, self.C_n4 = 7.7e4/28.8, 7.7e4/28.8, 7.7e4/28.8, 7.7e4/28.8
+        self.C_x1, self.C_x2 = 657.0/28.8, 657.0/28.8
+        self.C_y1, self.C_y2, self.C_y3, self.C_y4 = 657.0/28.8, 657.0/28.8, 657.0/28.8, 657.0/28.8
+        self.C_z1, self.C_z2, self.C_z3, self.C_z4 = 657.0/28.8, 657.0/28.8, 657.0/28.8, 657.0/28.8
 
     def rhs_symbolic(self, X, Thrust_paras, t=None, external_disturbance=None):
         """
@@ -114,7 +115,7 @@ class AirshipCasADiSymbolic:
         N2 = ca.cross(omega, self.I0 @ omega) + self.m * ca.cross(self.rg, ca.cross(omega, v))
         N_term = ca.vertcat(N1, N2)
 
-        # =======================重力作用力和力矩gravity======================================
+        # =======================重力作用力和力矩 gravity======================================
         Rz = R_zeta(gamma)
         fg_earth = ca.vertcat(0, 0, self.m * self.g)  # 地球坐标系中的重力
         fg_BRF = Rz.T @ fg_earth  # 将重力向量旋转到机体坐标系
@@ -144,16 +145,24 @@ class AirshipCasADiSymbolic:
         X_a = -q_dyn * (self.C_x1 * ca.cos(alpha) ** 2 * ca.cos(beta) ** 2 + self.C_x2 * ca.sin(2 * alpha) * ca.sin(
             alpha / 2))
         Y_a = -q_dyn * (
-                    self.C_y1 * ca.cos(beta / 2) * ca.sin(2 * beta) + self.C_y2 * ca.sin(2 * beta) + self.C_y3 * ca.sin(
-                beta) * ca.sin(ca.fabs(beta)))
+                self.C_y1 * ca.cos(beta / 2) * ca.sin(2 * beta) + self.C_y2 * ca.sin(2 * beta) + self.C_y3 * ca.sin(
+            beta) * ca.sin(ca.fabs(beta)))
         Z_a = -q_dyn * (self.C_z1 * ca.cos(alpha / 2) * ca.sin(2 * alpha) + self.C_z2 * ca.sin(
             2 * alpha) + self.C_z3 * ca.sin(alpha) * ca.sin(ca.fabs(alpha)))
         L_a = q_dyn * self.C_l1 * ca.sin(beta) * ca.sin(ca.fabs(beta))
         M_a = -q_dyn * (self.C_m1 * ca.cos(alpha / 2) * ca.sin(2 * alpha) + self.C_m2 * ca.sin(
             2 * alpha) + self.C_m3 * ca.sin(alpha) * ca.sin(ca.fabs(alpha)))
         N_a = q_dyn * (
-                    self.C_n1 * ca.cos(beta / 2) * ca.sin(2 * beta) + self.C_n2 * ca.sin(2 * beta) + self.C_n3 * ca.sin(
-                beta) * ca.sin(ca.fabs(beta)))
+                self.C_n1 * ca.cos(beta / 2) * ca.sin(2 * beta) + self.C_n2 * ca.sin(2 * beta) + self.C_n3 * ca.sin(
+            beta) * ca.sin(ca.fabs(beta)))
+
+
+        # X_a = -q_dyn * (22.85)
+        # Y_a = -q_dyn * (2.3)
+        # Z_a = -q_dyn * (2.3)
+        # L_a = 0
+        # M_a = 0
+        # N_a = 0
 
         fa_BRF, ma_BRF = ca.vertcat(X_a, Y_a, Z_a), ca.vertcat(L_a, M_a, N_a)
 
@@ -161,12 +170,12 @@ class AirshipCasADiSymbolic:
         # 将推力参数转换为力和力矩
         Thrust_Force_torque = thrust_params_to_force_torque(Thrust_paras, self.rp_r, self.rp_l)
 
-        Thrust_Force = [400,0,0 ] # Thrust_Force_torque[0s:3]  # BRF 中的推力向量
-        Thrust_torque = [0,0,0] # Thrust_Force_torque[3:6]
+        Thrust_Force = [340, 0, 0]  # Thrust_Force_torque[0s:3]  # BRF 中的推力向量
+        Thrust_torque = [0, 0, 0]  # Thrust_Force_torque[3:6]
 
         # =======================合并力和力矩======================================
-        F_forces = (fg_BRF + fb_BRF)*0 + fa_BRF + Thrust_Force
-        F_torques = (mg_BRF + mb_BRF)*0 + ma_BRF + Thrust_torque
+        F_forces = (fg_BRF + fb_BRF)  + fa_BRF + Thrust_Force
+        F_torques = (mg_BRF + mb_BRF)  + ma_BRF + Thrust_torque
         F_term = ca.vertcat(F_forces, F_torques)
 
         # --- 如果提供了外部扰动，则添加 ---
