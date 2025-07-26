@@ -29,8 +29,8 @@ def thrust_params_to_force_torque(thrust_params, rp_r, rp_l):
 
 
     T_mag = thrust_params[0]
-    mu = thrust_params[1]
-    nu = thrust_params[2]
+    mu = 0 #thrust_params[1]
+    nu = 0# thrust_params[2]
 
     # calculate right thrust vector
     thrust_vector_r = ca.vertcat(

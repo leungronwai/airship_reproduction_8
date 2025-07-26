@@ -272,13 +272,13 @@ class DoMpcConfig:
         mpc.bounds['upper', '_u', 'nu'] = np.deg2rad(30)   # 垂直偏转角最大值 (+30°)
 
         # === State constraints ===
-        # Position constraints
-        mpc.bounds['lower', '_x', 'pos', 0] = -5000.0  # x 位置最小值
-        mpc.bounds['upper', '_x', 'pos', 0] = 5000.0   # x 位置最大值
-        mpc.bounds['lower', '_x', 'pos', 1] = -5000.0  # y 位置最小值
-        mpc.bounds['upper', '_x', 'pos', 1] = 5000.0   # y 位置最大值
-        mpc.bounds['lower', '_x', 'pos', 2] = 10  # z 位置最小值
-        mpc.bounds['upper', '_x', 'pos', 2] = 5000.0   # z 位置最大值
+        # Position constraints - 调整 Y 坐标约束以包含 0-500m 范围
+        mpc.bounds['lower', '_x', 'pos', 0] = -5000.0    # x 位置最小值
+        mpc.bounds['upper', '_x', 'pos', 0] = 5000.0     # x 位置最大值
+        mpc.bounds['lower', '_x', 'pos', 1] = -100.0     # y 位置最小值（允许稍微偏离）
+        mpc.bounds['upper', '_x', 'pos', 1] = 600.0      # y 位置最大值（允许稍微超出 500m）
+        mpc.bounds['lower', '_x', 'pos', 2] = -25000.0   # z 位置最小值 (允许高达 25km)
+        mpc.bounds['upper', '_x', 'pos', 2] = 1000.0     # z 位置最大值 (地面以下 1km)
 
         # Attitude constraints (Euler angles: [roll, pitch, yaw])
         mpc.bounds['lower', '_x', 'att', 0] = -np.deg2rad(25)  # Roll 最小值 (-25°)
@@ -338,11 +338,11 @@ class DoMpcConfig:
 
         def tvp_fun(t_now):
             """Update reference trajectory parameters."""
-            yc, yc_dot, _, _, _ = self.trajectory.get_spiral_trajectory(t_now)
+            # 使用直线轨迹替代螺旋轨迹
+            yc, yc_dot, _, _, _ = self.trajectory.get_straight_line_trajectory(t_now)
 
             tvp_current = tvp_template()
 
-            # 使用正确的 TVP 访问方式 - 基于调试输出的结构
             tvp_current['_tvp', :, 'pos_ref'] = yc[0:3].reshape(-1, 1).astype(float)
             tvp_current['_tvp', :, 'att_ref'] = yc[3:6].reshape(-1, 1).astype(float)
             tvp_current['_tvp', :, 'vel_ref'] = yc_dot[0:3].reshape(-1, 1).astype(float)
@@ -392,7 +392,8 @@ class DoMpcConfig:
 
         def tvp_fun(t_now):
             """Update disturbance parameters for current simulation time"""
-            yc, yc_dot, _, _, _ = self.trajectory.get_spiral_trajectory(t_now)
+            # 使用直线轨迹
+            yc, yc_dot, _, _, _ = self.trajectory.get_straight_line_trajectory(t_now)
 
             tvp_template['pos_ref'] = yc[0:3].reshape(-1, 1).astype(float)
             tvp_template['att_ref'] = yc[3:6].reshape(-1, 1).astype(float)
