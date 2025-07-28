@@ -89,21 +89,4 @@ def disturbance_delta(t):
 # V_WIND_FUNC = get_wind_erf #  If using function, specify here
 
 
-# ===  (do-mpc Controller Parameters) ===
-#  prediction horizon length
-N_HORIZON = 8
 
-#  state weight matrix (position and attitude error weights)
-Q = np.diag([10.0, 10.0, 10.0,
-             5.0, 5.0, 5.0,
-             1.0, 1.0, 1.0,
-             0.5, 0.5, 0.5])
-
-# 控制输入权重矩阵 (平衡控制能耗与性能)
-R = np.diag([5.0, 10.0, 10.0])  # [推力，水平偏转，垂直偏转]
-
-#  terminal state weight matrix
-Qf = np.diag([20.0, 20.0, 20.0,
-              10.0, 10.0, 10.0,
-              2.0, 2.0, 2.0,
-              1.0, 1.0, 1.0])

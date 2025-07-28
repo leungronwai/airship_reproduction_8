@@ -11,7 +11,6 @@ refer to Nonlinear adaptive trajectory tracking control for a stratospheric airs
 import casadi as ca
 
 
-
 def R_zeta(gamma):
     """
     计算旋转矩阵 - Eq. 6
@@ -57,19 +56,17 @@ def R_gamma(gamma):
     )
 
 
-
-
 def R_y_inv(gamma):
     """
     Compute inverse of rotation matrix R_gamma
-    
+
     Args:
         gamma: attitude angles (phi, theta, psi)
     Returns:
         3x3 inverse rotation matrix (CasADi MX type)
     """
     phi, theta, _ = gamma[0], gamma[1], gamma[2]
-    
+
     # Calculate inverse directly based on matrix structure
     return ca.vertcat(
         ca.horzcat(1, 0, 0),
