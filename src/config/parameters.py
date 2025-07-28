@@ -15,14 +15,6 @@ from src.system.trajectory_ref import Trajectory
 
 
 
-
-
-
-
-
-
-
-
 # # --- Initial position Conditions ---
 # def setup_spiral_initial_conditions():
 #     """
