@@ -15,7 +15,7 @@ import numpy as np
 
 # === 本地模块 ===
 from src.system.rotation_matrices import R_zeta, R_gamma
-from src.system.thrust_vectoring import thrust_params_to_force_torque
+
 
 
 class AirshipCasADiSymbolic:
@@ -25,7 +25,7 @@ class AirshipCasADiSymbolic:
 
     def __init__(self, input_params=None):
         # 物理参数
-        self.params = input_params
+
         self.m = 2934  # 质量 [kg]
         self.Volume = 35705  # 体积 [m^3]
         self.g = 9.74  # 重力加速度 [m/s^2]
@@ -66,7 +66,7 @@ class AirshipCasADiSymbolic:
         self.C_y1, self.C_y2, self.C_y3, self.C_y4 = 657.0/28.8, 657.0/28.8, 657.0/28.8, 657.0/28.8
         self.C_z1, self.C_z2, self.C_z3, self.C_z4 = 657.0/28.8, 657.0/28.8, 657.0/28.8, 657.0/28.8
 
-    def rhs_symbolic(self, X, Thrust_paras, t=None, external_disturbance=None):
+    def rhs_symbolic(self, X, thrust_params, t=None, external_disturbance=None):
         """
 
         参数：
@@ -156,16 +156,42 @@ class AirshipCasADiSymbolic:
                 self.C_n1 * ca.cos(beta / 2) * ca.sin(2 * beta) + self.C_n2 * ca.sin(2 * beta) + self.C_n3 * ca.sin(
             beta) * ca.sin(ca.fabs(beta)))
 
-
-
-
         fa_BRF, ma_BRF = ca.vertcat(X_a, Y_a, Z_a), ca.vertcat(L_a, M_a, N_a)
 
-        # =======================推力和推力矩======================================
+        # =======================推力和推力矩 thrust_vetering======================================
         # 将推力参数转换为力和力矩
-        Thrust_Force_torque = thrust_params_to_force_torque('forward', Thrust_paras, self.rp_r, self.rp_l)
 
-        Thrust_Force = [340, 0, 0]  # Thrust_Force_torque[0s:3]  # BRF 中的推力向量
+        T_mag = thrust_params[0]
+        mu = thrust_params[1]  # 恢复使用参数而不是硬编码为 0
+        nu = thrust_params[2]  # 恢复使用参数而不是硬编码为 0
+
+        # 计算右侧推力向量
+        thrust_vector_r = ca.vertcat(
+            T_mag * ca.cos(mu) * ca.cos(nu),
+            T_mag * ca.sin(mu),
+            T_mag * ca.cos(mu) * ca.sin(nu)
+        )
+
+        # 计算左侧推力向量
+        thrust_vector_l = ca.vertcat(
+            T_mag * ca.cos(mu) * ca.cos(nu),
+            T_mag * ca.sin(mu),
+            T_mag * ca.cos(mu) * ca.sin(nu)
+        )
+
+        # 总推力
+        T_total = thrust_vector_r + thrust_vector_l
+
+        # 计算力矩
+        tau_r = ca.cross(self.rp_r, thrust_vector_r)
+        tau_l = ca.cross(self.rp_l, thrust_vector_l)
+        tau_vec = tau_r + tau_l
+
+        # 组合力和力矩
+        thrust_force_torque = ca.vertcat(T_total, tau_vec)
+
+
+        Thrust_Force = [340, 0, 0]  # Thrust_Force_torque[0:3]  # BRF 中的推力向量
         Thrust_torque = [0, 0, 0]  # Thrust_Force_torque[3:6]
 
         # =======================合并力和力矩======================================
