@@ -45,7 +45,7 @@ def run_simulation():
     # 设置初始状态，考虑 Z 轴向下为正的坐标系 - 修改为 20km 高度
     initial_position = np.array([0.0, 0.0, -20000.0])  # Z=-20000 表示在地面上方 20km
     initial_attitude = np.array([0.0, 0.0, 0.0])  # 水平飞行，面向 X 轴正方向
-    initial_velocity = np.array([15.0, 0.0, 0.0])  # 初始水平速度，Z 速度为 0
+    initial_velocity = np.array([1.0, 0.0, 0.0])  # 初始水平速度，Z 速度为 0
     initial_angular_velocity = np.array([0.0, 0.0, 0.0])  # 初始无角速度
 
     X0 = np.concatenate([initial_position, initial_attitude, initial_velocity, initial_angular_velocity])
@@ -68,7 +68,7 @@ def run_simulation():
 
     # 仿真参数
     DT = 1  # 仿真步长 (s)
-    T_SPAN = 100  # 仿真总时间 (s)
+    T_SPAN = 500  # 仿真总时间 (s)
 
     for i in range(int(T_SPAN / DT)):
         current_time = i * DT
@@ -83,10 +83,10 @@ def run_simulation():
         # for the current state x0, mpc computes the optimal control action u0
         # print(f"Time: {current_time:.2f}s, Ramp factor: {ramp_factor:.2f}")
         timer.tic()
-        u0 = mpc.make_step(x0)
-        # 打印控制输入
+        u0 = mpc.make_step(x0)  # 这里计算出 [T, μ, v]
+        # 打印控制输入参数
         print(f"\n=== Time: {current_time:.1f}s ===")
-        print(f"Control input: [T={float(u0[0]):.2f}, μ={float(u0[1]):.2f}, ν={float(u0[2]):.2f}]")
+        print(f"Control input: [T={float(u0[0]):.2f}, mu={float(u0[1]):.2f}, nu={float(u0[2]):.2f}]")
         timer.toc()
 
         # for the current state u0, computes the next state y_next

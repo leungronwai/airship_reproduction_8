@@ -22,7 +22,7 @@ class Trajectory:
 
         # 水平直线轨迹参数 (Z 轴向下为正) - 修改为 20km 高度
         self.start_point = np.array([0.0, 0.0, -20000.0])    # 起点 [x, y, z] - 负 Z 表示在地面上方 20km
-        self.end_point = np.array([1.64393562e+03, 00.0, -20000.0])   # 终点 [x, y, z] - 保持相同高度
+        self.end_point = np.array([1.64393562e+03, 200.0, -20000.0])   # 终点 [x, y, z] - 保持相同高度
         self.speed = 15.0                                     # 飞行速度 [m/s]
 
     # ┌─────────────────────────────────────────────────────┐
@@ -154,7 +154,7 @@ class Trajectory:
     def get_straight_line_trajectory(self, t):
         """
         生成水平直线轨迹 (考虑 Z 轴向下为正)
-        
+
         Args:
             t: 当前时间
         Returns:

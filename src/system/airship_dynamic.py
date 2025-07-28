@@ -17,7 +17,6 @@ import numpy as np
 from src.system.rotation_matrices import R_zeta, R_gamma
 
 
-
 class AirshipCasADiSymbolic:
     """
     飞艇符号化模型类
@@ -59,12 +58,12 @@ class AirshipCasADiSymbolic:
 
         # 气动系数
 
-        self.C_l1 = 2.4e4/28.8
-        self.C_m1, self.C_m2, self.C_m3, self.C_m4 = 7.7e4/28.8, 7.7e4/28.8, 7.7e4/28.8, 7.7e4/28.8
-        self.C_n1, self.C_n2, self.C_n3, self.C_n4 = 7.7e4/28.8, 7.7e4/28.8, 7.7e4/28.8, 7.7e4/28.8
-        self.C_x1, self.C_x2 = 657.0/28.8, 657.0/28.8
-        self.C_y1, self.C_y2, self.C_y3, self.C_y4 = 657.0/28.8, 657.0/28.8, 657.0/28.8, 657.0/28.8
-        self.C_z1, self.C_z2, self.C_z3, self.C_z4 = 657.0/28.8, 657.0/28.8, 657.0/28.8, 657.0/28.8
+        self.C_l1 = 2.4e4 / 28.8
+        self.C_m1, self.C_m2, self.C_m3, self.C_m4 = 7.7e4 / 28.8, 7.7e4 / 28.8, 7.7e4 / 28.8, 7.7e4 / 28.8
+        self.C_n1, self.C_n2, self.C_n3, self.C_n4 = 7.7e4 / 28.8, 7.7e4 / 28.8, 7.7e4 / 28.8, 7.7e4 / 28.8
+        self.C_x1, self.C_x2 = 657.0 / 28.8, 657.0 / 28.8
+        self.C_y1, self.C_y2, self.C_y3, self.C_y4 = 657.0 / 28.8, 657.0 / 28.8, 657.0 / 28.8, 657.0 / 28.8
+        self.C_z1, self.C_z2, self.C_z3, self.C_z4 = 657.0 / 28.8, 657.0 / 28.8, 657.0 / 28.8, 657.0 / 28.8
 
     def rhs_symbolic(self, X, thrust_params, t=None, external_disturbance=None):
         """
@@ -158,12 +157,11 @@ class AirshipCasADiSymbolic:
 
         fa_BRF, ma_BRF = ca.vertcat(X_a, Y_a, Z_a), ca.vertcat(L_a, M_a, N_a)
 
-        # =======================推力和推力矩 thrust_vetering======================================
+        # =======================推力和推力矩 thrust_vetors_controller======================================
         # 将推力参数转换为力和力矩
-
         T_mag = thrust_params[0]
-        mu = thrust_params[1]  # 恢复使用参数而不是硬编码为 0
-        nu = thrust_params[2]  # 恢复使用参数而不是硬编码为 0
+        mu = thrust_params[1]
+        nu = thrust_params[2]
 
         # 计算右侧推力向量
         thrust_vector_r = ca.vertcat(
@@ -188,15 +186,14 @@ class AirshipCasADiSymbolic:
         tau_vec = tau_r + tau_l
 
         # 组合力和力矩
-        thrust_force_torque = ca.vertcat(T_total, tau_vec)
+        Thrust_Force_torque = ca.vertcat(T_total, tau_vec)
 
-
-        Thrust_Force = [340, 0, 0]  # Thrust_Force_torque[0:3]  # BRF 中的推力向量
-        Thrust_torque = [0, 0, 0]  # Thrust_Force_torque[3:6]
+        Thrust_Force =  Thrust_Force_torque[0:3]  # BRF 中的推力向量 [340, 0, 0]  #
+        Thrust_torque = Thrust_Force_torque[3:6]  # [0, 0, 0]
 
         # =======================合并力和力矩======================================
-        F_forces = (fg_BRF + fb_BRF)  + fa_BRF + Thrust_Force
-        F_torques = (mg_BRF + mb_BRF)  + ma_BRF + Thrust_torque
+        F_forces = (fg_BRF + fb_BRF) + fa_BRF + Thrust_Force
+        F_torques = (mg_BRF + mb_BRF) + ma_BRF + Thrust_torque
         F_term = ca.vertcat(F_forces, F_torques)
 
         # --- 如果提供了外部扰动，则添加 ---

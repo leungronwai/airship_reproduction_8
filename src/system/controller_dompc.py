@@ -205,28 +205,24 @@ class DoMpcConfig:
         # 缩放各类状态误差
         Q_scaled[0:3, 0:3] *= pos_weight  # 增强位置误差权重（x, y, z）
         Q_scaled[3:6, 3:6] *= att_weight
-        Q_scaled[6:9, 6:9] *= vel_weight
-        Q_scaled[9:12, 9:12] *= ang_weight
+        Q_scaled[6:9, 6:9] *= 0
+        Q_scaled[9:12, 9:12] *= 0
 
         Qf_scaled[0:3, 0:3] *= pos_weight * 2  # 终端位置更强调
         Qf_scaled[3:6, 3:6] *= att_weight * 2
-        Qf_scaled[6:9, 6:9] *= vel_weight * 2  # 减弱速度/角速度误差在代价函数中的影响
-        Qf_scaled[9:12, 9:12] *= ang_weight * 2
+        Qf_scaled[6:9, 6:9] *= 0  # 减弱速度/角速度误差在代价函数中的影响
+        Qf_scaled[9:12, 9:12] *= 0
 
         # Terminal cost - only includes state errors, not control inputs
         mterm = (self.model.aux['pos_error'].T @ Qf_scaled[0:3, 0:3] @ self.model.aux['pos_error'] +
-                 self.model.aux['att_error'].T @ Qf_scaled[3:6, 3:6] @ self.model.aux['att_error'] +
-                 self.model.aux['vel_error'].T @ Qf_scaled[6:9, 6:9] @ self.model.aux['vel_error'] +
-                 self.model.aux['ang_error'].T @ Qf_scaled[9:12, 9:12] @ self.model.aux['ang_error'])
+                 self.model.aux['att_error'].T @ Qf_scaled[3:6, 3:6] @ self.model.aux['att_error'])
 
         # Stage cost - includes state errors and control inputs
         lterm = (self.model.aux['pos_error'].T @ Q_scaled[0:3, 0:3] @ self.model.aux['pos_error'] +
                  self.model.aux['att_error'].T @ Q_scaled[3:6, 3:6] @ self.model.aux['att_error'] +
-                 self.model.aux['vel_error'].T @ Q_scaled[6:9, 6:9] @ self.model.aux['vel_error'] +
-                 self.model.aux['ang_error'].T @ Q_scaled[9:12, 9:12] @ self.model.aux['ang_error'] +
-                 200 * self.model.u['T'] ** 2 +
-                 50 * self.model.u['mu'] ** 2 +
-                 50 * self.model.u['nu'] ** 2)
+                 0.1 * self.model.u['T'] ** 2 +
+                 0.1 * self.model.u['mu'] ** 2 +
+                 0.1 * self.model.u['nu'] ** 2)
 
         # + self.model.u['T']**2 * R_scaled[0, 0] + self.model.u['mu']**2 * R_scaled[1, 1] + self.model.u['nu']**2 * R_scaled[2, 2]
 
@@ -234,12 +230,13 @@ class DoMpcConfig:
 
         # Setting the penalty weight for the control input # 增加控制输入变化率的惩罚
         # in the objective function this is the "smoothness constraint" of control
-        mpc.set_rterm(T=20, mu=20, nu=20)  # means: rterm = 1 * T^2 + 1 * mu^2 + 1 * nu^2
+        mpc.set_rterm(T=1e-2, mu=1e-2, nu=1e-2)  # # 控制输入变化平滑项 rterm = 1 * T^2 + 1 * mu^2 + 1 * nu^2
 
         # === Control input constraints ===
         # Thrust: avoid zero, ensure minimum lift
         mpc.bounds['lower', '_u', 'T'] = 5.0  # 最小推力
-        mpc.bounds['upper', '_u', 'T'] = 20.0  # 最大推力
+        mpc.bounds['upper', '_u', 'T'] = 4000.0  # 最大推力
+
 
         # Deflection angles: mu and nu (typically ±30°)
         mpc.bounds['lower', '_u', 'mu'] = -np.deg2rad(30)  # 水平偏转角最小值 (-30°)
