@@ -47,7 +47,7 @@ class AirshipCasADiSymbolic:
         # 距离向量
         self.xg = 0  # 重心
         self.yg = 0
-        self.zg = 0#4.66
+        self.zg = 2.66
         self.rg = np.array([self.xg, self.yg, self.zg])
         self.rb = np.array([0, 0, 0])  # 浮心
         self.rp_r = np.array([0 * self.airship_a1, self.airship_b, 3])  # 右侧推力点
@@ -157,18 +157,13 @@ class AirshipCasADiSymbolic:
             beta) * ca.sin(ca.fabs(beta)))
 
 
-        # X_a = -q_dyn * (22.85)
-        # Y_a = -q_dyn * (2.3)
-        # Z_a = -q_dyn * (2.3)
-        # L_a = 0
-        # M_a = 0
-        # N_a = 0
+
 
         fa_BRF, ma_BRF = ca.vertcat(X_a, Y_a, Z_a), ca.vertcat(L_a, M_a, N_a)
 
         # =======================推力和推力矩======================================
         # 将推力参数转换为力和力矩
-        Thrust_Force_torque = thrust_params_to_force_torque(Thrust_paras, self.rp_r, self.rp_l)
+        Thrust_Force_torque = thrust_params_to_force_torque('forward', Thrust_paras, self.rp_r, self.rp_l)
 
         Thrust_Force = [340, 0, 0]  # Thrust_Force_torque[0s:3]  # BRF 中的推力向量
         Thrust_torque = [0, 0, 0]  # Thrust_Force_torque[3:6]

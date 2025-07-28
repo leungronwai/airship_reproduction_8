@@ -8,24 +8,19 @@ NMPC Controller Implementation based on do-mpc
 # cspell: ignore cvodes mu_strategy hessian_approximation limited_memory_max_history alpha_for_y recalc_y max_wall_time print_time
 
 import warnings
-# third-party library
-import numpy as np
+
 import casadi as ca
 import do_mpc
+# third-party library
+import numpy as np
 from do_mpc.model import Model
-
 
 # local module
 from src.system.airship_dynamic import AirshipCasADiSymbolic
 from src.system.trajectory_ref import Trajectory
 
-from src.config import parameters as params
-
 warnings.filterwarnings("ignore", category=UserWarning, module="do_mpc.sysid")
 warnings.filterwarnings("ignore", category=UserWarning, module="do_mpc.opcua")
-
-
-
 
 
 class DoMpcConfig:
@@ -43,21 +38,21 @@ class DoMpcConfig:
         """
         # --- 控制器参数 ---
         self.DT = 1  # 仿真步长 (s)
-        self.N_HORIZON = 10  # 预测时域长度
-        
+        self.N_HORIZON = 18  # 预测时域长度
+
         # --- 权重矩阵 ---
-        self.Q = np.diag([10.0, 10.0, 10.0,    # 位置权重
-                         5.0, 5.0, 5.0,        # 姿态权重
-                         1.0, 1.0, 1.0,        # 线速度权重
-                         0.5, 0.5, 0.5])       # 角速度权重
-        
-        self.R = np.diag([5.0, 10.0, 10.0])    # 控制输入权重
-        
-        self.Qf = np.diag([20.0, 20.0, 20.0,   # 终端位置权重
-                          10.0, 10.0, 10.0,    # 终端姿态权重
-                          2.0, 2.0, 2.0,       # 终端线速度权重
-                          1.0, 1.0, 1.0])      # 终端角速度权重
-        
+        self.Q = np.diag([1, 1, 1,  # 位置权重
+                          1, 1, 1,  # 姿态权重
+                          0, 0, 0,  # 线速度权重
+                          0, 0, 0])  # 角速度权重
+
+        self.R = np.diag([0.1, 0.1, 0.1])  # 控制输入权重
+
+        self.Qf = np.diag([1, 1, 1,  # 终端位置权重
+                           1, 1, 1,  # 终端姿态权重
+                           0, 0, 0,  # 终端线速度权重
+                           0, 0, 0])  # 终端角速度权重
+
         # Create reference trajectory
         self.trajectory = Trajectory()
 
@@ -68,7 +63,7 @@ class DoMpcConfig:
 
         # Create MPC controller
         self.mpc = self.create_mpc_controller(self.model)
-        
+
     def disturbance_delta(self, t):
         """ Define external disturbance vector"""
         d = np.zeros(6)
@@ -79,15 +74,6 @@ class DoMpcConfig:
         # d[4] = 1.5 + 1.5 * np.sin(0.1 * t)
         # d[5] = 1.5 + 2 * np.cos(0.1 * t)
         return d
-
-
-
-
-
-
-
-
-
 
     def create_model(self, symvar_type='MX'):
         """
@@ -103,15 +89,15 @@ class DoMpcConfig:
         # model = do_mpc.model.Model(model_type, symvar_type)
 
         # Define state variables - 12-dimensional state vector
-        pos = model.set_variable(var_type='_x', var_name='pos', shape=(3, 1))      # Position [x, y, z]
-        att = model.set_variable(var_type='_x', var_name='att', shape=(3, 1))      # Attitude [phi, theta, psi]
-        vel = model.set_variable(var_type='_x', var_name='vel', shape=(3, 1))      # Linear velocity [u, v, w]
+        pos = model.set_variable(var_type='_x', var_name='pos', shape=(3, 1))  # Position [x, y, z]
+        att = model.set_variable(var_type='_x', var_name='att', shape=(3, 1))  # Attitude [phi, theta, psi]
+        vel = model.set_variable(var_type='_x', var_name='vel', shape=(3, 1))  # Linear velocity [u, v, w]
         omega = model.set_variable(var_type='_x', var_name='omega', shape=(3, 1))  # Angular velocity [p, q, r]
 
         # Define control inputs - 3-dimensional control vector
-        T = model.set_variable(var_type='_u', var_name='T')          # Thrust magnitude
-        mu = model.set_variable(var_type='_u', var_name='mu')        # Horizontal deflection angle
-        nu = model.set_variable(var_type='_u', var_name='nu')        # Vertical deflection angle
+        T = model.set_variable(var_type='_u', var_name='T')  # Thrust magnitude
+        mu = model.set_variable(var_type='_u', var_name='mu')  # Horizontal deflection angle
+        nu = model.set_variable(var_type='_u', var_name='nu')  # Vertical deflection angle
 
         # Define reference trajectory parameters
         pos_ref = model.set_variable(var_type='_tvp', var_name='pos_ref', shape=(3, 1))
@@ -122,7 +108,6 @@ class DoMpcConfig:
         # Define disturbance variables (for Simulator)
         disturbance = model.set_variable(var_type='_tvp', var_name='disturbance', shape=(6, 1))
 
-
         # Use existing symbolic dynamics model
         symbolic_model = AirshipCasADiSymbolic()
 
@@ -132,8 +117,6 @@ class DoMpcConfig:
 
         # Get dynamics equations (including disturbance)
         X_dot = symbolic_model.rhs_symbolic(X_state, Thrust_paras, external_disturbance=disturbance)
-
-
 
         # Decompose state derivatives
         pos_dot = X_dot[0:3]
@@ -204,20 +187,17 @@ class DoMpcConfig:
 
         mpc.set_param(**setup_mpc)
 
-
         # suppress solver output
         if silence_solver:
             mpc.settings.supress_ipopt_output()
 
-        mpc.set_param(nlpsol_opts={'ipopt.print_level': 0}) # print_level = 0 means no print
-
+        mpc.set_param(nlpsol_opts={'ipopt.print_level': 0})  # print_level = 0 means no print
 
         # 设置各分量的缩放因子
-        pos_weight = 10000
-        att_weight = 2
-        vel_weight = 200000
-        ang_weight = 1
-
+        pos_weight = 100
+        att_weight = 100
+        vel_weight = 0
+        ang_weight = 0
 
         Q_scaled = self.Q.copy()
         Qf_scaled = self.Qf.copy()
@@ -228,12 +208,10 @@ class DoMpcConfig:
         Q_scaled[6:9, 6:9] *= vel_weight
         Q_scaled[9:12, 9:12] *= ang_weight
 
-        Qf_scaled[0:3, 0:3] *= pos_weight * 2    # 终端位置更强调
+        Qf_scaled[0:3, 0:3] *= pos_weight * 2  # 终端位置更强调
         Qf_scaled[3:6, 3:6] *= att_weight * 2
-        Qf_scaled[6:9, 6:9] *= vel_weight * 2    # 减弱速度/角速度误差在代价函数中的影响
-        Qf_scaled[9:12, 9:12] *= ang_weight * 0.2
-
-
+        Qf_scaled[6:9, 6:9] *= vel_weight * 2  # 减弱速度/角速度误差在代价函数中的影响
+        Qf_scaled[9:12, 9:12] *= ang_weight * 2
 
         # Terminal cost - only includes state errors, not control inputs
         mterm = (self.model.aux['pos_error'].T @ Qf_scaled[0:3, 0:3] @ self.model.aux['pos_error'] +
@@ -256,9 +234,7 @@ class DoMpcConfig:
 
         # Setting the penalty weight for the control input # 增加控制输入变化率的惩罚
         # in the objective function this is the "smoothness constraint" of control
-        mpc.set_rterm(T=20, mu=20, nu=20) # means: rterm = 1 * T^2 + 1 * mu^2 + 1 * nu^2
-
-
+        mpc.set_rterm(T=20, mu=20, nu=20)  # means: rterm = 1 * T^2 + 1 * mu^2 + 1 * nu^2
 
         # === Control input constraints ===
         # Thrust: avoid zero, ensure minimum lift
@@ -267,43 +243,42 @@ class DoMpcConfig:
 
         # Deflection angles: mu and nu (typically ±30°)
         mpc.bounds['lower', '_u', 'mu'] = -np.deg2rad(30)  # 水平偏转角最小值 (-30°)
-        mpc.bounds['upper', '_u', 'mu'] = np.deg2rad(30)   # 水平偏转角最大值 (+30°)
+        mpc.bounds['upper', '_u', 'mu'] = np.deg2rad(30)  # 水平偏转角最大值 (+30°)
         mpc.bounds['lower', '_u', 'nu'] = -np.deg2rad(30)  # 垂直偏转角最小值 (-30°)
-        mpc.bounds['upper', '_u', 'nu'] = np.deg2rad(30)   # 垂直偏转角最大值 (+30°)
+        mpc.bounds['upper', '_u', 'nu'] = np.deg2rad(30)  # 垂直偏转角最大值 (+30°)
 
         # === State constraints ===
         # Position constraints - 调整 Y 坐标约束以包含 0-500m 范围
-        mpc.bounds['lower', '_x', 'pos', 0] = -5000.0    # x 位置最小值
-        mpc.bounds['upper', '_x', 'pos', 0] = 5000.0     # x 位置最大值
-        mpc.bounds['lower', '_x', 'pos', 1] = -100.0     # y 位置最小值（允许稍微偏离）
-        mpc.bounds['upper', '_x', 'pos', 1] = 600.0      # y 位置最大值（允许稍微超出 500m）
-        mpc.bounds['lower', '_x', 'pos', 2] = -25000.0   # z 位置最小值 (允许高达 25km)
-        mpc.bounds['upper', '_x', 'pos', 2] = 1000.0     # z 位置最大值 (地面以下 1km)
+        mpc.bounds['lower', '_x', 'pos', 0] = -5000.0  # x 位置最小值
+        mpc.bounds['upper', '_x', 'pos', 0] = 5000.0  # x 位置最大值
+        mpc.bounds['lower', '_x', 'pos', 1] = -100.0  # y 位置最小值（允许稍微偏离）
+        mpc.bounds['upper', '_x', 'pos', 1] = 600.0  # y 位置最大值（允许稍微超出 500m）
+        mpc.bounds['lower', '_x', 'pos', 2] = -25000.0  # z 位置最小值 (允许高达 25km)
+        mpc.bounds['upper', '_x', 'pos', 2] = 1000.0  # z 位置最大值 (地面以下 1km)
 
         # Attitude constraints (Euler angles: [roll, pitch, yaw])
         mpc.bounds['lower', '_x', 'att', 0] = -np.deg2rad(25)  # Roll 最小值 (-25°)
-        mpc.bounds['upper', '_x', 'att', 0] = np.deg2rad(25)   # Roll 最大值 (+25°)
+        mpc.bounds['upper', '_x', 'att', 0] = np.deg2rad(25)  # Roll 最大值 (+25°)
         mpc.bounds['lower', '_x', 'att', 1] = -np.deg2rad(25)  # Pitch 最小值 (-25°)
-        mpc.bounds['upper', '_x', 'att', 1] = np.deg2rad(25)   # Pitch 最大值 (+25°)
-        mpc.bounds['lower', '_x', 'att', 2] = -np.pi           # Yaw 最小值 (-180°)
-        mpc.bounds['upper', '_x', 'att', 2] = np.pi            # Yaw 最大值 (+180°)
+        mpc.bounds['upper', '_x', 'att', 1] = np.deg2rad(25)  # Pitch 最大值 (+25°)
+        mpc.bounds['lower', '_x', 'att', 2] = -np.pi  # Yaw 最小值 (-180°)
+        mpc.bounds['upper', '_x', 'att', 2] = np.pi  # Yaw 最大值 (+180°)
 
         # Linear velocity constraints
         mpc.bounds['lower', '_x', 'vel', 0] = -20.0  # u (X 方向速度最小值)
-        mpc.bounds['upper', '_x', 'vel', 0] = 20.0   # u (X 方向速度最大值)
+        mpc.bounds['upper', '_x', 'vel', 0] = 20.0  # u (X 方向速度最大值)
         mpc.bounds['lower', '_x', 'vel', 1] = -20.0  # v (Y 方向速度最小值)
-        mpc.bounds['upper', '_x', 'vel', 1] = 20.0   # v (Y 方向速度最大值)
-        mpc.bounds['lower', '_x', 'vel', 2] = -3.0   # w (Z 方向速度最小值)
-        mpc.bounds['upper', '_x', 'vel', 2] = 3.0    # w (Z 方向速度最大值)
+        mpc.bounds['upper', '_x', 'vel', 1] = 20.0  # v (Y 方向速度最大值)
+        mpc.bounds['lower', '_x', 'vel', 2] = -3.0  # w (Z 方向速度最小值)
+        mpc.bounds['upper', '_x', 'vel', 2] = 3.0  # w (Z 方向速度最大值)
 
         # Angular velocity constraints
         mpc.bounds['lower', '_x', 'omega', 0] = -np.deg2rad(10)  # p (Roll rate 最小值 -10°/s)
-        mpc.bounds['upper', '_x', 'omega', 0] = np.deg2rad(10)   # p (Roll rate 最大值 +10°/s)
+        mpc.bounds['upper', '_x', 'omega', 0] = np.deg2rad(10)  # p (Roll rate 最大值 +10°/s)
         mpc.bounds['lower', '_x', 'omega', 1] = -np.deg2rad(10)  # q (Pitch rate 最小值 -10°/s)
-        mpc.bounds['upper', '_x', 'omega', 1] = np.deg2rad(10)   # q (Pitch rate 最大值 +10°/s)
-        mpc.bounds['lower', '_x', 'omega', 2] = -np.deg2rad(8)   # r (Yaw rate 最小值 -8°/s)
-        mpc.bounds['upper', '_x', 'omega', 2] = np.deg2rad(8)    # r (Yaw rate 最大值 +8°/s)
-
+        mpc.bounds['upper', '_x', 'omega', 1] = np.deg2rad(10)  # q (Pitch rate 最大值 +10°/s)
+        mpc.bounds['lower', '_x', 'omega', 2] = -np.deg2rad(8)  # r (Yaw rate 最小值 -8°/s)
+        mpc.bounds['upper', '_x', 'omega', 2] = np.deg2rad(8)  # r (Yaw rate 最大值 +8°/s)
 
         # # 状态变量缩放
         # mpc.scaling['_x', 'pos', 0] = 1000.0  # x 位置缩放：1km -> 1
@@ -327,12 +302,6 @@ class DoMpcConfig:
         # mpc.scaling['_u', 'mu'] = 1.0         # 水平偏转角缩放：保持原始值
         # mpc.scaling['_u', 'nu'] = 1.0         # 垂直偏转角缩放：保持原始值
 
-
-
-
-
-
-
         # # === Assign TVP (Time-Varying Parameters) ===
         tvp_template = mpc.get_tvp_template()
 
@@ -351,17 +320,12 @@ class DoMpcConfig:
 
             return tvp_current
 
-
         mpc.set_tvp_fun(tvp_fun)
 
         # Complete MPC setup
         mpc.setup()
 
-
-
         return mpc
-
-
 
     def create_simulator(self, model):
         """
