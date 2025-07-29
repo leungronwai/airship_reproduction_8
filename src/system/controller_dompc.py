@@ -235,7 +235,7 @@ class DoMpcConfig:
         # === Control input constraints ===
         # Thrust: avoid zero, ensure minimum lift
         mpc.bounds['lower', '_u', 'T'] = 5.0  # 最小推力
-        mpc.bounds['upper', '_u', 'T'] = 4000.0  # 最大推力
+        mpc.bounds['upper', '_u', 'T'] = 1000.0  # 最大推力
 
 
         # Deflection angles: mu and nu (typically ±30°)

@@ -68,7 +68,7 @@ def run_simulation():
 
     # 仿真参数
     DT = 1  # 仿真步长 (s)
-    T_SPAN = 500  # 仿真总时间 (s)
+    T_SPAN = 200  # 仿真总时间 (s)
 
     for i in range(int(T_SPAN / DT)):
         current_time = i * DT
