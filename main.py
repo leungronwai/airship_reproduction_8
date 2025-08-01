@@ -104,16 +104,10 @@ def run_simulation():
         # 打印参考速度和实际速度
         print(f"\n=== Time: {current_time:.1f}s ===")
         print(f"Reference velocity: [{ref_vel_x:.2f}, {ref_vel_y:.2f}, {ref_vel_z:.2f}] m/s")
-        print(f"Reference |v|: {ref_vel_magnitude:.2f} m/s")
         print(f"Actual velocity: [{vel_x:.2f}, {vel_y:.2f}, {vel_z:.2f}] m/s")
-        print(f"Actual |v|: {vel_magnitude:.2f} m/s")
 
-        # # 强制限制实际速度
-        # MAX_VEL = 20.0
-        # if vel_magnitude > MAX_VEL:
-        #     print(f"强制限制速度：{vel_magnitude:.2f} → {vel_magnitude} m/s")
-        #     scale_factor = MAX_VEL / vel_magnitude
-        #     x0[6:9] = x0[6:9] * scale_factor  # 直接赋值而不是 *=
+
+
 
         # store the optimal control and state
         optimal_control.append(u0)
