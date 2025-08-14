@@ -38,20 +38,9 @@ class DoMpcConfig:
         """
         # --- 控制器参数 ---
         self.DT = 1  # 仿真步长 (s)
-        self.N_HORIZON = 18  # 预测时域长度
 
-        # --- 权重矩阵 ---
-        self.Q = np.diag([1, 1, 1,  # 位置权重
-                          1, 1, 1,  # 姿态权重
-                          0, 0, 0,  # 线速度权重
-                          0, 0, 0])  # 角速度权重
 
-        self.R = np.diag([0.1, 0.1, 0.1])  # 控制输入权重
 
-        self.Qf = np.diag([1, 1, 1,  # 终端位置权重
-                           1, 1, 1,  # 终端姿态权重
-                           0, 0, 0,  # 终端线速度权重
-                           0, 0, 0])  # 终端角速度权重
 
         # Create reference trajectory
         self.trajectory = Trajectory()
@@ -113,10 +102,10 @@ class DoMpcConfig:
 
         # Combine state vector
         X_state = ca.vertcat(pos, att, vel, omega)
-        Thrust_paras = ca.vertcat(T, mu, nu)
+        thrust_params = ca.vertcat(T, mu, nu)
 
         # Get dynamics equations (including disturbance)
-        X_dot = symbolic_model.rhs_symbolic(X_state, Thrust_paras, external_disturbance=disturbance)
+        X_dot = symbolic_model.rhs_symbolic(X_state, thrust_params, external_disturbance=disturbance)
 
         # Decompose state derivatives
         pos_dot = X_dot[0:3]
@@ -168,7 +157,7 @@ class DoMpcConfig:
 
         # MPC setup
         setup_mpc = {
-            'n_horizon': 10,
+            'n_horizon': 20,
             'n_robust': 1,
             't_step': self.DT,
             'store_full_solution': True,
@@ -193,36 +182,22 @@ class DoMpcConfig:
 
         mpc.set_param(nlpsol_opts={'ipopt.print_level': 0})  # print_level = 0 means no print
 
-        # 设置各分量的缩放因子
-        pos_weight = 100
-        att_weight = 100
-        vel_weight = 0
-        ang_weight = 0
+        # 修正权重设置 - 同时跟踪位置和姿态
+        Q_pos = np.diag([10000, 10000, 1000])  # X,Y 权重很高，Z 稍低
+        Q_att = np.diag([1000, 1000, 5000])   # 添加姿态权重，特别强调偏航角
+        Qf_pos = np.diag([20000, 20000, 2000])  # 终端位置权重更高
+        Qf_att = np.diag([2000, 2000, 10000])   # 终端姿态权重，偏航角最重要
 
-        Q_scaled = self.Q.copy()
-        Qf_scaled = self.Qf.copy()
+        # Terminal cost - 包含位置和姿态误差
+        mterm = (self.model.aux['pos_error'].T @ Qf_pos @ self.model.aux['pos_error'] +
+                self.model.aux['att_error'].T @ Qf_att @ self.model.aux['att_error'])
 
-        # 缩放各类状态误差
-        Q_scaled[0:3, 0:3] *= pos_weight  # 增强位置误差权重（x, y, z）
-        Q_scaled[3:6, 3:6] *= att_weight
-        Q_scaled[6:9, 6:9] *= 0
-        Q_scaled[9:12, 9:12] *= 0
-
-        Qf_scaled[0:3, 0:3] *= pos_weight * 2  # 终端位置更强调
-        Qf_scaled[3:6, 3:6] *= att_weight * 2
-        Qf_scaled[6:9, 6:9] *= 0  # 减弱速度/角速度误差在代价函数中的影响
-        Qf_scaled[9:12, 9:12] *= 0
-
-        # Terminal cost - only includes state errors, not control inputs
-        mterm = (self.model.aux['pos_error'].T @ Qf_scaled[0:3, 0:3] @ self.model.aux['pos_error'] +
-                 self.model.aux['att_error'].T @ Qf_scaled[3:6, 3:6] @ self.model.aux['att_error'])
-
-        # Stage cost - includes state errors and control inputs
-        lterm = (self.model.aux['pos_error'].T @ Q_scaled[0:3, 0:3] @ self.model.aux['pos_error'] +
-                 self.model.aux['att_error'].T @ Q_scaled[3:6, 3:6] @ self.model.aux['att_error'] +
-                 0.1 * self.model.u['T'] ** 2 +
-                 0.1 * self.model.u['mu'] ** 2 +
-                 0.1 * self.model.u['nu'] ** 2)
+        # Stage cost - 包含位置、姿态误差和控制输入
+        lterm = (self.model.aux['pos_error'].T @ Q_pos @ self.model.aux['pos_error'] +
+                self.model.aux['att_error'].T @ Q_att @ self.model.aux['att_error'] +
+                1e-12 * self.model.u['T'] ** 2 +
+                1e-8 * self.model.u['mu'] ** 2 +
+                1e-8 * self.model.u['nu'] ** 2)
 
         # + self.model.u['T']**2 * R_scaled[0, 0] + self.model.u['mu']**2 * R_scaled[1, 1] + self.model.u['nu']**2 * R_scaled[2, 2]
 
@@ -230,34 +205,33 @@ class DoMpcConfig:
 
         # Setting the penalty weight for the control input # 增加控制输入变化率的惩罚
         # in the objective function this is the "smoothness constraint" of control
-        mpc.set_rterm(T=1e-2, mu=1e-2, nu=1e-2)  # # 控制输入变化平滑项 rterm = 1 * T^2 + 1 * mu^2 + 1 * nu^2
+        mpc.set_rterm(T=1e-10, mu=1e-6, nu=1e-6)  # # 控制输入变化平滑项 rterm = 1 * T^2 + 1 * mu^2 + 1 * nu^2
 
         # === Control input constraints ===
         # Thrust: avoid zero, ensure minimum lift
-        mpc.bounds['lower', '_u', 'T'] = 5.0  # 最小推力
-        mpc.bounds['upper', '_u', 'T'] = 1000.0  # 最大推力
-
+        mpc.bounds['lower', '_u', 'T'] = 1000.0  # 最小推力
+        mpc.bounds['upper', '_u', 'T'] = 100000.0  # 最大推力
 
         # Deflection angles: mu and nu (typically ±30°)
-        mpc.bounds['lower', '_u', 'mu'] = -np.deg2rad(30)  # 水平偏转角最小值 (-30°)
-        mpc.bounds['upper', '_u', 'mu'] = np.deg2rad(30)  # 水平偏转角最大值 (+30°)
-        mpc.bounds['lower', '_u', 'nu'] = -np.deg2rad(30)  # 垂直偏转角最小值 (-30°)
-        mpc.bounds['upper', '_u', 'nu'] = np.deg2rad(30)  # 垂直偏转角最大值 (+30°)
+        mpc.bounds['lower', '_u', 'mu'] = -np.deg2rad(45)  # 水平偏转角最小值 (-30°)
+        mpc.bounds['upper', '_u', 'mu'] = np.deg2rad(45)  # 水平偏转角最大值 (+30°)
+        mpc.bounds['lower', '_u', 'nu'] = -np.deg2rad(45)  # 垂直偏转角最小值 (-30°)
+        mpc.bounds['upper', '_u', 'nu'] = np.deg2rad(45)  # 垂直偏转角最大值 (+30°)
 
         # === State constraints ===
         # Position constraints - 调整 Y 坐标约束以包含 0-500m 范围
-        mpc.bounds['lower', '_x', 'pos', 0] = -5000.0  # x 位置最小值
+        mpc.bounds['lower', '_x', 'pos', 0] = -6000.0  # x 位置最小值
         mpc.bounds['upper', '_x', 'pos', 0] = 5000.0  # x 位置最大值
-        mpc.bounds['lower', '_x', 'pos', 1] = -100.0  # y 位置最小值（允许稍微偏离）
-        mpc.bounds['upper', '_x', 'pos', 1] = 600.0  # y 位置最大值（允许稍微超出 500m）
+        mpc.bounds['lower', '_x', 'pos', 1] = -4000.0  # y 位置最小值（允许稍微偏离）
+        mpc.bounds['upper', '_x', 'pos', 1] = 4000.0  # y 位置最大值（允许稍微超出 500m）
         mpc.bounds['lower', '_x', 'pos', 2] = -25000.0  # z 位置最小值 (允许高达 25km)
-        mpc.bounds['upper', '_x', 'pos', 2] = 1000.0  # z 位置最大值 (地面以下 1km)
+        mpc.bounds['upper', '_x', 'pos', 2] = 2000.0  # z 位置最大值 (地面以下 1km)
 
         # Attitude constraints (Euler angles: [roll, pitch, yaw])
-        mpc.bounds['lower', '_x', 'att', 0] = -np.deg2rad(25)  # Roll 最小值 (-25°)
-        mpc.bounds['upper', '_x', 'att', 0] = np.deg2rad(25)  # Roll 最大值 (+25°)
-        mpc.bounds['lower', '_x', 'att', 1] = -np.deg2rad(25)  # Pitch 最小值 (-25°)
-        mpc.bounds['upper', '_x', 'att', 1] = np.deg2rad(25)  # Pitch 最大值 (+25°)
+        mpc.bounds['lower', '_x', 'att', 0] = -np.deg2rad(45)  # Roll 最小值 (-25°)
+        mpc.bounds['upper', '_x', 'att', 0] = np.deg2rad(45)  # Roll 最大值 (+25°)
+        mpc.bounds['lower', '_x', 'att', 1] = -np.deg2rad(45)  # Pitch 最小值 (-25°)
+        mpc.bounds['upper', '_x', 'att', 1] = np.deg2rad(45)  # Pitch 最大值 (+25°)
         mpc.bounds['lower', '_x', 'att', 2] = -np.pi  # Yaw 最小值 (-180°)
         mpc.bounds['upper', '_x', 'att', 2] = np.pi  # Yaw 最大值 (+180°)
 
@@ -277,35 +251,15 @@ class DoMpcConfig:
         mpc.bounds['lower', '_x', 'omega', 2] = -np.deg2rad(8)  # r (Yaw rate 最小值 -8°/s)
         mpc.bounds['upper', '_x', 'omega', 2] = np.deg2rad(8)  # r (Yaw rate 最大值 +8°/s)
 
-        # # 状态变量缩放
-        # mpc.scaling['_x', 'pos', 0] = 1000.0  # x 位置缩放：1km -> 1
-        # mpc.scaling['_x', 'pos', 1] = 1000.0  # y 位置缩放：1km -> 1
-        # mpc.scaling['_x', 'pos', 2] = 1000.0  # z 位置缩放：1km -> 1
-        #
-        # mpc.scaling['_x', 'att', 0] = 1.0     # roll 缩放：保持原始值
-        # mpc.scaling['_x', 'att', 1] = 1.0     # pitch 缩放：保持原始值
-        # mpc.scaling['_x', 'att', 2] = 1.0     # yaw 缩放：保持原始值
-        #
-        # mpc.scaling['_x', 'vel', 0] = 10.0    # x 速度缩放：10m/s -> 1
-        # mpc.scaling['_x', 'vel', 1] = 10.0    # y 速度缩放：10m/s -> 1
-        # mpc.scaling['_x', 'vel', 2] = 5.0     # z 速度缩放：5m/s -> 1
-        #
-        # mpc.scaling['_x', 'omega', 0] = 0.1   # roll rate 缩放：0.1rad/s -> 1
-        # mpc.scaling['_x', 'omega', 1] = 0.1   # pitch rate 缩放：0.1rad/s -> 1
-        # mpc.scaling['_x', 'omega', 2] = 0.1   # yaw rate 缩放：0.1rad/s -> 1
-        #
-        # # 控制输入缩放
-        # mpc.scaling['_u', 'T'] = 10.0         # 推力缩放：10N -> 1
-        # mpc.scaling['_u', 'mu'] = 1.0         # 水平偏转角缩放：保持原始值
-        # mpc.scaling['_u', 'nu'] = 1.0         # 垂直偏转角缩放：保持原始值
+
 
         # # === Assign TVP (Time-Varying Parameters) ===
         tvp_template = mpc.get_tvp_template()
 
         def tvp_fun(t_now):
             """Update reference trajectory parameters."""
-            # 使用直线轨迹替代螺旋轨迹
-            yc, yc_dot, _, _, _ = self.trajectory.get_straight_line_trajectory(t_now)
+            # 使用水平圆形轨迹
+            yc, yc_dot, _, _, _ = self.trajectory.get_circular_trajectory(t_now)
 
             tvp_current = tvp_template()
 
@@ -342,8 +296,6 @@ class DoMpcConfig:
             'integration_tool': 'cvodes',
             'abstol': 1e-8,
             'reltol': 1e-6,
-            'max_step_size': self.DT / 5,
-            'min_step_size': self.DT / 500,
         }
         simulator.set_param(**simulator_params)
 
@@ -353,8 +305,8 @@ class DoMpcConfig:
 
         def tvp_fun(t_now):
             """Update disturbance parameters for current simulation time"""
-            # 使用直线轨迹
-            yc, yc_dot, _, _, _ = self.trajectory.get_straight_line_trajectory(t_now)
+            # 使用水平圆形轨迹
+            yc, yc_dot, _, _, _ = self.trajectory.get_circular_trajectory(t_now)
 
             tvp_template['pos_ref'] = yc[0:3].reshape(-1, 1).astype(float)
             tvp_template['att_ref'] = yc[3:6].reshape(-1, 1).astype(float)
