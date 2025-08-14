@@ -22,7 +22,7 @@ class AirshipCasADiSymbolic:
     飞艇符号化模型类
     """
 
-    def __init__(self, input_params=None):
+    def __init__(self):
         # 物理参数
 
         self.m = 2934  # 质量 [kg]

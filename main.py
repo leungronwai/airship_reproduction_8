@@ -40,12 +40,12 @@ def run_simulation():
     # setting up an estimator, given the model
     estimator = do_mpc.estimator.StateFeedback(model)
 
-    # Set the initial state of mpc and simulator
-    # 初始化状态设置
-    # 设置初始状态，考虑 Z 轴向下为正的坐标系 - 修改为 20km 高度
-    initial_position = np.array([0.0, 0.0, -20000.0])  # Z=-20000 表示在地面上方 20km
-    initial_attitude = np.array([0.0, 0.0, 0.0])  # 水平飞行，面向 X 轴正方向
-    initial_velocity = np.array([1.0, 0.0, 0.0])  # 初始水平速度，Z 速度为 0
+
+    # 初始化 mpc and simulator 状态设置
+    # 设置初始状态，起始点在原点
+    initial_position = np.array([0.0, 0.0, -20000.0])  # 起始点在原点
+    initial_attitude = np.array([0.0, 0.0, np.pi/12])  # 偏航角 90 度，面向 Y 轴
+    initial_velocity = np.array([0.0, 16.0, 0.0])  # 初始切向速度（向上，与圆形轨迹相切）
     initial_angular_velocity = np.array([0.0, 0.0, 0.0])  # 初始无角速度
 
     X0 = np.concatenate([initial_position, initial_attitude, initial_velocity, initial_angular_velocity])
@@ -68,13 +68,13 @@ def run_simulation():
 
     # 仿真参数
     DT = 1  # 仿真步长 (s)
-    T_SPAN = 200  # 仿真总时间 (s)
+    T_SPAN = 120  # 仿真总时间 (s)
 
     for i in range(int(T_SPAN / DT)):
         current_time = i * DT
 
         # 获取当前参考轨迹信息
-        yc_ref, yc_dot_ref, _, _, _ = airship_mpc.trajectory.get_straight_line_trajectory(current_time)
+        yc_ref, yc_dot_ref = airship_mpc.trajectory.get_circular_trajectory(current_time)
         ref_vel_x, ref_vel_y, ref_vel_z = yc_dot_ref[0:3]  # 提取参考速度分量
         ref_vel_magnitude = np.linalg.norm(yc_dot_ref[0:3])  # 计算参考速度大小
 
@@ -95,7 +95,7 @@ def run_simulation():
         # for the current state y_next, estimates the next state x0
         x0 = estimator.make_step(y_next)
 
-        # 修复 NumPy 弃用警告
+
         vel_x = float(x0[6].item())  # 使用 .item() 方法
         vel_y = float(x0[7].item())
         vel_z = float(x0[8].item())
@@ -105,9 +105,6 @@ def run_simulation():
         print(f"\n=== Time: {current_time:.1f}s ===")
         print(f"Reference velocity: [{ref_vel_x:.2f}, {ref_vel_y:.2f}, {ref_vel_z:.2f}] m/s")
         print(f"Actual velocity: [{vel_x:.2f}, {vel_y:.2f}, {vel_z:.2f}] m/s")
-
-
-
 
         # store the optimal control and state
         optimal_control.append(u0)
@@ -125,38 +122,66 @@ def run_simulation():
     print(f"Reference Trajectory End: {reference_trajectory[-1]} (meters)")
     print(f"Actual Trajectory End: {optimal_states[-1, :3]} (meters)")
 
-    # 绘制轨迹时将 Z 坐标转换为 km（将 Z 值乘以 -1 并除以 1000）
-    ax.plot3D(reference_trajectory[:, 0], reference_trajectory[:, 1], -reference_trajectory[:, 2] / 1000,
+    # 添加详细的起始点验证
+    print(f"\n=== 起始点详细信息 ===")
+    print(
+        f"参考轨迹第一个点 (图中绿色点): x={reference_trajectory[0, 0]:.6f}, y={reference_trajectory[0, 1]:.6f}, z={reference_trajectory[0, 2]:.6f}")
+    print(
+        f"实际轨迹第一个点：x={optimal_states[0, 0].item():.6f}, y={optimal_states[0, 1].item():.6f}, z={optimal_states[0, 2].item():.6f}")
+
+    # 验证 t=0 时的轨迹
+    yc_t0, _, _, _, _ = airship_mpc.trajectory.get_circular_trajectory(0.0)
+    print(f"直接调用 get_circular_trajectory(0.0): x={yc_t0[0]:.6f}, y={yc_t0[1]:.6f}, z={yc_t0[2]:.6f}")
+
+    # 验证初始状态设置
+    print(
+        f"main.py 中设置的初始位置：x={initial_position[0]:.6f}, y={initial_position[1]:.6f}, z={initial_position[2]:.6f}")
+    print(f"仿真循环第一次调用时间：current_time = {0 * DT:.6f}")
+
+    # 验证第一个仿真步骤
+    first_time = 0 * DT
+    yc_first, _, _, _, _ = airship_mpc.trajectory.get_circular_trajectory(first_time)
+    print(f"仿真第一步 t={first_time}: x={yc_first[0]:.6f}, y={yc_first[1]:.6f}, z={yc_first[2]:.6f}")
+
+    # 绘制轨迹 - 将 Z 坐标转换为正值显示（轨迹显示在 20km 高度）
+    ax.plot3D(reference_trajectory[:, 0], reference_trajectory[:, 1], (reference_trajectory[:, 2] + 40000) / 1000,
               label='Reference Trajectory', color='blue')
-    ax.plot3D(optimal_states[:, 0], optimal_states[:, 1], -optimal_states[:, 2] / 1000,
+    ax.plot3D(optimal_states[:, 0], optimal_states[:, 1], (optimal_states[:, 2] + 40000) / 1000,
               label='Actual Trajectory', color='orange')
 
-    # 起点和终点也需要将 Z 坐标转换为 km
-    ax.scatter(reference_trajectory[0, 0], reference_trajectory[0, 1], -reference_trajectory[0, 2] / 1000,
+    # 起点和终点 - 圆形轨迹（Z 坐标显示在 20km 高度）
+    ax.scatter(reference_trajectory[0, 0], reference_trajectory[0, 1], (reference_trajectory[0, 2] + 40000) / 1000,
                color="green", s=100, label="Start")
-    ax.text(reference_trajectory[0, 0], reference_trajectory[0, 1], -reference_trajectory[0, 2] / 1000 - 0.15,
+    ax.text(reference_trajectory[0, 0], reference_trajectory[0, 1], (reference_trajectory[0, 2] + 40000) / 1000 + 0.5,
             "Start Point", color="green", fontsize=12, weight='bold')
-    ax.scatter(reference_trajectory[-1, 0], reference_trajectory[-1, 1], -reference_trajectory[-1, 2] / 1000,
+    ax.scatter(reference_trajectory[-1, 0], reference_trajectory[-1, 1], (reference_trajectory[-1, 2] + 40000) / 1000,
                color="red", s=100, label="End")
-    ax.text(reference_trajectory[-1, 0], reference_trajectory[-1, 1], -reference_trajectory[-1, 2] / 1000 - 0.15,
+    ax.text(reference_trajectory[-1, 0], reference_trajectory[-1, 1],
+            (reference_trajectory[-1, 2] + 40000) / 1000 + 0.5,
             "Target Point", color="red", fontsize=12, weight='bold')
 
-    # 修改 Z 轴标签以反映实际含义，并设置刻度单位为 km
+    # Adjust axis labels and range
     ax.set_xlabel('X Pos (m)')
     ax.set_ylabel('Y Pos (m)')
     ax.set_zlabel('Altitude (km)')
-    ax.set_title('3D Trajectory Comparison')
-    ax.legend()
+    ax.set_title('3D Circular Trajectory Comparison')
 
-    # 设置 Y 轴范围和刻度
-    ax.set_ylim(0, 500)  # Y 轴范围：0 到 500m
-    y_ticks = np.arange(0, 501, 50)  # Y 轴刻度：0, 50, 100, 150, ..., 500
+    # Adjust X and Y axis range to accommodate the new circular trajectory
+    ax.set_xlim(-5000, 2000)  # 调整 X 轴范围以适应新的圆形轨迹
+    ax.set_ylim(-3000, 3000)  # Y 轴范围
+
+    # Set X axis ticks
+    x_ticks = np.arange(-5000, 2001, 1000)  # 与 X 轴范围匹配
+    ax.set_xticks(x_ticks)
+
+    # Set Y axis ticks
+    y_ticks = np.arange(-3000, 3001, 1000)  # 与 Y 轴范围匹配
     ax.set_yticks(y_ticks)
 
-    # 设置 Z 轴刻度：从 0 开始，每 2km 一个刻度，最大 28km
-    z_ticks = np.arange(0, 30, 2)  # 从 0 到 28，每 2 为一个刻度 (0, 2, 4, ..., 28)
+    # Adjust Z axis range to show positive altitude from 0 to 30km
+    z_ticks = np.arange(0, 34, 2)  # From 0km to 30km, every 2km
     ax.set_zticks(z_ticks)
-    ax.set_zlim(0, 28)  # 设置 Z 轴范围为 0 到 28km
+    ax.set_zlim(0, 34)  # Set Z axis range from 0 to 34km
 
     # 设置所有轴的格式器，强制显示原始值而不是科学计数法
     formatter = ScalarFormatter(useOffset=False, useMathText=False)
@@ -241,7 +266,7 @@ def run_simulation():
     plt.plot(optimal_states[:, 0], optimal_states[:, 1], label='XY Trajectory')
     plt.xlabel('X Position (m)')
     plt.ylabel('Y Position (m)')
-    plt.title('2D Trajectory (XY Plane)')
+    plt.title('2D Actual Trajectory (XY Plane)')
     plt.grid(True)
     plt.axis('equal')
     plt.show()
