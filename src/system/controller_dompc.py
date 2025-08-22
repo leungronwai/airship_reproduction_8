@@ -259,7 +259,7 @@ class DoMpcConfig:
         def tvp_fun(t_now):
             """Update reference trajectory parameters."""
             # 使用水平圆形轨迹
-            yc, yc_dot, _, _, _ = self.trajectory.get_circular_trajectory(t_now)
+            yc, yc_dot = self.trajectory.get_helix_trajectory(t_now)
 
             tvp_current = tvp_template()
 
@@ -306,7 +306,7 @@ class DoMpcConfig:
         def tvp_fun(t_now):
             """Update disturbance parameters for current simulation time"""
             # 使用水平圆形轨迹
-            yc, yc_dot, _, _, _ = self.trajectory.get_circular_trajectory(t_now)
+            yc, yc_dot  = self.trajectory.get_helix_trajectory(t_now)
 
             tvp_template['pos_ref'] = yc[0:3].reshape(-1, 1).astype(float)
             tvp_template['att_ref'] = yc[3:6].reshape(-1, 1).astype(float)

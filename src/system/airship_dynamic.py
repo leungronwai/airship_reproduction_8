@@ -10,11 +10,7 @@
 
 
 import casadi as ca
-# === 第三方库 ===
 import numpy as np
-
-# === 本地模块 ===
-from src.system.rotation_matrices import R_zeta, R_gamma
 
 
 class AirshipCasADiSymbolic:
@@ -57,13 +53,55 @@ class AirshipCasADiSymbolic:
         self.rho = 0.0822  # ~20km 高度的空气密度 [kg/m^3]
 
         # 气动系数
-
         self.C_l1 = 2.4e4 / 28.8
         self.C_m1, self.C_m2, self.C_m3, self.C_m4 = 7.7e4 / 28.8, 7.7e4 / 28.8, 7.7e4 / 28.8, 7.7e4 / 28.8
         self.C_n1, self.C_n2, self.C_n3, self.C_n4 = 7.7e4 / 28.8, 7.7e4 / 28.8, 7.7e4 / 28.8, 7.7e4 / 28.8
         self.C_x1, self.C_x2 = 657.0 / 28.8, 657.0 / 28.8
         self.C_y1, self.C_y2, self.C_y3, self.C_y4 = 657.0 / 28.8, 657.0 / 28.8, 657.0 / 28.8, 657.0 / 28.8
         self.C_z1, self.C_z2, self.C_z3, self.C_z4 = 657.0 / 28.8, 657.0 / 28.8, 657.0 / 28.8, 657.0 / 28.8
+
+    # ---------- 旋转矩阵 ----------
+    @staticmethod
+    def R_zeta(gamma):
+        """返回 3x3 旋转矩阵 R_zeta(gamma)"""
+        phi, theta, psi = gamma[0], gamma[1], gamma[2]
+        return ca.vertcat(
+            ca.horzcat(
+                ca.cos(theta) * ca.cos(psi),
+                ca.sin(phi) * ca.sin(theta) * ca.cos(psi) - ca.cos(phi) * ca.sin(psi),
+                ca.cos(phi) * ca.sin(theta) * ca.cos(psi) + ca.sin(phi) * ca.sin(psi)
+            ),
+            ca.horzcat(
+                ca.cos(theta) * ca.sin(psi),
+                ca.sin(phi) * ca.sin(theta) * ca.sin(psi) + ca.cos(phi) * ca.cos(psi),
+                ca.cos(phi) * ca.sin(theta) * ca.sin(psi) - ca.sin(phi) * ca.cos(psi)
+            ),
+            ca.horzcat(
+                -ca.sin(theta),
+                ca.sin(phi) * ca.cos(theta),
+                ca.cos(phi) * ca.cos(theta)
+            )
+        )
+
+    @staticmethod
+    def R_gamma(gamma):
+        """返回 3x3 姿态到角速度映射矩阵 R_gamma(gamma)"""
+        phi, theta, psi = gamma[0], gamma[1], gamma[2]
+        return ca.vertcat(
+            ca.horzcat(1, ca.sin(phi) * ca.sin(theta) / ca.cos(theta), ca.cos(phi) * ca.sin(theta) / ca.cos(theta)),
+            ca.horzcat(0, ca.cos(phi), -ca.sin(phi)),
+            ca.horzcat(0, ca.sin(phi) / ca.cos(theta), ca.cos(phi) / ca.cos(theta))
+        )
+
+    @staticmethod
+    def R_y_inv(gamma):
+        """返回 3x3 矩阵 R_y_inv（若需要）"""
+        phi, theta, psi = gamma[0], gamma[1], gamma[2]
+        return ca.vertcat(
+            ca.horzcat(1, 0, 0),
+            ca.horzcat(-ca.sin(phi) * ca.sin(theta) / ca.cos(theta), ca.cos(phi), -ca.sin(phi) / ca.cos(theta)),
+            ca.horzcat(-ca.cos(phi) * ca.sin(theta) / ca.cos(theta), -ca.sin(phi), ca.cos(phi) / ca.cos(theta))
+        )
 
     def rhs_symbolic(self, X, thrust_params, t=None, external_disturbance=None):
         """
@@ -87,11 +125,15 @@ class AirshipCasADiSymbolic:
         v = X[6:9]  # BRF 中的线速度
         omega = X[9:12]  # BRF 中的角速度
 
-        # === 运动学 ===
-        R_block = ca.diagcat(R_zeta(gamma), R_gamma(gamma))
+        # ===========================================================================
+        # ==                               运动学                                   ==
+        # ===========================================================================
+        R_block = ca.diagcat(self.R_zeta(gamma), self.R_gamma(gamma))
         y_dot = R_block @ ca.vertcat(v, omega)  # y_dot = [zeta_dot, gamma_dot] eq.(5)
 
-        # === 动力学 ===
+        # ===========================================================================
+        # ==                               动力学                                   ==
+        # ===========================================================================
         # ===  (Calculate Added Mass/Inertia) ===
         k1, k2, k3 = 0.17, 0.83, 0.52
         m_air = self.rho * self.Volume  # displaced air mass
@@ -115,7 +157,7 @@ class AirshipCasADiSymbolic:
         N_term = ca.vertcat(N1, N2)
 
         # =======================重力作用力和力矩 gravity======================================
-        Rz = R_zeta(gamma)
+        Rz = self.R_zeta(gamma)
         fg_earth = ca.vertcat(0, 0, self.m * self.g)  # 地球坐标系中的重力
         fg_BRF = Rz.T @ fg_earth  # 将重力向量旋转到机体坐标系
         mg_BRF = ca.cross(self.rg, fg_BRF)  # 重力在 CG 处产生的力矩 (rg 是 CV->CG)
