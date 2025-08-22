@@ -39,13 +39,11 @@ class DoMpcConfig:
         # --- 控制器参数 ---
         self.DT = 1  # 仿真步长 (s)
 
-
-
-
         # Create reference trajectory
         self.trajectory = Trajectory()
 
         self.use_disturbance_compensation = use_disturbance_compensation
+
 
         # Create do-mpc model
         self.model = self.create_model()
@@ -55,6 +53,7 @@ class DoMpcConfig:
 
     def disturbance_delta(self, t):
         """ Define external disturbance vector"""
+        _ = t
         d = np.zeros(6)
         # d[0] = 0.5 + 2 * np.sin(0.1 * t)
         # d[1] = 0.4 + 1.5 * np.cos(0.1 * t)
@@ -157,7 +156,7 @@ class DoMpcConfig:
 
         # MPC setup
         setup_mpc = {
-            'n_horizon': 20,
+            'n_horizon': 18,
             'n_robust': 1,
             't_step': self.DT,
             'store_full_solution': True,
@@ -259,14 +258,14 @@ class DoMpcConfig:
         def tvp_fun(t_now):
             """Update reference trajectory parameters."""
             # 使用水平圆形轨迹
-            yc, yc_dot = self.trajectory.get_helix_trajectory(t_now)
+            pos_ref, att_ref, vel_ref, omega_body_ref = self.trajectory.get_helix_trajectory(t_now)
 
             tvp_current = tvp_template()
 
-            tvp_current['_tvp', :, 'pos_ref'] = yc[0:3].reshape(-1, 1).astype(float)
-            tvp_current['_tvp', :, 'att_ref'] = yc[3:6].reshape(-1, 1).astype(float)
-            tvp_current['_tvp', :, 'vel_ref'] = yc_dot[0:3].reshape(-1, 1).astype(float)
-            tvp_current['_tvp', :, 'omega_ref'] = yc_dot[3:6].reshape(-1, 1).astype(float)
+            tvp_current['_tvp', :, 'pos_ref'] = pos_ref[0:3].reshape(-1, 1).astype(float)
+            tvp_current['_tvp', :, 'att_ref'] = att_ref[0:3].reshape(-1, 1).astype(float)
+            tvp_current['_tvp', :, 'vel_ref'] = vel_ref[0:3].reshape(-1, 1).astype(float)
+            tvp_current['_tvp', :, 'omega_ref'] = omega_body_ref[0:3].reshape(-1, 1).astype(float)
             tvp_current['_tvp', :, 'disturbance'] = self.disturbance_delta(t_now).reshape(-1, 1).astype(float)
 
             return tvp_current
@@ -305,13 +304,13 @@ class DoMpcConfig:
 
         def tvp_fun(t_now):
             """Update disturbance parameters for current simulation time"""
-            # 使用水平圆形轨迹
-            yc, yc_dot  = self.trajectory.get_helix_trajectory(t_now)
+            #
+            pos_ref, att_ref, vel_ref, omega_body_ref = self.trajectory.get_helix_trajectory(t_now)
 
-            tvp_template['pos_ref'] = yc[0:3].reshape(-1, 1).astype(float)
-            tvp_template['att_ref'] = yc[3:6].reshape(-1, 1).astype(float)
-            tvp_template['vel_ref'] = yc_dot[0:3].reshape(-1, 1).astype(float)
-            tvp_template['omega_ref'] = yc_dot[3:6].reshape(-1, 1).astype(float)
+            tvp_template['pos_ref'] = pos_ref[0:3].reshape(-1, 1).astype(float)
+            tvp_template['att_ref'] = att_ref[0:3].reshape(-1, 1).astype(float)
+            tvp_template['vel_ref'] = vel_ref[0:3].reshape(-1, 1).astype(float)
+            tvp_template['omega_ref'] = omega_body_ref[0:3].reshape(-1, 1).astype(float)
             tvp_template['disturbance'] = self.disturbance_delta(t_now).reshape(-1, 1).astype(float)
 
             return tvp_template

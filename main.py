@@ -51,7 +51,7 @@ def run_simulation():
 
     # 初始化 mpc and simulator 状态设置
     # 设置初始状态，起始点在原点
-    initial_position = np.array([0.0, 0.0, -20000.0])  # 起始点在原点
+    initial_position = np.array([0.0, 2000.0, -19800.0])  # 起始点在原点
     initial_attitude = np.array([0.0, 0.0, np.pi/12])  # 偏航角 90 度，面向 Y 轴
     initial_velocity = np.array([0.0, 16.0, 0.0])  # 初始切向速度（向上，与圆形轨迹相切）
     initial_angular_velocity = np.array([0.0, 0.0, 0.0])  # 初始无角速度
@@ -82,11 +82,11 @@ def run_simulation():
         current_time = i * DT
 
         # 获取当前参考轨迹信息
-        yc_ref, yc_dot_ref = airship_mpc.trajectory.get_helix_trajectory(current_time)
-        ref_vel_x, ref_vel_y, ref_vel_z = yc_dot_ref[0:3]  # 提取参考速度分量
-        ref_vel_magnitude = np.linalg.norm(yc_dot_ref[0:3])  # 计算参考速度大小
+        pos_ref, _, vel_ref, _ = airship_mpc.trajectory.get_helix_trajectory(current_time)
 
-        reference_trajectory.append(yc_ref[:3])  # 只存储位置部分
+
+
+        reference_trajectory.append(pos_ref[:3])  # 只存储位置部分
 
         # for the current state x0, mpc computes the optimal control action u0
         # print(f"Time: {current_time:.2f}s, Ramp factor: {ramp_factor:.2f}")
@@ -107,11 +107,11 @@ def run_simulation():
         vel_x = float(x0[6].item())  # 使用 .item() 方法
         vel_y = float(x0[7].item())
         vel_z = float(x0[8].item())
-        vel_magnitude = np.sqrt(vel_x ** 2 + vel_y ** 2 + vel_z ** 2)  # 计算实际速度大小
+
 
         # 打印参考速度和实际速度
         print(f"\n=== Time: {current_time:.1f}s ===")
-        print(f"Reference velocity: [{ref_vel_x:.2f}, {ref_vel_y:.2f}, {ref_vel_z:.2f}] m/s")
+        print(f"Reference velocity: [{vel_ref[0]:.2f}, {vel_ref[1]:.2f}, {vel_ref[2]:.2f}] m/s")
         print(f"Actual velocity: [{vel_x:.2f}, {vel_y:.2f}, {vel_z:.2f}] m/s")
 
         # store the optimal control and state
@@ -131,25 +131,17 @@ def run_simulation():
     print(f"Actual Trajectory End: {optimal_states[-1, :3]} (meters)")
 
     # 添加详细的起始点验证
-    print(f"\n=== 起始点详细信息 ===")
+    print("\n=== 起始点详细信息 ===")
     print(
-        f"参考轨迹第一个点 (图中绿色点): x={reference_trajectory[0, 0]:.6f}, y={reference_trajectory[0, 1]:.6f}, z={reference_trajectory[0, 2]:.6f}")
+        f"参考轨迹起始点 (图中绿色点): x={reference_trajectory[0, 0]:.6f}, y={reference_trajectory[0, 1]:.6f}, z={reference_trajectory[0, 2]:.6f}")
     print(
-        f"实际轨迹第一个点：x={optimal_states[0, 0].item():.6f}, y={optimal_states[0, 1].item():.6f}, z={optimal_states[0, 2].item():.6f}")
+        f"实际轨迹起始点：x={optimal_states[0, 0].item():.6f}, y={optimal_states[0, 1].item():.6f}, z={optimal_states[0, 2].item():.6f}")
 
-    # 验证 t=0 时的轨迹
-    yc_t0, yc_dot_t0 = airship_mpc.trajectory.get_helix_trajectory(0.0)
-    print(f"直接调用 get_helix_trajectory(0.0): x={yc_t0[0]:.6f}, y={yc_t0[1]:.6f}, z={yc_t0[2]:.6f}")
 
-    # 验证初始状态设置
-    print(
-        f"main.py 中设置的初始位置：x={initial_position[0]:.6f}, y={initial_position[1]:.6f}, z={initial_position[2]:.6f}")
-    print(f"仿真循环第一次调用时间：current_time = {0 * DT:.6f}")
 
-    # 验证第一个仿真步骤 - 这里也要修复函数名和返回值数量
-    first_time = 0 * DT
-    yc_first, yc_dot_first = airship_mpc.trajectory.get_helix_trajectory(first_time)
-    print(f"仿真第一步 t={first_time}: x={yc_first[0]:.6f}, y={yc_first[1]:.6f}, z={yc_first[2]:.6f}")
+
+
+
 
     # 绘制轨迹：直接使用参考系的 z 值（向下为正），以 km 为单位显示并保持负号
     ax.plot3D(reference_trajectory[:, 0], reference_trajectory[:, 1], reference_trajectory[:, 2] / 1000,
